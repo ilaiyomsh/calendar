@@ -1,0 +1,159 @@
+.container {
+    position: relative;
+    width: 100%;
+}
+
+.trigger {
+    width: 100%;
+    background-color: transparent;
+    border: 2px solid #1f2b3e;
+    border-radius: 50px;
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-sizing: border-box;
+}
+
+.trigger:disabled,
+.trigger.disabled {
+    background-color: #f6f7fb;
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.triggerText {
+    font-size: 14px;
+    color: #1f2b3e;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+    min-width: 0;
+    text-align: right;
+}
+
+.triggerIcon {
+    color: #1f2b3e;
+    font-size: 16px;
+    margin-right: 4px;
+}
+
+.dropdown {
+    position: absolute;
+    z-index: 10010;
+    width: 100%;
+    margin-top: 8px;
+    background-color: #ffffff;
+    border: 2px solid #1f2b3e;
+    border-radius: 8px;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+    max-height: 240px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.productsList {
+    overflow-y: auto;
+    flex: 1;
+    padding: 8px;
+}
+
+.productItem {
+    padding: 10px 12px;
+    font-size: 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background-color 0.15s;
+    background-color: transparent;
+    color: #323338;
+    font-weight: normal;
+}
+
+.productItem:hover {
+    background-color: #f0f2f5;
+    color: #1f2b3e;
+}
+
+.productItem.selected {
+    background-color: #1f2b3e;
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.productItem.selected:hover {
+    background-color: #1f2b3e;
+    color: #ffffff;
+}
+
+.emptyState {
+    padding: 16px;
+    text-align: center;
+    font-size: 12px;
+    color: #676879;
+}
+
+.footer {
+    border-top: 1px solid #e0e0e0;
+    padding: 8px;
+    background-color: #ffffff;
+}
+
+.addButton {
+    width: 100%;
+    padding: 10px 12px;
+    background-color: #ffffff;
+    border: 1px solid #1f2b3e;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #1f2b3e;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.addButton:hover {
+    background-color: #f0f2f5;
+    border-color: #1f2b3e;
+}
+
+.createForm {
+    display: flex;
+    gap: 6px;
+}
+
+.createInput {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1px solid #1f2b3e;
+    border-radius: 6px;
+    font-size: 13px;
+    outline: none;
+    box-sizing: border-box;
+}
+
+.createButton {
+    padding: 8px 12px;
+    background-color: #1f2b3e;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.cancelButton {
+    padding: 8px 12px;
+    background-color: #f0f2f5;
+    color: #1f2b3e;
+    border: 1px solid #d0d4e4;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+}
+

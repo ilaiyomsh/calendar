@@ -1,0 +1,25 @@
+.eventContainer {
+    height: 100%;
+    overflow: hidden;
+    padding-left: 4px;
+}
+
+.eventContainer.allDay {
+    background-color: rgba(106, 90, 205, 0.15);
+    border-left: 3px solid #6a5acd;
+}
+
+.title {
+    font-weight: bold;
+    font-size: 13px;
+}
+
+.notes {
+    font-size: 11px;
+    margin-top: 2px;
+    opacity: 0.9;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+

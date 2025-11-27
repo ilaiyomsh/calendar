@@ -1,0 +1,73 @@
+.rbc-calendar {
+    direction: rtl;
+}
+
+/* תיקון הרווח בין header לגריד */
+.rbc-time-view {
+    direction: rtl;
+}
+
+.rbc-time-header {
+    direction: rtl;
+}
+
+.rbc-time-content {
+    direction: rtl;
+}
+
+/* תיבת אירועים יומיים - גלויה */
+/* .rbc-allday-cell {
+    display: none !important;
+} */
+
+.rbc-time-header-content {
+    border-left: none !important;
+}
+
+/* תיקון z-index לתפריטי השעות כדי שיופיעו מעל ה-Combobox */
+.time-dropdown-menu {
+    z-index: 10002 !important;
+}
+
+/* וידוא שכל תפריטי Dropdown מופיעים מעל Combobox */
+[data-testid="dropdown-menu"],
+[class*="dropdown-menu"],
+[class*="DropdownMenu"],
+[class*="Menu"] {
+    z-index: 10002 !important;
+}
+
+/* וידוא שה-Dialog של תפריטי הזמן מופיע מעל הכל */
+[data-testid="dialog-content-container"].time-dropdown-menu,
+[data-testid="dialog-content-container"] {
+    z-index: 10002 !important;
+}
+
+/* וידוא שהפורטל של Vibe מופיע מעל Combobox */
+[data-popper-placement],
+[data-testid*="dialog"],
+.dialog-content-container {
+    z-index: 10002 !important;
+}
+
+/* הורדת z-index של Combobox ורכיביו */
+[class*="combobox"],
+[class*="Combobox"],
+[role="search"] {
+    z-index: 1 !important;
+}
+
+/* וידוא שתפריט הזמן מופיע מעל Modal content */
+[data-testid="dialog-content-container"][class*="time-dropdown-menu"] {
+    z-index: 10003 !important;
+}
+
+/* רווחים אחידים בין כפתורים ב-toolbar */
+.rbc-toolbar .rbc-btn-group {
+    display: flex;
+    gap: 4px;
+}
+
+.rbc-toolbar .rbc-btn-group button {
+    margin: 0 !important;
+}

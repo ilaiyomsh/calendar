@@ -1,0 +1,135 @@
+.overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(0, 0, 0, 0.4);
+    z-index: 10005;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-family: Figtree, Roboto, Rubik, Noto Kufi Arabic, sans-serif;
+}
+
+.container {
+    background-color: #e2e4e6;
+    border: 3px solid #1f2b3e;
+    border-radius: 24px;
+    padding: 24px;
+    width: 400px;
+    max-width: 90%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+    position: relative;
+}
+
+.title {
+    font-size: 20px;
+    font-weight: 600;
+    color: #323338;
+    margin: 0;
+    margin-bottom: 10px;
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    width: 100%;
+}
+
+.itemButton {
+    padding: 12px 8px;
+    background-color: transparent;
+    color: #1f2b3e;
+    border: 2px solid #1f2b3e;
+    border-radius: 50px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.itemButton.selected {
+    background-color: #1f2b3e;
+    color: #ffffff;
+}
+
+.input {
+    width: 100%;
+    padding: 12px 20px;
+    background-color: transparent;
+    border: 2px solid #1f2b3e;
+    border-radius: 50px;
+    font-size: 14px;
+    color: #1f2b3e;
+    text-align: center;
+    outline: none;
+    box-sizing: border-box;
+    margin-top: 10px;
+}
+
+.actionsContainer {
+    display: flex;
+    gap: 12px;
+    width: 100%;
+    align-items: center;
+}
+
+.saveButton {
+    background-color: #6a5acd;
+    color: white;
+    border: 3px solid #1f2b3e;
+    border-radius: 4px;
+    padding: 10px 40px;
+    font-size: 18px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 20px;
+    box-shadow: 0 4px 0 #1f2b3e;
+    transition: transform 0.1s, box-shadow 0.1s;
+    flex: 1;
+}
+
+.saveButton:active {
+    transform: translateY(2px);
+    box-shadow: 0 2px 0 #1f2b3e;
+}
+
+.deleteButton {
+    background-color: #d83a52;
+    color: white;
+    border: 3px solid #1f2b3e;
+    border-radius: 4px;
+    padding: 10px 20px;
+    font-size: 18px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 20px;
+    box-shadow: 0 4px 0 #1f2b3e;
+    transition: transform 0.1s, box-shadow 0.1s;
+}
+
+.deleteButton:active {
+    transform: translateY(2px);
+    box-shadow: 0 2px 0 #1f2b3e;
+}
+
+.productSection {
+    margin-top: 12px;
+    width: 100%;
+}
+
+.loading {
+    grid-column: 1 / -1;
+    text-align: center;
+}
+
