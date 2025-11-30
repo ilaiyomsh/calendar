@@ -10,13 +10,71 @@ const ProductSelect = ({
     onSelectProduct, 
     onCreateNew, 
     isLoading, 
-    disabled 
+    disabled,
+    isCreatingProduct = false
 }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [isCreating, setIsCreating] = useState(false);
     const [newProductName, setNewProductName] = useState('');
+    const [dropdownPosition, setDropdownPosition] = useState({ top: 'auto', bottom: 'auto', left: 'auto', width: 'auto' });
     const containerRef = useRef(null);
     const inputRef = useRef(null);
+    const dropdownRef = useRef(null);
+
+    // חישוב מיקום ה-dropdown
+    const calculateDropdownPosition = () => {
+        if (!containerRef.current) return;
+        
+        const rect = containerRef.current.getBoundingClientRect();
+        const viewportHeight = window.innerHeight;
+        const spaceBelow = viewportHeight - rect.bottom;
+        const spaceAbove = rect.top;
+        const dropdownHeight = 240; // max-height של ה-dropdown
+        
+        // חישוב מיקום אופקי
+        const left = rect.left;
+        const width = rect.width;
+        
+        // אם אין מספיק מקום למטה אבל יש למעלה, נציג למעלה
+        if (spaceBelow < dropdownHeight && spaceAbove > spaceBelow) {
+            setDropdownPosition({ 
+                bottom: `${viewportHeight - rect.top + 4}px`,
+                top: 'auto',
+                left: `${left}px`,
+                width: `${width}px`
+            });
+        } else {
+            setDropdownPosition({ 
+                top: `${rect.bottom + 4}px`,
+                bottom: 'auto',
+                left: `${left}px`,
+                width: `${width}px`
+            });
+        }
+    };
+
+    useEffect(() => {
+        if (isOpen) {
+            calculateDropdownPosition();
+            
+            // עדכון מיקום בעת גלילה או שינוי גודל
+            const handleScroll = () => {
+                calculateDropdownPosition();
+            };
+            
+            const handleResize = () => {
+                calculateDropdownPosition();
+            };
+            
+            window.addEventListener('scroll', handleScroll, true);
+            window.addEventListener('resize', handleResize);
+            
+            return () => {
+                window.removeEventListener('scroll', handleScroll, true);
+                window.removeEventListener('resize', handleResize);
+            };
+        }
+    }, [isOpen]);
 
     // סגירת הדרופדאון בלחיצה מחוץ לרכיב
     useEffect(() => {
@@ -69,9 +127,12 @@ const ProductSelect = ({
                 onClick={() => !disabled && !isLoading && setIsOpen(!isOpen)}
             >
                 <span className={styles.triggerText}>
-                    {selectedOption 
-                        ? selectedOption.name 
-                        : (isLoading ? "טוען..." : "בחר מוצר ...")
+                    {isCreatingProduct 
+                        ? "מוסיף מוצר חדש..."
+                        : (selectedOption 
+                            ? selectedOption.name 
+                            : (isLoading ? "טוען..." : "בחר מוצר ...")
+                        )
                     }
                 </span>
                 <div className={styles.triggerIcon}>
@@ -81,7 +142,16 @@ const ProductSelect = ({
 
             {/* הרשימה הנפתחת */}
             {isOpen && !disabled && (
-                <div className={styles.dropdown}>
+                <div 
+                    ref={dropdownRef}
+                    className={styles.dropdown}
+                    style={{
+                        top: dropdownPosition.top,
+                        bottom: dropdownPosition.bottom,
+                        left: dropdownPosition.left,
+                        width: dropdownPosition.width
+                    }}
+                >
                     {/* רשימת מוצרים */}
                     <div className={styles.productsList}>
                         {products.length > 0 ? (

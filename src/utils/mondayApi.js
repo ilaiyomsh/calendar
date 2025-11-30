@@ -27,15 +27,15 @@ export const fetchColumnSettings = async (monday, boardId, columnId) => {
 
     try {
         const startTime = Date.now();
-        const response = await monday.api(query);
+    const response = await monday.api(query);
         const duration = Date.now() - startTime;
 
         logger.apiResponse('fetchColumnSettings', response, duration);
-        
-        const columnSettings = response.data?.boards?.[0]?.columns?.[0]?.settings;
+    
+    const columnSettings = response.data?.boards?.[0]?.columns?.[0]?.settings;
         logger.functionEnd('fetchColumnSettings', { hasSettings: !!columnSettings });
-        
-        return columnSettings;
+    
+    return columnSettings;
     } catch (error) {
         logger.apiError('fetchColumnSettings', error);
         throw error;
@@ -67,59 +67,59 @@ export const fetchAllBoardItems = async (monday, boardId) => {
 
     try {
         const startTime = Date.now();
-        const firstResponse = await monday.api(firstQuery);
+    const firstResponse = await monday.api(firstQuery);
         const duration = Date.now() - startTime;
 
         logger.apiResponse('fetchAllBoardItems (first page)', firstResponse, duration);
 
-        const itemsPage = firstResponse.data?.boards?.[0]?.items_page;
-        
-        if (itemsPage) {
-            allItems = allItems.concat(itemsPage.items);
-            cursor = itemsPage.cursor;
-            pageCount++;
+    const itemsPage = firstResponse.data?.boards?.[0]?.items_page;
+    
+    if (itemsPage) {
+        allItems = allItems.concat(itemsPage.items);
+        cursor = itemsPage.cursor;
+        pageCount++;
             logger.debug('fetchAllBoardItems', `Page ${pageCount}: Fetched ${itemsPage.items.length} items`);
-        }
+    }
 
-        // קריאות המשך
-        while (cursor) {
-            const nextQuery = `query {
-                next_items_page (cursor: "${cursor}", limit:100){
-                    cursor
-                    items{
-                        name
-                        id
-                    }
+    // קריאות המשך
+    while (cursor) {
+        const nextQuery = `query {
+            next_items_page (cursor: "${cursor}", limit:100){
+                cursor
+                items{
+                    name
+                    id
                 }
-            }`;
+            }
+        }`;
 
             logger.api(`fetchAllBoardItems (page ${pageCount + 1})`, nextQuery);
 
             const pageStartTime = Date.now();
-            const nextResponse = await monday.api(nextQuery);
+        const nextResponse = await monday.api(nextQuery);
             const pageDuration = Date.now() - pageStartTime;
 
             logger.apiResponse(`fetchAllBoardItems (page ${pageCount + 1})`, nextResponse, pageDuration);
 
-            const nextPage = nextResponse.data?.next_items_page;
-            
-            if (nextPage && nextPage.items) {
-                allItems = allItems.concat(nextPage.items);
-                cursor = nextPage.cursor;
-                pageCount++;
+        const nextPage = nextResponse.data?.next_items_page;
+        
+        if (nextPage && nextPage.items) {
+            allItems = allItems.concat(nextPage.items);
+            cursor = nextPage.cursor;
+            pageCount++;
                 logger.debug('fetchAllBoardItems', `Page ${pageCount}: Fetched ${nextPage.items.length} items`);
-            } else {
-                cursor = null;
-            }
+        } else {
+            cursor = null;
         }
+    }
 
         logger.functionEnd('fetchAllBoardItems', { totalItems: allItems.length, pages: pageCount });
-        
-        // המרה לפורמט Combobox
-        return allItems.map(item => ({
-            value: item.id,
-            label: item.name
-        }));
+    
+    // המרה לפורמט Combobox
+    return allItems.map(item => ({
+        value: item.id,
+        label: item.name
+    }));
     } catch (error) {
         logger.apiError('fetchAllBoardItems', error);
         throw error;
@@ -155,13 +155,13 @@ export const createBoardItem = async (monday, boardId, itemName, columnValues = 
 
     try {
         const startTime = Date.now();
-        const response = await monday.api(mutation);
+    const response = await monday.api(mutation);
         const duration = Date.now() - startTime;
 
         logger.apiResponse('createBoardItem', response, duration);
         logger.functionEnd('createBoardItem', { item: response.data?.create_item });
-        
-        return response.data?.create_item;
+    
+    return response.data?.create_item;
     } catch (error) {
         logger.apiError('createBoardItem', error);
         throw error;
@@ -234,34 +234,85 @@ export const fetchCustomersForUser = async (monday, boardId, peopleColumnId) => 
     }
 };
 
-// אחזור מוצרים לפי לקוח
-export const fetchProductsForCustomer = async (monday, productsBoardId, customerColumnId, customerId) => {
-    logger.functionStart('fetchProductsForCustomer', { productsBoardId, customerColumnId, customerId });
+// מציאת עמודת Connected Board בלוח המוצרים שמקשרת ללוח הלקוחות
+export const findCustomerLinkColumn = async (monday, productsBoardId, customerBoardId) => {
+    if (!productsBoardId || !customerBoardId) return null;
 
-    const query = `query {
-        boards(ids: [${productsBoardId}]) {
-            items_page(
-                limit: 100,
-                query_params: {
-                    rules: [
-                        {
-                            column_id: "${customerColumnId}",
-                            compare_value: [${customerId}]
-                        }
-                    ]
-                }
-            ) {
-                items {
+    logger.functionStart('findCustomerLinkColumn', { productsBoardId, customerBoardId });
+
+    try {
+        const query = `query {
+            boards(ids: [${productsBoardId}]) {
+                columns {
                     id
-                    name
+                    type
+                    settings_str
+                }
+            }
+        }`;
+
+        logger.api('findCustomerLinkColumn', query);
+        const res = await monday.api(query);
+        const columns = res.data?.boards?.[0]?.columns || [];
+
+        // מציאת עמודת board_relation שמקשרת ללוח הלקוחות
+        for (const col of columns) {
+            if (col.type === 'board_relation') {
+                try {
+                    const settings = JSON.parse(col.settings_str || '{}');
+                    if (settings.boardIds && settings.boardIds.includes(parseInt(customerBoardId))) {
+                        logger.functionEnd('findCustomerLinkColumn', { columnId: col.id });
+                        return col.id;
+                    }
+                } catch {
+                    continue;
                 }
             }
         }
-    }`;
+        logger.warn('findCustomerLinkColumn', 'Could not find customer link column in products board');
+        return null;
+    } catch (error) {
+        logger.apiError('findCustomerLinkColumn', error);
+        throw error;
+    }
+};
 
-    logger.api('fetchProductsForCustomer', query);
+// אחזור מוצרים לפי לקוח
+export const fetchProductsForCustomer = async (monday, productsBoardId, customerBoardId, customerId) => {
+    logger.functionStart('fetchProductsForCustomer', { productsBoardId, customerBoardId, customerId });
 
     try {
+        // מציאת העמודה בלוח המוצרים שמקשרת ללקוח
+        const customerLinkColumnId = await findCustomerLinkColumn(monday, productsBoardId, customerBoardId);
+
+        if (!customerLinkColumnId) {
+            logger.warn('fetchProductsForCustomer', 'Could not find customer link column in products board');
+            return [];
+        }
+
+        const query = `query {
+            boards(ids: [${productsBoardId}]) {
+                items_page(
+                    limit: 100,
+                    query_params: {
+                        rules: [
+                            {
+                                column_id: "${customerLinkColumnId}",
+                                compare_value: [${customerId}]
+                            }
+                        ]
+                    }
+                ) {
+                    items {
+                        id
+                        name
+                    }
+                }
+            }
+        }`;
+
+        logger.api('fetchProductsForCustomer', query);
+
         const startTime = Date.now();
         const response = await monday.api(query);
         const duration = Date.now() - startTime;
@@ -279,29 +330,37 @@ export const fetchProductsForCustomer = async (monday, productsBoardId, customer
 };
 
 // יצירת מוצר חדש
-export const createProduct = async (monday, productsBoardId, customerColumnId, customerId, productName) => {
-    logger.functionStart('createProduct', { productsBoardId, customerColumnId, customerId, productName });
-
-    const columnValues = JSON.stringify({
-        [customerColumnId]: {
-            item_ids: [parseInt(customerId)]
-        }
-    });
-
-    const mutation = `mutation {
-        create_item(
-            board_id: ${productsBoardId},
-            item_name: "${productName}",
-            column_values: ${JSON.stringify(columnValues)}
-        ) {
-            id
-            name
-        }
-    }`;
-
-    logger.api('createProduct', mutation);
+export const createProduct = async (monday, productsBoardId, customerBoardId, customerId, productName) => {
+    logger.functionStart('createProduct', { productsBoardId, customerBoardId, customerId, productName });
 
     try {
+        // מציאת העמודה בלוח המוצרים שמקשרת ללקוח
+        const customerLinkColumnId = await findCustomerLinkColumn(monday, productsBoardId, customerBoardId);
+
+        if (!customerLinkColumnId) {
+            logger.warn('createProduct', 'Could not find customer link column in products board');
+            return null;
+        }
+
+        const columnValues = JSON.stringify({
+            [customerLinkColumnId]: {
+                item_ids: [parseInt(customerId)]
+            }
+        });
+
+        const mutation = `mutation {
+            create_item(
+                board_id: ${productsBoardId},
+                item_name: "${productName}",
+                column_values: ${JSON.stringify(columnValues)}
+            ) {
+                id
+                name
+            }
+        }`;
+
+        logger.api('createProduct', mutation);
+
         const startTime = Date.now();
         const response = await monday.api(mutation);
         const duration = Date.now() - startTime;
@@ -348,6 +407,113 @@ export const updateItemColumnValues = async (monday, boardId, itemId, columnValu
 };
 
 // מחיקת אייטם
+// אחזור אייטם בודד לפי ID
+export const fetchItemById = async (monday, boardId, itemId) => {
+    logger.functionStart('fetchItemById', { boardId, itemId });
+
+    const query = `query {
+        boards(ids: [${boardId}]) {
+            items_page(
+                limit: 1,
+                query_params: {
+                    rules: [
+                        {
+                            column_id: "id",
+                            compare_value: [${itemId}],
+                            operator: any_of
+                        }
+                    ]
+                }
+            ) {
+                items {
+                    id
+                    name
+                    column_values {
+                        id
+                        value
+                        type
+                        ... on DateValue {
+                            date
+                            time
+                        }
+                        ... on BoardRelationValue {
+                            value
+                        }
+                        ... on TextValue {
+                            text
+                        }
+                    }
+                }
+            }
+        }
+    }`;
+
+    logger.api('fetchItemById', query);
+
+    try {
+        const startTime = Date.now();
+        const response = await monday.api(query);
+        const duration = Date.now() - startTime;
+
+        logger.apiResponse('fetchItemById', response, duration);
+
+        const items = response.data?.boards?.[0]?.items_page?.items || [];
+        const item = items.length > 0 ? items[0] : null;
+        
+        logger.functionEnd('fetchItemById', { found: !!item });
+        return item;
+    } catch (error) {
+        logger.apiError('fetchItemById', error);
+        throw error;
+    }
+};
+
+// אחזור לקוח בודד לפי ID
+export const fetchCustomerById = async (monday, boardId, customerId) => {
+    logger.functionStart('fetchCustomerById', { boardId, customerId });
+
+    const query = `query {
+        boards(ids: [${boardId}]) {
+            items_page(
+                limit: 1,
+                query_params: {
+                    rules: [
+                        {
+                            column_id: "id",
+                            compare_value: [${customerId}],
+                            operator: any_of
+                        }
+                    ]
+                }
+            ) {
+                items {
+                    id
+                    name
+                }
+            }
+        }
+    }`;
+
+    logger.api('fetchCustomerById', query);
+
+    try {
+        const startTime = Date.now();
+        const response = await monday.api(query);
+        const duration = Date.now() - startTime;
+
+        logger.apiResponse('fetchCustomerById', response, duration);
+
+        const items = response.data?.boards?.[0]?.items_page?.items || [];
+        const customer = items.length > 0 ? { id: items[0].id, name: items[0].name } : null;
+        
+        logger.functionEnd('fetchCustomerById', { found: !!customer });
+        return customer;
+    } catch (error) {
+        logger.apiError('fetchCustomerById', error);
+        throw error;
+    }
+};
+
 export const deleteItem = async (monday, itemId) => {
     logger.functionStart('deleteItem', { itemId });
 

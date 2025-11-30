@@ -1,0 +1,135 @@
+.container {
+  position: relative;
+}
+
+.trigger {
+  width: 90%;
+  background-color: #ffffff;
+  border: 1px solid #d0d4e4;
+  border-radius: 4px;
+  padding: 10px 32px 10px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.triggerOpen {
+  border-color: #0073e6;
+  box-shadow: 0 0 0 3px rgba(0, 115, 230, 0.1);
+}
+
+.triggerDisabled {
+  background-color: #f6f7fb;
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.triggerText {
+  font-size: 14px;
+  color: #323338;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.triggerTextPlaceholder {
+  color: #676879;
+}
+
+.triggerIcon {
+  color: #676879;
+  font-size: 12px;
+}
+
+.dropdown {
+  position: fixed;
+  z-index: 10010;
+  background-color: #ffffff;
+  border: 1px solid #d0d4e4;
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  max-height: 240px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.searchContainer {
+  padding: 8px;
+  border-bottom: 1px solid #e6e9ef;
+  background-color: #ffffff;
+  flex-shrink: 0;
+}
+
+.searchWrapper {
+  position: relative;
+}
+
+.searchInput {
+  width: 100%;
+  background-color: #f6f7fb;
+  border: 1px solid #d0d4e4;
+  border-radius: 4px;
+  padding: 8px 32px 8px 12px;
+  font-size: 14px;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.searchIcon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #676879;
+  font-size: 14px;
+  pointer-events: none;
+}
+
+.optionsList {
+  overflow-y: auto;
+  flex: 1;
+  padding: 4px;
+}
+
+.option {
+  padding: 8px 12px;
+  font-size: 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.option:hover {
+  background-color: #f6f7fb;
+}
+
+.optionSelected {
+  background-color: #e3f2fd;
+  color: #0073e6;
+  font-weight: 500;
+}
+
+.optionSelected:hover {
+  background-color: #e3f2fd;
+}
+
+.optionIndicator {
+  width: 8px;
+  height: 8px;
+  background-color: #0073e6;
+  border-radius: 50%;
+}
+
+.noResults {
+  padding: 16px;
+  text-align: center;
+  font-size: 12px;
+  color: #676879;
+}
+

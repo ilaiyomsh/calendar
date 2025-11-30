@@ -18,16 +18,43 @@ export default function EventModal({
     setSelectedItem: setPropSelectedItem = null
 }) {
     const { customSettings } = useSettings();
-    const { customers, loading: loadingCustomers, error: customersError } = useCustomers();
-    const { products, loading: loadingProducts, fetchForCustomer, createProduct } = useProducts();
+    const { customers, loading: loadingCustomers, error: customersError, refetch: refetchCustomers } = useCustomers();
+    const { createProduct } = useProducts();
     
     // State - משתמש ב-prop אם קיים, אחרת state פנימי
     const [internalSelectedItem, setInternalSelectedItem] = useState(null);
-    const selectedItem = propSelectedItem !== null ? propSelectedItem : internalSelectedItem;
+    const [localCustomers, setLocalCustomers] = useState(customers);
+    
+    // עדכון localCustomers כש-customers משתנה
+    useEffect(() => {
+        setLocalCustomers(customers);
+    }, [customers]);
+    
+    // מציאת selectedItem מה-localCustomers
+    const selectedItem = propSelectedItem !== null 
+        ? (localCustomers.find(c => c.id === propSelectedItem.id) || propSelectedItem)
+        : internalSelectedItem;
     const setSelectedItem = setPropSelectedItem || setInternalSelectedItem;
+    
+    // עדכון selectedItem כש-localCustomers משתנה (אם יש propSelectedItem)
+    useEffect(() => {
+        if (propSelectedItem !== null && localCustomers.length > 0 && setPropSelectedItem) {
+            const updatedCustomer = localCustomers.find(c => c.id === propSelectedItem.id);
+            if (updatedCustomer) {
+                // עדכון רק אם יש שינוי במוצרים
+                const currentProducts = propSelectedItem.products || [];
+                const newProducts = updatedCustomer.products || [];
+                if (currentProducts.length !== newProducts.length || 
+                    !currentProducts.every((p, i) => p.id === newProducts[i]?.id)) {
+                    setPropSelectedItem(updatedCustomer);
+                }
+            }
+        }
+    }, [localCustomers, propSelectedItem, setPropSelectedItem]);
     
     const [notes, setNotes] = useState("");
     const [selectedProduct, setSelectedProduct] = useState(null);
+    const [isCreatingProduct, setIsCreatingProduct] = useState(false);
 
     // Reset state when dialog opens
     useEffect(() => {
@@ -36,33 +63,55 @@ export default function EventModal({
                 // מצב עריכה - טעינת נתונים קיימים
                 setNotes(eventToEdit.notes || "");
                 setSelectedProduct(eventToEdit.productId || null);
-                // אחרי שטענו את הלקוחות, נטען את המוצרים אם יש לקוח
-                if (eventToEdit.customerId) {
-                    fetchForCustomer(eventToEdit.customerId);
+                // מציאת הלקוח מהרשימה
+                if (eventToEdit.customerId && localCustomers.length > 0) {
+                    const customer = localCustomers.find(c => c.id === eventToEdit.customerId);
+                    if (customer) {
+                        setSelectedItem(customer);
+                    }
                 }
             } else {
                 // מצב יצירה - איפוס
                 setSelectedItem(null);
                 setNotes("");
                 setSelectedProduct(null);
+                setIsCreatingProduct(false);
             }
         }
-    }, [isOpen, isEditMode, eventToEdit, fetchForCustomer, setSelectedItem]);
+    }, [isOpen, isEditMode, eventToEdit, localCustomers, setSelectedItem]);
 
-    // טעינת מוצרים כשנבחר לקוח
+    // איפוס בחירת מוצר כשמשנים לקוח
     useEffect(() => {
-        if (selectedItem && customSettings.productColumnId) {
-            fetchForCustomer(selectedItem.id);
-            setSelectedProduct(null); // איפוס בחירת מוצר
+        if (selectedItem) {
+            setSelectedProduct(null);
         }
-    }, [selectedItem, customSettings.productColumnId, fetchForCustomer]);
+    }, [selectedItem]);
 
     const handleCreateProduct = async (productName) => {
         if (!selectedItem) return;
         
-        const newProduct = await createProduct(selectedItem.id, productName);
-        if (newProduct) {
-            setSelectedProduct(newProduct.id);
+        setIsCreatingProduct(true);
+        try {
+            const newProduct = await createProduct(selectedItem.id, productName);
+            if (newProduct) {
+                // עדכון localCustomers עם המוצר החדש
+                const updatedCustomers = localCustomers.map(customer =>
+                    customer.id === selectedItem.id
+                        ? { ...customer, products: [...(customer.products || []), newProduct] }
+                        : customer
+                );
+                setLocalCustomers(updatedCustomers);
+                
+                // עדכון selectedItem עם המוצר החדש
+                const updatedSelectedItem = {
+                    ...selectedItem,
+                    products: [...(selectedItem.products || []), newProduct]
+                };
+                setSelectedItem(updatedSelectedItem);
+                setSelectedProduct(newProduct.id);
+            }
+        } finally {
+            setIsCreatingProduct(false);
         }
     };
 
@@ -105,7 +154,7 @@ export default function EventModal({
                         <div className={styles.loading}>טוען...</div>
                     ) : customersError ? (
                         <div className={styles.loading}>{customersError}</div>
-                    ) : customers.map(item => (
+                    ) : localCustomers.map(item => (
                         <button
                             key={item.id}
                             onClick={() => {
@@ -122,12 +171,13 @@ export default function EventModal({
                 {customSettings.productColumnId && selectedItem && (
                     <div className={styles.productSection}>
                         <ProductSelect 
-                            products={products}
+                            products={selectedItem?.products || []}
                             selectedProduct={selectedProduct}
                             onSelectProduct={setSelectedProduct}
                             onCreateNew={handleCreateProduct}
-                            isLoading={loadingProducts}
+                            isLoading={false}
                             disabled={false}
+                            isCreatingProduct={isCreatingProduct}
                         />
                     </div>
                 )}

@@ -2,13 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useCustomers } from '../../hooks/useCustomers';
 import { useProductsMultiple } from '../../hooks/useProductsMultiple';
-import { fetchCustomersForUser } from '../../utils/mondayApi';
 import ProductSelect from '../ProductSelect';
 import logger from '../../utils/logger';
-import mondaySdk from 'monday-sdk-js';
 import styles from './AllDayEventModal.module.css';
-
-const monday = mondaySdk();
 
 export default function AllDayEventModal({
     isOpen,
@@ -17,8 +13,8 @@ export default function AllDayEventModal({
     onCreate
 }) {
     const { customSettings } = useSettings();
-    const { customers, loading: loadingCustomers } = useCustomers();
-    const { products, loadingProducts, fetchForCustomer, createProduct } = useProductsMultiple();
+    const { customers, loading: loadingCustomers, refetch: refetchCustomers } = useCustomers();
+    const { createProduct } = useProductsMultiple();
     
     // State - בחירת סוג אירוע
     const [selectedType, setSelectedType] = useState(null); // 'sick' | 'vacation' | 'reserves' | 'reports'
@@ -26,67 +22,74 @@ export default function AllDayEventModal({
     
     // State - מוצרים נבחרים
     const [selectedProducts, setSelectedProducts] = useState({});
+    // State - יצירת מוצר לכל פרויקט
+    const [isCreatingProduct, setIsCreatingProduct] = useState({});
     
     // איפוס state כאשר התיבה נפתחת או נסגרת
     useEffect(() => {
         if (isOpen) {
-            // איפוס כאשר התיבה נפתחת
+            // איפוס כאשר התיבה נפתחת - רק selectedType, לא projectReports
+            // projectReports יתעדכן על ידי fetchProjects כש-selectedType משתנה ל-'reports'
+            logger.debug('AllDayEventModal', 'Modal opened - resetting selectedType only');
             setSelectedType(null);
-            setProjectReports([]);
             setSelectedProducts({});
+            setIsCreatingProduct({});
+            // רענון רשימת הלקוחות והמוצרים
+            refetchCustomers().then(() => {
+                logger.debug('AllDayEventModal', 'Customers refetched after modal opened');
+            });
+            // לא מאפסים projectReports כאן - זה יקרה ב-fetchProjects
         } else {
             // איפוס גם כאשר התיבה נסגרת (למקרה שהמשתמש סגר בלי לשמור)
+            logger.debug('AllDayEventModal', 'Modal closed - resetting all state');
             setSelectedType(null);
             setProjectReports([]);
             setSelectedProducts({});
+            setIsCreatingProduct({});
         }
-    }, [isOpen]);
+    }, [isOpen, refetchCustomers]);
+    
+    // אחזור רשימת פרויקטים (לקוחות) - משתמש ב-customers מה-hook שכבר כולל מוצרים
+    const fetchProjects = React.useCallback(() => {
+        logger.debug('AllDayEventModal', `fetchProjects called - customers count: ${customers.length}`);
+        
+        if (customers.length === 0) {
+            logger.warn('AllDayEventModal', 'No customers available');
+            return;
+        }
+        
+        logger.functionStart('AllDayEventModal.fetchProjects');
+        
+        // Initialize projectReports with empty hours, notes and product, כולל מוצרים
+        const newProjectReports = customers.map(customer => ({
+            projectId: customer.id,
+            projectName: customer.name,
+            hours: '',
+            notes: '',
+            productId: '',
+            products: customer.products || []
+        }));
+        
+        logger.debug('AllDayEventModal', `Setting projectReports with ${newProjectReports.length} items:`, newProjectReports.map(r => r.projectName));
+        setProjectReports(newProjectReports);
+        
+        logger.functionEnd('AllDayEventModal.fetchProjects', { count: newProjectReports.length });
+    }, [customers]);
     
     // אחזור פרויקטים בעת פתיחת ה-Modal
     useEffect(() => {
+        logger.debug('AllDayEventModal', `useEffect triggered - isOpen: ${isOpen}, selectedType: ${selectedType}`);
         if (isOpen && selectedType === 'reports') {
+            logger.debug('AllDayEventModal', 'Calling fetchProjects from useEffect - resetting projectReports first');
+            // איפוס מפורש לפני טעינה חדשה
+            setProjectReports([]);
             fetchProjects();
+        } else if (selectedType !== 'reports' && projectReports.length > 0) {
+            // אם הסוג שונה מ-'reports', נאפס את projectReports
+            logger.debug('AllDayEventModal', 'Selected type changed away from reports - clearing projectReports');
+            setProjectReports([]);
         }
-    }, [isOpen, selectedType]);
-    
-    // אחזור רשימת פרויקטים (לקוחות)
-    const fetchProjects = async () => {
-        if (!customSettings.connectedBoardId) return;
-        
-        logger.functionStart('AllDayEventModal.fetchProjects');
-
-        try {
-            // שימוש ב-customers מה-hook, או אחזור ישיר אם צריך
-            let items = customers;
-            
-            if (!items || items.length === 0) {
-                // אם אין לקוחות מה-hook, נטען ישירות
-                items = await fetchCustomersForUser(
-                    monday,
-                    customSettings.connectedBoardId,
-                    customSettings.peopleColumnId
-                );
-            }
-            
-            // Initialize projectReports with empty hours, notes and product
-            setProjectReports(items.map(item => ({
-                projectId: item.id,
-                projectName: item.name,
-                hours: '',
-                notes: '',
-                productId: ''
-            })));
-            
-            // טעינת מוצרים לכל לקוח
-            for (const project of items) {
-                fetchForCustomer(project.id);
-            }
-            
-            logger.functionEnd('AllDayEventModal.fetchProjects', { count: items.length });
-        } catch (err) {
-            logger.error('AllDayEventModal', 'Error fetching projects', err);
-        }
-    };
+    }, [isOpen, selectedType, fetchProjects]);
     
     // עדכון שעות, הערות או מוצר לפרויקט
     const updateProjectReport = (projectId, field, value) => {
@@ -109,9 +112,25 @@ export default function AllDayEventModal({
     };
     
     const handleCreateProduct = async (projectId, productName) => {
-        const newProduct = await createProduct(projectId, productName);
-        if (newProduct) {
-            updateSelectedProduct(projectId, newProduct.id);
+        setIsCreatingProduct(prev => ({ ...prev, [projectId]: true }));
+        try {
+            const newProduct = await createProduct(projectId, productName);
+            if (newProduct) {
+                // עדכון projectReports עם המוצר החדש
+                setProjectReports(prev =>
+                    prev.map(report =>
+                        report.projectId === projectId
+                            ? { 
+                                ...report, 
+                                products: [...(report.products || []), newProduct]
+                            }
+                            : report
+                    )
+                );
+                updateSelectedProduct(projectId, newProduct.id);
+            }
+        } finally {
+            setIsCreatingProduct(prev => ({ ...prev, [projectId]: false }));
         }
     };
     
@@ -217,7 +236,10 @@ export default function AllDayEventModal({
                 
                 {/* כפתור דיווחים מרובים */}
                 <button
-                    onClick={() => { setSelectedType('reports'); fetchProjects(); }}
+                    onClick={() => {
+                        logger.debug('AllDayEventModal', 'Button clicked - setting selectedType to reports');
+                        setSelectedType('reports');
+                    }}
                     className={`${styles.typeButton} ${styles.typeButtonFullWidth} ${selectedType === 'reports' ? styles.selected : ''}`}
                 >
                     דיווחים מרובים לפרויקטים
@@ -231,17 +253,22 @@ export default function AllDayEventModal({
                         </p>
                         
                         <div className={styles.reportsScrollable}>
+                            {(() => {
+                                logger.debug('AllDayEventModal', `Rendering ${projectReports.length} project reports:`, projectReports.map(r => r.projectName));
+                                return null;
+                            })()}
                             {!loadingCustomers && projectReports.map((report) => (
                                 <div key={report.projectId} className={styles.reportRow}>
                                     <div className={styles.projectName}>{report.projectName}</div>
                                     {customSettings.productColumnId && (
                                         <ProductSelect 
-                                            products={products[report.projectId] || []}
+                                            products={report.products || []}
                                             selectedProduct={selectedProducts[report.projectId] || ''}
                                             onSelectProduct={(productId) => updateSelectedProduct(report.projectId, productId)}
                                             onCreateNew={(productName) => handleCreateProduct(report.projectId, productName)}
-                                            isLoading={loadingProducts[report.projectId] || false}
+                                            isLoading={false}
                                             disabled={false}
+                                            isCreatingProduct={isCreatingProduct[report.projectId] || false}
                                         />
                                     )}
                                     <input

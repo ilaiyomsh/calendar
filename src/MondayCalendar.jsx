@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { format } from 'date-fns';
+import { format, parse } from 'date-fns';
 import { Calendar, Views } from 'react-big-calendar';
 import withDragAndDrop from 'react-big-calendar/lib/addons/dragAndDrop';
 
@@ -12,18 +12,25 @@ import './calendar-custom.css';
 import { localizer, hebrewMessages, formats } from './constants/calendarConfig';
 
 // פונקציות עזר
-import { fetchColumnSettings, fetchAllBoardItems as fetchBoardItems, createBoardItem, fetchEventsFromBoard, deleteItem } from './utils/mondayApi';
+import { fetchColumnSettings, fetchAllBoardItems as fetchBoardItems, createBoardItem, fetchEventsFromBoard, deleteItem, fetchItemById, fetchCustomerById } from './utils/mondayApi';
 import { getColumnIds, mapItemToEvent, buildColumnValues, buildFetchEventsQuery } from './utils/mondayColumns';
 import logger from './utils/logger';
 
 // רכיבים
-import EventModal from './components/EventModal';
-import AllDayEventModal from './components/AllDayEventModal';
+import EventModal from './components/EventModal/EventModal';
+import AllDayEventModal from './components/AllDayEventModal/AllDayEventModal';
 import CalendarToolbar from './components/CalendarToolbar';
 import CustomEvent from './components/CustomEvent';
+import { ToastContainer } from './components/Toast';
 
 // Context
 import { useSettings } from './contexts/SettingsContext';
+
+// Hooks
+import { useMondayEvents } from './hooks/useMondayEvents';
+import { useToast } from './hooks/useToast';
+import { useCustomers } from './hooks/useCustomers';
+import { useBoardOwner } from './hooks/useBoardOwner';
 
 // עטיפת הלוח ברכיב Drag and Drop
 const DnDCalendar = withDragAndDrop(Calendar);
@@ -32,10 +39,14 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
     // גישה להגדרות מותאמות
     const { customSettings } = useSettings();
     
-    // State - אירועים ולוח שנה
-    const [events, setEvents] = useState([]);
-    const minTime = new Date(1970, 1, 1, 6, 0, 0);  // 06:00 קבוע
-    const maxTime = new Date(1970, 1, 1, 20, 0, 0); // 20:00 קבוע
+    // State - לוח שנה - שעות עבודה גמישות
+    const minTime = customSettings.workDayStart 
+        ? parse(customSettings.workDayStart, 'HH:mm', new Date(1970, 1, 1))
+        : new Date(1970, 1, 1, 6, 0, 0);  // ברירת מחדל: 06:00
+    
+    const maxTime = customSettings.workDayEnd 
+        ? parse(customSettings.workDayEnd, 'HH:mm', new Date(1970, 1, 1))
+        : new Date(1970, 1, 1, 20, 0, 0); // ברירת מחדל: 20:00
 
     // State - Modal
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -51,10 +62,17 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
     const [isAllDayModalOpen, setIsAllDayModalOpen] = useState(false);
     const [pendingAllDayDate, setPendingAllDayDate] = useState(null);
     
-    // State - אייטמים מהלוח
-    const [parentBoardId, setParentBoardId] = useState(null);
-    const [boardItems, setBoardItems] = useState([]);
-    const [isLoadingItems, setIsLoadingItems] = useState(false);
+    // Hook לניהול לקוחות
+    const { customers, loading: isLoadingItems } = useCustomers();
+    
+    // Hook לבדיקת owner status
+    const { isOwner, loading: ownerLoading } = useBoardOwner(monday);
+    
+    // המרת לקוחות לפורמט boardItems
+    const boardItems = customers.map(customer => ({
+        value: customer.id,
+        label: customer.name
+    }));
 
     // State - UI
     const [isComboboxOpen, setIsComboboxOpen] = useState(false);
@@ -65,6 +83,22 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
     const [context, setContext] = useState(null);
     const [settings, setSettings] = useState(null);
     const [columnIds, setColumnIds] = useState(null); // מזהי העמודות
+
+    // Hook לניהול Toast
+    const { toasts, showSuccess, showError, showWarning, removeToast } = useToast();
+
+    // Hook לניהול אירועים
+    const { 
+        events, 
+        loading: eventsLoading, 
+        error: eventsError,
+        loadEvents,
+        createEvent,
+        updateEvent,
+        deleteEvent,
+        updateEventPosition,
+        addEvent
+    } = useMondayEvents(monday, context);
 
     // טעינת context מ-Monday
     useEffect(() => {
@@ -102,181 +136,6 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
         loadSettings();
     }, [monday]);
 
-    // פונקציה לטעינת אירועים מ-Monday
-    const loadEventsFromMonday = useCallback(async (startDate, endDate) => {
-        // וידוא שיש לנו את כל ההגדרות הנדרשות
-        if (!context?.boardId || !customSettings?.dateColumnId || !customSettings?.durationColumnId) {
-            logger.warn('loadEventsFromMonday', 'Missing context or settings for fetching events');
-            return;
-        }
-
-        try {
-            logger.functionStart('loadEventsFromMonday', { startDate, endDate });
-            
-            const fromDateStr = format(startDate, 'yyyy-MM-dd');
-            const toDateStr = format(endDate, 'yyyy-MM-dd');
-
-            // 1. בניית השאילתה לפי המפרט
-            const query = `query {
-                boards (ids: [${context.boardId}]) {
-                    items_page (
-                        limit: 500,
-                        query_params: {
-                            rules: [
-                                {
-                                    column_id: "${customSettings.dateColumnId}",
-                                    compare_value: ["${fromDateStr}", "${toDateStr}"],
-                                    operator: between
-                                }
-                            ]
-                        }
-                    ) {
-                        items {
-                            id
-                            name
-                            column_values {
-                                id
-                                value
-                                ... on DateValue {
-                                    date
-                                    time
-                                }
-                                ... on PeopleValue {
-                                    text
-                                    persons_and_teams {
-                                        id
-                                        kind
-                                    }
-                                    updated_at
-                                }
-                            }
-                        }
-                    }
-                }
-            }`;
-
-            const res = await monday.api(query);
-            
-            if (!res.data?.boards?.[0]?.items_page?.items) {
-                logger.warn('loadEventsFromMonday', 'No items found in response');
-                setEvents([]);
-                return;
-            }
-
-            const rawItems = res.data.boards[0].items_page.items;
-
-            // 2. מיפוי וחישוב לתצוגה
-            const mappedEvents = rawItems.map(item => {
-                // מציאת העמודה הרלוונטית
-                const dateColumn = item.column_values.find(col => col.id === customSettings.dateColumnId);
-                const durationColumn = item.column_values.find(col => col.id === customSettings.durationColumnId);
-                const notesColumn = item.column_values.find(col => col.id === customSettings.notesColumnId);
-
-                // א. חילוץ התחלה מהשדות date ו-time (כבר מותאמים לזמן מקומי)
-                let start = null;
-                if (dateColumn?.date) {
-                    const [year, month, day] = dateColumn.date.split('-').map(Number);
-                    
-                    let hours = 0, minutes = 0, seconds = 0;
-                    if (dateColumn.time) {
-                        [hours, minutes, seconds] = dateColumn.time.split(':').map(Number);
-                    }
-
-                    // יצירת תאריך מקומי - time כבר מותאם למשתמש לפי Monday
-                    start = new Date(year, month - 1, day, hours, minutes, seconds || 0);
-                }
-
-                if (!start || isNaN(start.getTime())) return null; // דילוג אם אין תאריך תקין
-
-                // ב. חילוץ משך (ברירת מחדל: 60 דקות)
-                let durationMinutes = 60;
-                if (durationColumn?.value) {
-                    try {
-                        let durationHours = 0;
-                        
-                        // עמודת numbers מחזירה מחרוזת JSON של מספר
-                        if (typeof durationColumn.value === 'string') {
-                            // ניסיון לפענח כ-JSON תחילה
-                            try {
-                                const parsed = JSON.parse(durationColumn.value);
-                                // JSON.parse מחזיר את המספר ישירות
-                                if (typeof parsed === 'number') {
-                                    durationHours = parsed;
-                                } else if (parsed && typeof parsed === 'object') {
-                                    // אם זה אובייקט, נחפש שדה מספרי
-                                    durationHours = parseFloat(parsed.value || parsed.number) || 0;
-                                } else {
-                                    // ניסיון אחרון - המרה ישירה למספר
-                                    durationHours = parseFloat(parsed) || 0;
-                                }
-                            } catch {
-                                // אם זה לא JSON, זה כנראה מחרוזת מספרית רגילה
-                                durationHours = parseFloat(durationColumn.value) || 0;
-                            }
-                        } else if (typeof durationColumn.value === 'number') {
-                            durationHours = durationColumn.value;
-                        }
-                        
-                        if (!isNaN(durationHours)) {
-                            if (durationHours === 0) {
-                                // אירוע יומי (מחלה/חופשה/מילואים)
-                                durationMinutes = 0;
-                            } else {
-                                durationMinutes = Math.round(durationHours * 60);
-                            }
-                        } else {
-                            logger.warn('loadEventsFromMonday', `Invalid duration hours: ${durationHours} for item: ${item.name}`);
-                            return null;
-                        }
-                    } catch (e) {
-                        logger.error('loadEventsFromMonday', 'Error parsing duration', e);
-                    }
-                } else {
-                    logger.warn('loadEventsFromMonday', `No duration column value for item: ${item.name}`);
-                }
-
-                // ג. חילוץ הערות
-                let notes = '';
-                if (notesColumn?.value) {
-                    try {
-                        notes = notesColumn.value || '';
-                    } catch (e) {
-                        logger.error('loadEventsFromMonday', 'Error parsing notes', e);
-                    }
-                }
-
-                // ד. חישוב סיום
-                let end;
-                let isAllDay = false;
-                
-                if (durationMinutes === 0) {
-                    // אירוע יומי - end = start (all-day event)
-                    end = new Date(start);
-                    isAllDay = true;
-                } else {
-                    end = new Date(start.getTime() + durationMinutes * 60000);
-                }
-
-                // ו. יצירת האובייקט
-                return {
-                    id: item.id,
-                    title: item.name,
-                    start: start,
-                    end: end,
-                    allDay: isAllDay,
-                    mondayItemId: item.id,
-                    notes: notes
-                };
-            }).filter(Boolean); // סינון nulls
-
-            setEvents(mappedEvents);
-            logger.functionEnd('loadEventsFromMonday', { count: mappedEvents.length });
-
-        } catch (error) {
-            logger.error('loadEventsFromMonday', 'Error loading events', error);
-        }
-    }, [context, customSettings, monday]);
-
     // טעינת אירועים בפתיחה ראשונית ובעדכון הגדרות
     useEffect(() => {
         if (context?.boardId && customSettings?.dateColumnId) {
@@ -290,90 +149,35 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
             endOfWeek.setDate(startOfWeek.getDate() + 7);
             endOfWeek.setHours(23, 59, 59, 999);
 
-            loadEventsFromMonday(startOfWeek, endOfWeek);
+            loadEvents(startOfWeek, endOfWeek);
         }
-    }, [context, customSettings, loadEventsFromMonday]);
+    }, [context, customSettings, loadEvents]);
 
     // --- Helper functions ---
 
     // --- Event handlers ---
 
-    // פונקציה מרכזית לעדכון אירוע (גרירה או שינוי גודל)
-    const handleEventUpdate = async (event, newStart, newEnd) => {
-        // 1. עדכון אופטימי ב-UI
-        setEvents((prev) => {
-            const filtered = prev.filter((ev) => ev.id !== event.id);
-            return [...filtered, { ...event, start: newStart, end: newEnd }];
-        });
-
-        // 2. בדיקת תקינות להגדרות
-        if (!context?.boardId || !customSettings?.dateColumnId || !customSettings?.durationColumnId) {
-            logger.error('handleEventUpdate', 'Missing settings for update');
-            return;
-        }
-
-        try {
-            logger.functionStart('handleEventUpdate', { id: event.mondayItemId, newStart, newEnd });
-
-            // 3. חישובים
-            const durationMinutes = Math.round((newEnd - newStart) / 60000);
-            const hours = Math.floor(durationMinutes / 60);
-            const minutes = durationMinutes % 60;
-
-            // 4. המרת הזמן המקומי ל-UTC (Monday מצפה ל-UTC)
-            const utcYear = newStart.getUTCFullYear();
-            const utcMonth = newStart.getUTCMonth() + 1;
-            const utcDay = newStart.getUTCDate();
-            const utcHours = newStart.getUTCHours();
-            const utcMinutes = newStart.getUTCMinutes();
-            const utcSeconds = newStart.getUTCSeconds();
-
-            const dateStr = `${utcYear}-${String(utcMonth).padStart(2, '0')}-${String(utcDay).padStart(2, '0')}`;
-            const timeStr = `${String(utcHours).padStart(2, '0')}:${String(utcMinutes).padStart(2, '0')}:${String(utcSeconds).padStart(2, '0')}`;
-
-            // 5. בניית ערכים לעדכון
-            const columnValues = {};
-            
-            columnValues[customSettings.dateColumnId] = {
-                date: dateStr,
-                time: timeStr
-            };
-
-            // המרה לשעות עשרוניות
-            const durationHours = durationMinutes / 60;
-            columnValues[customSettings.durationColumnId] = durationHours.toFixed(2);
-
-            // 5. שליחת Mutation
-            const mutation = `mutation {
-                change_multiple_column_values(
-                    item_id: ${event.mondayItemId}, 
-                    board_id: ${context.boardId}, 
-                    column_values: ${JSON.stringify(JSON.stringify(columnValues))}
-                ) {
-                    id
-                }
-            }`;
-
-            await monday.api(mutation);
-            console.log("✅ Event updated successfully in Monday");
-
-        } catch (error) {
-            console.error("❌ Error updating event:", error);
-            // במקרה של שגיאה, כדאי להחזיר את האירוע למצבו הקודם (לא מיושם כאן לפשטות)
-            // רענון הנתונים מהשרת יכול לתקן את המצב
-            loadEventsFromMonday(newStart, newEnd); // רענון פשוט כ-fallback
-        }
-    };
-
     // גרירת אירוע קיים (הזזה)
-    const onEventDrop = useCallback(({ event, start, end }) => {
-        handleEventUpdate(event, start, end);
-    }, [context, customSettings, monday]); // תלויות
+    const onEventDrop = useCallback(async ({ event, start, end }) => {
+        try {
+            await updateEventPosition(event, start, end);
+            showSuccess('האירוע עודכן בהצלחה');
+        } catch (error) {
+            showError('שגיאה בעדכון מיקום האירוע. השינויים בוטלו.');
+            logger.error('MondayCalendar', 'Error in onEventDrop', error);
+        }
+    }, [updateEventPosition, showSuccess, showError]);
 
     // שינוי אורך אירוע (מתיחה)
-    const onEventResize = useCallback(({ event, start, end }) => {
-        handleEventUpdate(event, start, end);
-    }, [context, customSettings, monday]); // תלויות
+    const onEventResize = useCallback(async ({ event, start, end }) => {
+        try {
+            await updateEventPosition(event, start, end);
+            showSuccess('האירוע עודכן בהצלחה');
+        } catch (error) {
+            showError('שגיאה בעדכון אורך האירוע. השינויים בוטלו.');
+            logger.error('MondayCalendar', 'Error in onEventResize', error);
+        }
+    }, [updateEventPosition, showSuccess, showError]);
 
     // טעינת נתוני אירוע לעריכה
     const loadEventDataForEdit = useCallback(async (event) => {
@@ -382,49 +186,15 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
         try {
             logger.functionStart('loadEventDataForEdit', { eventId: event.mondayItemId });
             
-            // שימוש ב-items_by_column_values לחיפוש לפי ID
-            // Monday.com API תומך ב-items_by_column_values שמאפשר לשאול אייטמים לפי ערך של עמודה
-            // אבל כדי לשאול לפי ID, נשתמש ב-items_page עם limit גבוה ונסנן
-            // או נשתמש ב-items_by_column_values עם עמודת name או עמודה אחרת
-            // למעשה, הדרך הכי פשוטה היא לשאול את כל האייטמים ולסנן לפי ID
-            const query = `query {
-                boards(ids: [${context.boardId}]) {
-                    items_page(limit: 500) {
-                        items {
-                            id
-                            name
-                            column_values {
-                                id
-                                value
-                                type
-                                ... on DateValue {
-                                    date
-                                    time
-                                }
-                                ... on BoardRelationValue {
-                                    value
-                                }
-                                ... on TextValue {
-                                    text
-                                }
-                            }
-                        }
-                    }
-                }
-            }`;
+            // שימוש ב-query ממוקד לפי ID
+            const item = await fetchItemById(monday, context.boardId, event.mondayItemId);
             
-            const res = await monday.api(query);
-            
-            if (res.data?.boards?.[0]?.items_page?.items) {
-                // סינון האייטם לפי ID
-                const item = res.data.boards[0].items_page.items.find(i => i.id === event.mondayItemId.toString());
-                
-                if (!item) {
-                    logger.warn('loadEventDataForEdit', `Item not found: ${event.mondayItemId}`);
-                    return;
-                }
-                
-                const updatedEvent = { ...event };
+            if (!item) {
+                logger.warn('loadEventDataForEdit', `Item not found: ${event.mondayItemId}`);
+            return;
+        }
+
+            const updatedEvent = { ...event };
                 
                 // חילוץ לקוח
                 if (customSettings.projectColumnId) {
@@ -440,22 +210,19 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
                                 const customerId = parsedValue.item_ids[0].toString();
                                 updatedEvent.customerId = customerId;
                                 
-                                // נטען את הלקוח - צריך לטעון את boardItems קודם
+                                // נטען את הלקוח - שימוש ב-query ממוקד
                                 if (settings?.perent_item_board && context?.boardId) {
                                     try {
                                         const columnId = Object.keys(settings.perent_item_board)[0];
                                         if (columnId) {
-                                            const { fetchColumnSettings, fetchAllBoardItems } = await import('./utils/mondayApi');
                                             const columnSettings = await fetchColumnSettings(monday, context.boardId, columnId);
                                             
                                             if (columnSettings?.boardIds && columnSettings.boardIds.length > 0) {
                                                 const boardId = columnSettings.boardIds[0];
-                                                const items = await fetchAllBoardItems(monday, boardId);
-                                                setBoardItems(items);
+                                                const customer = await fetchCustomerById(monday, boardId, customerId);
                                                 
-                                                const customerItem = items.find(item => item.value === customerId);
-                                                if (customerItem) {
-                                                    setSelectedItem({ id: customerItem.value, name: customerItem.label });
+                                                if (customer) {
+                                                    setSelectedItem({ id: customer.id, name: customer.name });
                                                 }
                                             }
                                         }
@@ -500,9 +267,8 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
                     }
                 }
                 
-                setEventToEdit(updatedEvent);
-                logger.functionEnd('loadEventDataForEdit', { eventId: event.mondayItemId });
-            }
+            setEventToEdit(updatedEvent);
+            logger.functionEnd('loadEventDataForEdit', { eventId: event.mondayItemId });
         } catch (error) {
             logger.error('loadEventDataForEdit', 'Error loading event data for edit', error);
         }
@@ -551,33 +317,8 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
         setNewEventTitle('');
         setSelectedItem(null);
 
-        // אחזור אייטמים מהלוח המקור - רק אם יש הגדרות
-        if (settings?.perent_item_board && context?.boardId) {
-            try {
-                const columnId = Object.keys(settings.perent_item_board)[0];
-                if (!columnId) {
-                    logger.warn('onSelectSlot', 'No column ID found');
-                    return;
-                }
-
-                const columnSettings = await fetchColumnSettings(monday, context.boardId, columnId);
-                
-                if (columnSettings?.boardIds && columnSettings.boardIds.length > 0) {
-                    const boardId = columnSettings.boardIds[0];
-                    setParentBoardId(boardId);
-                    
-                    setIsLoadingItems(true);
-                    const items = await fetchBoardItems(monday, boardId);
-                    setBoardItems(items);
-                    setIsLoadingItems(false);
-                }
-            } catch (error) {
-                logger.error('onSelectSlot', 'Error fetching board items', error);
-                setIsLoadingItems(false);
-            }
-        } else {
-            logger.warn('onSelectSlot', 'Settings not configured yet');
-        }
+        // הלקוחות נטענים אוטומטית דרך useCustomers hook
+        // אין צורך בטעינה ידנית כאן
     }, [monday, settings, context]);
 
     // --- Modal handlers ---
@@ -592,123 +333,21 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
         setEventToEdit(null);
     };
 
-    // בניית column values משותפת ליצירה ועדכון
-    const buildColumnValues = (eventData, startTime, endTime, currentUser) => {
-        const durationMinutes = Math.round((endTime - startTime) / 60000);
-        const durationHours = durationMinutes / 60;
-
-        // המרת הזמן המקומי ל-UTC (Monday מצפה ל-UTC)
-        const utcYear = startTime.getUTCFullYear();
-        const utcMonth = startTime.getUTCMonth() + 1;
-        const utcDay = startTime.getUTCDate();
-        const utcHours = startTime.getUTCHours();
-        const utcMinutes = startTime.getUTCMinutes();
-        const utcSeconds = startTime.getUTCSeconds();
-
-        const dateStr = `${utcYear}-${String(utcMonth).padStart(2, '0')}-${String(utcDay).padStart(2, '0')}`;
-        const timeStr = `${String(utcHours).padStart(2, '0')}:${String(utcMinutes).padStart(2, '0')}:${String(utcSeconds).padStart(2, '0')}`;
-
-        const columnValues = {};
-
-        // עמודת תאריך
-        columnValues[customSettings.dateColumnId] = {
-            date: dateStr,
-            time: timeStr
-        };
-
-        // עמודת משך זמן - המרה לשעות עשרוניות
-        columnValues[customSettings.durationColumnId] = durationHours.toFixed(2);
-
-        // עמודת קישור לפרויקט (אם נבחר פרויקט ויש הגדרה לעמודה)
-        if (eventData.itemId && customSettings.projectColumnId) {
-            columnValues[customSettings.projectColumnId] = {
-                item_ids: [parseInt(eventData.itemId)]
-            };
-        }
-        
-        // עמודת קישור למוצר (אם נבחר מוצר ויש הגדרה לעמודה)
-        if (eventData.productId && customSettings.productColumnId) {
-            columnValues[customSettings.productColumnId] = {
-                item_ids: [parseInt(eventData.productId)]
-            };
-        }
-        
-        // עמודת הערות (אם יש הערות ויש הגדרה לעמודה)
-        if (eventData.notes && customSettings.notesColumnId) {
-            columnValues[customSettings.notesColumnId] = eventData.notes;
-        }
-        
-        // עמודת מדווח - המשתמש שיצר את הדיווח (אם יש הגדרה לעמודה)
-        if (currentUser && customSettings.reporterColumnId) {
-            columnValues[customSettings.reporterColumnId] = {
-                personsAndTeams: [{ id: parseInt(currentUser.id), kind: "person" }]
-            };
-        }
-
-        return columnValues;
-    };
 
     const handleCreateEvent = async (eventData) => {
-        // eventData מגיע מ-EventModal: { title, itemId, notes, productId }
-        
         if (!pendingSlot || !eventData?.title) {
             logger.warn('handleCreateEvent', 'Missing required data for event creation');
+            showWarning('חסרים נתונים נדרשים ליצירת האירוע');
             return;
-        }
-
-        if (!context?.boardId) {
-            logger.error('handleCreateEvent', 'Missing board ID');
-            return;
-        }
-
-        // בדיקת הגדרות חובה
-        if (!customSettings.dateColumnId || !customSettings.durationColumnId) {
-             logger.error('handleCreateEvent', 'Missing column settings (date or duration)');
-             return;
         }
 
         try {
-            const itemName = eventData.title;
-            const currentUserId = context?.user?.id;
-            
-            logger.functionStart('handleCreateEvent', {
-                itemName: itemName,
-                itemId: eventData.itemId,
-                notes: eventData.notes,
-                productId: eventData.productId,
-                start: pendingSlot.start,
-                end: pendingSlot.end
-            });
-
-            const columnValues = buildColumnValues(eventData, pendingSlot.start, pendingSlot.end, currentUserId ? { id: currentUserId } : null);
-            const columnValuesJson = JSON.stringify(columnValues);
-
-            // יצירת אייטם ב-Monday
-            const createdItem = await createBoardItem(
-                monday,
-                context.boardId,
-                itemName,
-                columnValuesJson
-            );
-
-            if (createdItem) {
-                // הוספת האירוע ל-state (Optimistic UI)
-                const newEvent = {
-                    id: createdItem.id,
-                    title: itemName,
-                    start: pendingSlot.start,
-                    end: pendingSlot.end,
-                    mondayItemId: createdItem.id,
-                    notes: eventData.notes
-                };
-
-                setEvents([...events, newEvent]);
-                logger.functionEnd('handleCreateEvent', { eventId: newEvent.id });
-
-                handleCloseModal();
-            }
+            await createEvent(eventData, pendingSlot.start, pendingSlot.end);
+            showSuccess('האירוע נוצר בהצלחה');
+            handleCloseModal();
         } catch (error) {
-            logger.error('handleCreateEvent', 'Error creating event', error);
+            showError('שגיאה ביצירת האירוע. נסה שוב.');
+            logger.error('MondayCalendar', 'Error in handleCreateEvent', error);
         }
     };
 
@@ -716,83 +355,17 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
     const handleUpdateEvent = async (eventData) => {
         if (!eventToEdit || !pendingSlot || !eventData?.title) {
             logger.warn('handleUpdateEvent', 'Missing required data for event update');
+            showWarning('חסרים נתונים נדרשים לעדכון האירוע');
             return;
-        }
-
-        if (!context?.boardId || !eventToEdit.mondayItemId) {
-            logger.error('handleUpdateEvent', 'Missing board ID or event ID');
-            return;
-        }
-
-        // בדיקת הגדרות חובה
-        if (!customSettings.dateColumnId || !customSettings.durationColumnId) {
-             logger.error('handleUpdateEvent', 'Missing column settings (date or duration)');
-             return;
         }
 
         try {
-            const itemName = eventData.title;
-            const currentUserId = context?.user?.id;
-            
-            logger.functionStart('handleUpdateEvent', {
-                itemId: eventToEdit.mondayItemId,
-                itemName: itemName,
-                itemId: eventData.itemId,
-                notes: eventData.notes,
-                productId: eventData.productId,
-                start: pendingSlot.start,
-                end: pendingSlot.end
-            });
-
-            const columnValues = buildColumnValues(eventData, pendingSlot.start, pendingSlot.end, currentUserId ? { id: currentUserId } : null);
-            const columnValuesJson = JSON.stringify(columnValues);
-
-            // עדכון אייטם ב-Monday
-            const mutation = `mutation {
-                change_multiple_column_values(
-                    item_id: ${eventToEdit.mondayItemId}, 
-                    board_id: ${context.boardId}, 
-                    column_values: ${JSON.stringify(JSON.stringify(columnValues))}
-                ) {
-                    id
-                }
-            }`;
-
-            await monday.api(mutation);
-            
-            // עדכון שם האייטם אם השתנה
-            if (itemName !== eventToEdit.title) {
-                const updateNameMutation = `mutation {
-                    change_simple_column_value(
-                        item_id: ${eventToEdit.mondayItemId},
-                        column_id: "name",
-                        value: "${itemName}"
-                    ) {
-                        id
-                    }
-                }`;
-                await monday.api(updateNameMutation);
-            }
-
-            // עדכון ה-state (Optimistic UI)
-            setEvents((prev) => {
-                return prev.map(ev => 
-                    ev.id === eventToEdit.id 
-                        ? { 
-                            ...ev, 
-                            title: itemName,
-                            start: pendingSlot.start,
-                            end: pendingSlot.end,
-                            notes: eventData.notes
-                        }
-                        : ev
-                );
-            });
-
-            logger.functionEnd('handleUpdateEvent', { eventId: eventToEdit.mondayItemId });
+            await updateEvent(eventToEdit.id, eventData, pendingSlot.start, pendingSlot.end);
+            showSuccess('האירוע עודכן בהצלחה');
             handleCloseModal();
         } catch (error) {
-            logger.error('handleUpdateEvent', 'Error updating event', error);
+            showError('שגיאה בעדכון האירוע. השינויים בוטלו.');
+            logger.error('MondayCalendar', 'Error in handleUpdateEvent', error);
         }
     };
 
@@ -800,20 +373,17 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
     const handleDeleteEvent = async () => {
         if (!eventToEdit || !eventToEdit.mondayItemId) {
             logger.error('handleDeleteEvent', 'Missing event ID for deletion');
-            return;
+            showError('שגיאה: לא נמצא מזהה אירוע למחיקה');
+             return;
         }
 
         try {
-            logger.functionStart('handleDeleteEvent', { eventId: eventToEdit.mondayItemId });
-
-            await deleteItem(monday, eventToEdit.mondayItemId);
-
-            // הסרת האירוע מה-state
-            setEvents((prev) => prev.filter(ev => ev.id !== eventToEdit.id));
-
-            logger.functionEnd('handleDeleteEvent', { eventId: eventToEdit.mondayItemId });
+            await deleteEvent(eventToEdit.id);
+            showSuccess('האירוע נמחק בהצלחה');
+                handleCloseModal();
         } catch (error) {
-            logger.error('handleDeleteEvent', 'Error deleting event', error);
+            showError('שגיאה במחיקת האירוע. האירוע לא נמחק.');
+            logger.error('MondayCalendar', 'Error in handleDeleteEvent', error);
         }
     };
 
@@ -876,9 +446,9 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
         }
         
         if (start && end) {
-            loadEventsFromMonday(start, end);
+            loadEvents(start, end);
         }
-    }, [loadEventsFromMonday]);
+    }, [loadEvents]);
 
     // Custom Toolbar עם גישה ל-props
     const CustomToolbarWithProps = useCallback((props) => {
@@ -890,9 +460,10 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
                 customSettings={customSettings}
                 columnIds={columnIds}
                 events={events}
+                isOwner={isOwner}
             />
         );
-    }, [onOpenSettings, monday, customSettings, columnIds, events]);
+    }, [onOpenSettings, monday, customSettings, columnIds, events, isOwner]);
 
     // יצירת אירוע יומי
     const handleCreateAllDayEvent = async (allDayData) => {
@@ -961,7 +532,7 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
                     );
                     
                     if (createdItem) {
-                        // הוספה ל-state (Optimistic UI)
+                        // הוספה ל-state דרך ה-hook
                         const newEvent = {
                             id: createdItem.id,
                             title: report.projectName,
@@ -970,7 +541,7 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
                             notes: report.notes,
                             mondayItemId: createdItem.id
                         };
-                        setEvents(prev => [...prev, newEvent]);
+                        addEvent(newEvent);
                     }
                     
                     // מעבר לאירוע הבא
@@ -1025,7 +596,7 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
                         allDay: true,
                         mondayItemId: createdItem.id
                     };
-                    setEvents(prev => [...prev, newEvent]);
+                    addEvent(newEvent);
                     logger.functionEnd('handleCreateAllDayEvent', { type: allDayData.type, eventId: createdItem.id });
                 }
             }
@@ -1038,6 +609,34 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
         }
     };
 
+    // פונקציה לקביעת עיצוב האירוע (צבע רקע מלא)
+    const eventStyleGetter = (event, start, end, isSelected) => {
+        let backgroundColor = '#3174ad'; // צבע ברירת מחדל (כחול)
+        
+        // עדיפות ראשונה: צבע הסטטוס מ-Monday (אם קיים)
+        if (event.statusColor) {
+            backgroundColor = event.statusColor;
+        }
+        // אחרת: לוגיקה לבחירת צבע לפי סוג האירוע או הכותרת
+        else if (event.title === 'מחלה') {
+            backgroundColor = '#e2445c'; // אדום
+        } else if (event.title === 'חופשה') {
+            backgroundColor = '#00c875'; // ירוק
+        } else if (event.title === 'מילואים') {
+            backgroundColor = '#579bfc'; // כחול בהיר
+        }
+        
+        return {
+            style: {
+                backgroundColor: backgroundColor,
+                borderRadius: '4px',
+                        opacity: 0.9,
+                color: 'white', // צבע הטקסט
+                border: '0px',
+                display: 'block'
+            }
+        };
+    };
 
     return (
         <div style={{ height: '100%', padding: '20px', direction: 'rtl', display: 'flex', flexDirection: 'column' }}>
@@ -1064,6 +663,7 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
                     onRangeChange={handleRangeChange}
                     step={15}
                     timeslots={4}
+                    eventPropGetter={eventStyleGetter}
                     components={{
                         toolbar: CustomToolbarWithProps,
                         event: CustomEvent
@@ -1102,6 +702,9 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
                 pendingDate={pendingAllDayDate}
                 onCreate={handleCreateAllDayEvent}
             />
+
+            {/* Toast Notifications */}
+            <ToastContainer toasts={toasts} onRemove={removeToast} />
         </div>
     );
 }

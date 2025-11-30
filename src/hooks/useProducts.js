@@ -15,10 +15,54 @@ export const useProducts = () => {
     const [loading, setLoading] = useState(false);
 
     /**
+     * מציאת עמודת Connected Board בלוח המוצרים שמקשרת ללוח הלקוחות
+     */
+    const findCustomerLinkColumn = useCallback(async (productsBoardId, customerBoardId) => {
+        if (!productsBoardId || !customerBoardId) return null;
+
+        try {
+            const query = `query {
+                boards(ids: [${productsBoardId}]) {
+                    columns {
+                        id
+                        type
+                        settings_str
+                    }
+                }
+            }`;
+
+            logger.api('findCustomerLinkColumn', query);
+            const res = await monday.api(query);
+            const columns = res.data?.boards?.[0]?.columns || [];
+
+            // מציאת עמודת board_relation שמקשרת ללוח הלקוחות
+            for (const col of columns) {
+                if (col.type === 'board_relation') {
+                    try {
+                        const settings = JSON.parse(col.settings_str || '{}');
+                        if (settings.boardIds && settings.boardIds.includes(parseInt(customerBoardId))) {
+                            logger.debug('useProducts', `Found customer link column: ${col.id}`);
+                            return col.id;
+                        }
+                    } catch {
+                        continue;
+                    }
+                }
+            }
+            logger.warn('useProducts', 'Could not find customer link column in products board');
+            return null;
+        } catch (err) {
+            logger.apiError('findCustomerLinkColumn', err);
+            logger.error('useProducts', 'Error finding customer link column', err);
+            return null;
+        }
+    }, []);
+
+    /**
      * אחזור מוצרים לפי לקוח
      */
     const fetchForCustomer = useCallback(async (customerId) => {
-        if (!customSettings.productsBoardId || !customSettings.productsCustomerColumnId || !customerId) {
+        if (!customSettings.productsBoardId || !customSettings.connectedBoardId || !customerId) {
             logger.warn('useProducts', 'Missing settings or customerId for fetching products');
             return;
         }
@@ -28,6 +72,18 @@ export const useProducts = () => {
         setLoading(true);
 
         try {
+            // מציאת העמודה בלוח המוצרים שמקשרת ללקוח
+            const customerLinkColumnId = await findCustomerLinkColumn(
+                customSettings.productsBoardId,
+                customSettings.connectedBoardId
+            );
+
+            if (!customerLinkColumnId) {
+                logger.warn('useProducts', 'Could not find customer link column in products board');
+                setProducts([]);
+                return;
+            }
+
             const query = `query {
                 boards(ids: [${customSettings.productsBoardId}]) {
                     items_page(
@@ -35,7 +91,7 @@ export const useProducts = () => {
                         query_params: {
                             rules: [
                                 {
-                                    column_id: "${customSettings.productsCustomerColumnId}",
+                                    column_id: "${customerLinkColumnId}",
                                     compare_value: [${customerId}]
                                 }
                             ]
@@ -72,13 +128,13 @@ export const useProducts = () => {
         } finally {
             setLoading(false);
         }
-    }, [customSettings.productsBoardId, customSettings.productsCustomerColumnId]);
+    }, [customSettings.productsBoardId, customSettings.connectedBoardId, findCustomerLinkColumn]);
 
     /**
      * יצירת מוצר חדש
      */
     const createProduct = useCallback(async (customerId, productName) => {
-        if (!customSettings.productsBoardId || !customSettings.productsCustomerColumnId || !productName?.trim() || !customerId) {
+        if (!customSettings.productsBoardId || !customSettings.connectedBoardId || !productName?.trim() || !customerId) {
             logger.warn('useProducts', 'Missing settings or data for creating product');
             return null;
         }
@@ -86,8 +142,19 @@ export const useProducts = () => {
         logger.functionStart('useProducts.createProduct', { customerId, productName });
 
         try {
+            // מציאת העמודה בלוח המוצרים שמקשרת ללקוח
+            const customerLinkColumnId = await findCustomerLinkColumn(
+                customSettings.productsBoardId,
+                customSettings.connectedBoardId
+            );
+
+            if (!customerLinkColumnId) {
+                logger.warn('useProducts', 'Could not find customer link column in products board');
+                return null;
+            }
+
             const columnValues = JSON.stringify({
-                [customSettings.productsCustomerColumnId]: {
+                [customerLinkColumnId]: {
                     item_ids: [parseInt(customerId)]
                 }
             });
@@ -125,7 +192,7 @@ export const useProducts = () => {
             logger.error('useProducts', 'Error creating product', err);
             return null;
         }
-    }, [customSettings.productsBoardId, customSettings.productsCustomerColumnId]);
+    }, [customSettings.productsBoardId, customSettings.connectedBoardId, findCustomerLinkColumn]);
 
     return {
         products,

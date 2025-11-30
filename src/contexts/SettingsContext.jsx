@@ -17,11 +17,16 @@ const DEFAULT_SETTINGS = {
   projectColumnId: null,       // עמודת Connected Board לקישור ללוח החיצוני (לקוח)
   notesColumnId: null,         // עמודת Text להערות חופשיות
   reporterColumnId: null,      // עמודת People למדווח
+  statusColumnId: null,        // עמודת Status לצביעת אירועים לפי צבע הסטטוס
   
   // הגדרות מוצרים - רמת היררכיה נוספת
   productsBoardId: null,       // מזהה לוח המוצרים
   productsCustomerColumnId: null, // עמודת Connected Board בלוח המוצרים (קישור ללקוח)
-  productColumnId: null        // עמודת Connected Board בלוח הנוכחי (קישור למוצר)
+  productColumnId: null,       // עמודת Connected Board בלוח הנוכחי (קישור למוצר)
+  
+  // הגדרות שעות עבודה
+  workDayStart: "06:00",       // שעת תחילת יום עבודה (HH:mm)
+  workDayEnd: "20:00"          // שעת סיום יום עבודה (HH:mm)
 };
 
 // Provider Component

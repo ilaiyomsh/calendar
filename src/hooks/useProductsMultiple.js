@@ -19,7 +19,7 @@ export const useProductsMultiple = () => {
      * אחזור מוצרים לפי לקוח
      */
     const fetchForCustomer = useCallback(async (customerId) => {
-        if (!customSettings.productsBoardId || !customSettings.productsCustomerColumnId || !customerId) {
+        if (!customSettings.productsBoardId || !customSettings.connectedBoardId || !customerId) {
             logger.warn('useProductsMultiple', 'Missing settings or customerId for fetching products');
             return;
         }
@@ -32,7 +32,7 @@ export const useProductsMultiple = () => {
             const items = await fetchProductsForCustomer(
                 monday,
                 customSettings.productsBoardId,
-                customSettings.productsCustomerColumnId,
+                customSettings.connectedBoardId,
                 customerId
             );
 
@@ -44,13 +44,13 @@ export const useProductsMultiple = () => {
         } finally {
             setLoadingProducts(prev => ({ ...prev, [customerId]: false }));
         }
-    }, [customSettings.productsBoardId, customSettings.productsCustomerColumnId]);
+    }, [customSettings.productsBoardId, customSettings.connectedBoardId]);
 
     /**
      * יצירת מוצר חדש
      */
     const createProductForCustomer = useCallback(async (customerId, productName) => {
-        if (!customSettings.productsBoardId || !customSettings.productsCustomerColumnId || !productName?.trim() || !customerId) {
+        if (!customSettings.productsBoardId || !customSettings.connectedBoardId || !productName?.trim() || !customerId) {
             logger.warn('useProductsMultiple', 'Missing settings or data for creating product');
             return null;
         }
@@ -61,7 +61,7 @@ export const useProductsMultiple = () => {
             const newProduct = await createProduct(
                 monday,
                 customSettings.productsBoardId,
-                customSettings.productsCustomerColumnId,
+                customSettings.connectedBoardId,
                 customerId,
                 productName
             );
@@ -79,7 +79,7 @@ export const useProductsMultiple = () => {
             logger.error('useProductsMultiple', 'Error creating product', err);
             return null;
         }
-    }, [customSettings.productsBoardId, customSettings.productsCustomerColumnId]);
+    }, [customSettings.productsBoardId, customSettings.connectedBoardId]);
 
     return {
         products,

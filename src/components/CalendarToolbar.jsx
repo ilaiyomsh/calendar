@@ -16,7 +16,8 @@ const CalendarToolbar = ({
   monday,
   customSettings,
   columnIds,
-  events
+  events,
+  isOwner = false
 }) => {
   
   // פונקציית דיבאג
@@ -35,15 +36,17 @@ const CalendarToolbar = ({
     <div className="rbc-toolbar">
       {/* צד ימין - כפתורי תצוגה + פעולות מותאמות */}
       <span className="rbc-btn-group">
-        {/* כפתור הגדרות */}
-        <button 
-          type="button" 
-          onClick={onOpenSettings}
-          title="הגדרות"
-          style={{ padding: '6px', background: 'transparent', border: 'none', cursor: 'pointer' }}
-        >
-          <Settings size={20} />
-        </button>
+        {/* כפתור הגדרות - מוצג רק ל-owners */}
+        {isOwner && (
+          <button 
+            type="button" 
+            onClick={onOpenSettings}
+            title="הגדרות"
+            style={{ padding: '6px', background: 'transparent', border: 'none', cursor: 'pointer' }}
+          >
+            <Settings size={20} />
+          </button>
+        )}
 
         {/* כפתור דיבאג */}
         <button

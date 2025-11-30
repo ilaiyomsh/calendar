@@ -6,7 +6,7 @@ import logger from '../utils/logger';
 const monday = mondaySdk();
 
 /**
- * Hook לאחזור לקוחות המשויכים למשתמש הנוכחי
+ * Hook לאחזור לקוחות המשויכים למשתמש הנוכחי, כולל המוצרים שלהם
  * @returns {Object} { customers, loading, error, refetch }
  */
 export const useCustomers = () => {
@@ -24,7 +24,8 @@ export const useCustomers = () => {
 
         logger.functionStart('useCustomers.fetchCustomers', {
             boardId: customSettings.connectedBoardId,
-            peopleColumnId: customSettings.peopleColumnId
+            peopleColumnId: customSettings.peopleColumnId,
+            productsColumnId: customSettings.productsCustomerColumnId
         });
 
         setLoading(true);
@@ -47,6 +48,18 @@ export const useCustomers = () => {
                         items {
                             id
                             name
+                            ${customSettings.productsCustomerColumnId ? `column_values(ids: "${customSettings.productsCustomerColumnId}") {
+                                column {
+                                    id
+                                    title
+                                }
+                                ... on BoardRelationValue {
+                                    linked_items {
+                                        id
+                                        name
+                                    }
+                                }
+                            }` : ''}
                         }
                     }
                 }
@@ -62,8 +75,37 @@ export const useCustomers = () => {
 
             if (res.data && res.data.boards && res.data.boards[0]) {
                 const items = res.data.boards[0].items_page.items || [];
-                setCustomers(items);
-                logger.functionEnd('useCustomers.fetchCustomers', { count: items.length });
+                
+                // עיבוד הנתונים - הוספת מוצרים לכל לקוח
+                const processedCustomers = items.map(item => {
+                    const customer = {
+                        id: item.id,
+                        name: item.name,
+                        products: []
+                    };
+
+                    // חילוץ מוצרים מ-column_values אם קיים
+                    if (item.column_values && item.column_values.length > 0) {
+                        const productsColumn = item.column_values.find(
+                            cv => cv.column?.id === customSettings.productsCustomerColumnId
+                        );
+                        
+                        if (productsColumn?.linked_items) {
+                            customer.products = productsColumn.linked_items.map(product => ({
+                                id: product.id,
+                                name: product.name
+                            }));
+                        }
+                    }
+
+                    return customer;
+                });
+
+                setCustomers(processedCustomers);
+                logger.functionEnd('useCustomers.fetchCustomers', { 
+                    count: processedCustomers.length,
+                    withProducts: !!customSettings.productsCustomerColumnId
+                });
             } else {
                 setCustomers([]);
                 logger.warn('useCustomers', 'No data in response');
@@ -76,7 +118,7 @@ export const useCustomers = () => {
         } finally {
             setLoading(false);
         }
-    }, [customSettings.connectedBoardId, customSettings.peopleColumnId]);
+    }, [customSettings.connectedBoardId, customSettings.peopleColumnId, customSettings.productsCustomerColumnId]);
 
     useEffect(() => {
         if (customSettings.connectedBoardId && customSettings.peopleColumnId) {

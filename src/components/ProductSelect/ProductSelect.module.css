@@ -42,10 +42,9 @@
 }
 
 .dropdown {
-    position: absolute;
-    z-index: 10010;
-    width: 100%;
-    margin-top: 8px;
+    position: fixed;
+    z-index: 10020;
+    margin-top: 0;
     background-color: #ffffff;
     border: 2px solid #1f2b3e;
     border-radius: 8px;

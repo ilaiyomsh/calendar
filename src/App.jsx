@@ -3,10 +3,10 @@ import "./App.css";
 import mondaySdk from "monday-sdk-js";
 import MondayCalendar from "./MondayCalendar";
 import { SettingsProvider, useSettings } from "./contexts/SettingsContext";
-import SettingsDialog from "./components/SettingsDialog";
+import SettingsDialog from "./components/SettingsDialog/SettingsDialog";
 
 const monday = mondaySdk();
-
+console.log('app start');
 // רכיב פנימי שמשתמש ב-Settings Context
 const AppContent = () => {
   const { customSettings, isLoading } = useSettings();
