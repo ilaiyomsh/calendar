@@ -55,6 +55,8 @@ export default function EventModal({
     const [notes, setNotes] = useState("");
     const [selectedProduct, setSelectedProduct] = useState(null);
     const [isCreatingProduct, setIsCreatingProduct] = useState(false);
+    // State נפרד למוצרים של הלקוח הנבחר - כמו ב-AllDayEventModal
+    const [selectedItemProducts, setSelectedItemProducts] = useState([]);
 
     // Reset state when dialog opens
     useEffect(() => {
@@ -68,11 +70,13 @@ export default function EventModal({
                     const customer = localCustomers.find(c => c.id === eventToEdit.customerId);
                     if (customer) {
                         setSelectedItem(customer);
+                        setSelectedItemProducts(customer.products || []);
                     }
                 }
             } else {
                 // מצב יצירה - איפוס
                 setSelectedItem(null);
+                setSelectedItemProducts([]);
                 setNotes("");
                 setSelectedProduct(null);
                 setIsCreatingProduct(false);
@@ -80,12 +84,15 @@ export default function EventModal({
         }
     }, [isOpen, isEditMode, eventToEdit, localCustomers, setSelectedItem]);
 
-    // איפוס בחירת מוצר כשמשנים לקוח
+    // עדכון selectedItemProducts כשמשנים לקוח (אבל לא בעת יצירת מוצר חדש)
     useEffect(() => {
-        if (selectedItem) {
+        if (selectedItem && !isCreatingProduct) {
+            setSelectedItemProducts(selectedItem.products || []);
             setSelectedProduct(null);
+        } else if (!selectedItem) {
+            setSelectedItemProducts([]);
         }
-    }, [selectedItem]);
+    }, [selectedItem, isCreatingProduct]);
 
     const handleCreateProduct = async (productName) => {
         if (!selectedItem) return;
@@ -94,7 +101,15 @@ export default function EventModal({
         try {
             const newProduct = await createProduct(selectedItem.id, productName);
             if (newProduct) {
-                // עדכון localCustomers עם המוצר החדש
+                // עדכון selectedItemProducts עם המוצר החדש - ישירות, כמו ב-AllDayEventModal
+                // זה מבטיח שהמוצר יופיע מיד ברשימה
+                setSelectedItemProducts(prev => [...prev, newProduct]);
+                
+                // בחירת המוצר החדש - מיד אחרי עדכון selectedItemProducts
+                setSelectedProduct(newProduct.id);
+                
+                // עדכון localCustomers עם המוצר החדש - רק הלקוח הספציפי
+                // זה נעשה אחרי בחירת המוצר כדי למנוע race conditions
                 const updatedCustomers = localCustomers.map(customer =>
                     customer.id === selectedItem.id
                         ? { ...customer, products: [...(customer.products || []), newProduct] }
@@ -108,7 +123,6 @@ export default function EventModal({
                     products: [...(selectedItem.products || []), newProduct]
                 };
                 setSelectedItem(updatedSelectedItem);
-                setSelectedProduct(newProduct.id);
             }
         } finally {
             setIsCreatingProduct(false);
@@ -142,75 +156,130 @@ export default function EventModal({
 
     if (!pendingSlot || !isOpen) return null;
 
+    // פורמט תאריך כותרת
+    const dateStr = pendingSlot?.start 
+        ? pendingSlot.start.toLocaleDateString('he-IL', { 
+            weekday: 'long', 
+            day: 'numeric', 
+            month: 'long' 
+        }) 
+        : '';
+
+    // בדיקה אם הפרטים מלאים
+    const isFormValid = () => {
+        if (!selectedItem) return false;
+        if (customSettings.productColumnId && !selectedProduct) return false;
+        return true;
+    };
+
+    const formIsValid = isFormValid();
+
+    // טיפול ב-Enter key
+    const handleKeyDown = (e) => {
+        if (e.key === 'Enter' && formIsValid && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+            e.preventDefault();
+            handleCreate();
+        }
+    };
+
     return (
         <div className={styles.overlay} onClick={(e) => e.target === e.currentTarget && onClose()}>
-            <div className={styles.container}>
-                {/* כותרת */}
-                <h2 className={styles.title}>פרויקט</h2>
-
-                {/* גריד לקוחות */}
-                <div className={styles.grid}>
-                    {loadingCustomers ? (
-                        <div className={styles.loading}>טוען...</div>
-                    ) : customersError ? (
-                        <div className={styles.loading}>{customersError}</div>
-                    ) : localCustomers.map(item => (
-                        <button
-                            key={item.id}
-                            onClick={() => {
-                                setSelectedItem(item.id === selectedItem?.id ? null : item);
-                            }}
-                            className={`${styles.itemButton} ${selectedItem?.id === item.id ? styles.selected : ''}`}
-                        >
-                            {item.name}
-                        </button>
-                    ))}
+            <div 
+                className={styles.modal} 
+                onClick={(e) => e.stopPropagation()} 
+                onKeyDown={handleKeyDown}
+                tabIndex={-1}
+            >
+                {/* Header */}
+                <div className={styles.header}>
+                    <div className={styles.titleGroup}>
+                        <h2 className={styles.title}>דיווח שעות</h2>
+                        <span className={styles.subtitle}>{dateStr}</span>
+                    </div>
+                    <button className={styles.closeBtn} onClick={onClose}>✕</button>
                 </div>
-                
-                {/* סעיף בחירת מוצר */}
-                {customSettings.productColumnId && selectedItem && (
-                    <div className={styles.productSection}>
-                        <ProductSelect 
-                            products={selectedItem?.products || []}
-                            selectedProduct={selectedProduct}
-                            onSelectProduct={setSelectedProduct}
-                            onCreateNew={handleCreateProduct}
-                            isLoading={false}
-                            disabled={false}
-                            isCreatingProduct={isCreatingProduct}
+
+                {/* Content */}
+                <div className={styles.content}>
+                    {/* לקוח / פרויקט */}
+                    <div className={styles.formGroup}>
+                        <label className={styles.label}>לקוח / פרויקט</label>
+                        <div className={styles.grid}>
+                            {loadingCustomers ? (
+                                <div className={styles.loading}>טוען...</div>
+                            ) : customersError ? (
+                                <div className={styles.loading}>{customersError}</div>
+                            ) : localCustomers.map(item => (
+                                <button
+                                    key={item.id}
+                                    onClick={() => {
+                                        setSelectedItem(item.id === selectedItem?.id ? null : item);
+                                    }}
+                                    className={`${styles.itemButton} ${selectedItem?.id === item.id ? styles.selected : ''}`}
+                                >
+                                    {item.name}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    
+                    {/* סעיף בחירת מוצר */}
+                    {customSettings.productColumnId && selectedItem && (
+                        <div className={styles.formGroup}>
+                            <label className={styles.label}>מוצר</label>
+                            <div className={styles.productSection}>
+                                <ProductSelect 
+                                    products={selectedItemProducts}
+                                    selectedProduct={selectedProduct}
+                                    onSelectProduct={setSelectedProduct}
+                                    onCreateNew={async (productName) => await handleCreateProduct(productName)}
+                                    isLoading={false}
+                                    disabled={false}
+                                    isCreatingProduct={isCreatingProduct}
+                                />
+                            </div>
+                        </div>
+                    )}
+
+                    {/* הערות נוספות */}
+                    <div className={styles.formGroup}>
+                        <label className={styles.label}>הערות נוספות</label>
+                        <input
+                            type="text"
+                            className={styles.input}
+                            placeholder="פרטים נוספים על העבודה..."
+                            value={notes}
+                            onChange={(e) => setNotes(e.target.value)}
+                            onKeyDown={handleKeyDown}
                         />
                     </div>
-                )}
+                </div>
 
-                {/* שדה תיאור חופשי */}
-                <input
-                    type="text"
-                    placeholder="תיאור חופשי"
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    className={styles.input}
-                    onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
-                />
-
-                {/* כפתורי פעולה */}
-                <div className={styles.actionsContainer}>
+                {/* Footer */}
+                <div className={styles.footer}>
                     {isEditMode && onDelete && (
                         <button 
+                            className={`${styles.btn} ${styles.btnDanger}`}
                             onClick={() => {
                                 if (window.confirm('האם אתה בטוח שברצונך למחוק את האירוע?')) {
                                     onDelete();
                                     onClose();
                                 }
                             }}
-                            className={styles.deleteButton}
-                            title="מחק אירוע"
                         >
-                            🗑️
+                            מחק
                         </button>
                     )}
                     <button 
+                        className={`${styles.btn} ${styles.btnSecondary}`}
+                        onClick={onClose}
+                    >
+                        ביטול
+                    </button>
+                    <button 
+                        className={`${styles.btn} ${formIsValid ? styles.btnPrimaryActive : styles.btnPrimary}`}
                         onClick={handleCreate}
-                        className={styles.saveButton}
+                        disabled={!formIsValid}
                     >
                         {isEditMode ? 'עדכן' : 'שמור'}
                     </button>

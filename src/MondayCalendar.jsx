@@ -185,7 +185,7 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
         
         try {
             logger.functionStart('loadEventDataForEdit', { eventId: event.mondayItemId });
-            
+
             // שימוש ב-query ממוקד לפי ID
             const item = await fetchItemById(monday, context.boardId, event.mondayItemId);
             
@@ -195,7 +195,7 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
         }
 
             const updatedEvent = { ...event };
-                
+
                 // חילוץ לקוח
                 if (customSettings.projectColumnId) {
                     const projectColumn = item.column_values.find(col => col.id === customSettings.projectColumnId);
@@ -209,7 +209,7 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
                             if (parsedValue?.item_ids && parsedValue.item_ids.length > 0) {
                                 const customerId = parsedValue.item_ids[0].toString();
                                 updatedEvent.customerId = customerId;
-                                
+
                                 // נטען את הלקוח - שימוש ב-query ממוקד
                                 if (settings?.perent_item_board && context?.boardId) {
                                     try {
@@ -264,7 +264,7 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
                     } else if (notesColumn?.value) {
                         // אם אין text, ננסה value
                         updatedEvent.notes = notesColumn.value;
-                    }
+                }
                 }
                 
             setEventToEdit(updatedEvent);
@@ -613,18 +613,22 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
     const eventStyleGetter = (event, start, end, isSelected) => {
         let backgroundColor = '#3174ad'; // צבע ברירת מחדל (כחול)
         
-        // עדיפות ראשונה: צבע הסטטוס מ-Monday (אם קיים)
-        if (event.statusColor) {
-            backgroundColor = event.statusColor;
+        // אם נבחרה עמודת סטטוס, נשתמש בצבע הסטטוס או בלוגיקה לפי כותרת
+        if (customSettings.statusColumnId) {
+            // עדיפות ראשונה: צבע הסטטוס מ-Monday (אם קיים)
+            if (event.statusColor) {
+                backgroundColor = event.statusColor;
+            }
+            // אחרת: לוגיקה לבחירת צבע לפי סוג האירוע או הכותרת
+            else if (event.title === 'מחלה') {
+                backgroundColor = '#e2445c'; // אדום
+            } else if (event.title === 'חופשה') {
+                backgroundColor = '#00c875'; // ירוק
+            } else if (event.title === 'מילואים') {
+                backgroundColor = '#579bfc'; // כחול בהיר
+            }
         }
-        // אחרת: לוגיקה לבחירת צבע לפי סוג האירוע או הכותרת
-        else if (event.title === 'מחלה') {
-            backgroundColor = '#e2445c'; // אדום
-        } else if (event.title === 'חופשה') {
-            backgroundColor = '#00c875'; // ירוק
-        } else if (event.title === 'מילואים') {
-            backgroundColor = '#579bfc'; // כחול בהיר
-        }
+        // אם לא נבחרה עמודת סטטוס, כל האירועים יהיו בצבע ברירת מחדל אחד
         
         return {
             style: {

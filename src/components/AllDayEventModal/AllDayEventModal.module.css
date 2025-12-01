@@ -1,153 +1,317 @@
 .overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    background-color: rgba(0, 0, 0, 0.4);
-    z-index: 10005;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-family: Figtree, Roboto, Rubik, Noto Kufi Arabic, sans-serif;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 10005;
+  backdrop-filter: blur(2px);
+  direction: rtl;
+  font-family: 'Figtree', sans-serif;
 }
 
-.container {
-    background-color: #e2e4e6;
-    border: 3px solid #1f2b3e;
-    border-radius: 24px;
-    padding: 24px;
-    width: 600px;
-    max-width: 90%;
-    max-height: 85vh;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
-    position: relative;
+.modal {
+  background-color: white;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 500px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+  transition: all 0.3s ease;
+  overflow: hidden;
 }
 
-.title {
-    font-size: 20px;
-    font-weight: 600;
-    color: #323338;
-    margin: 0;
-    text-align: center;
-    flex-shrink: 0;
+.modalWide {
+  max-width: 1000px;
+  height: 80vh;
 }
 
-.subtitle {
-    font-size: 14px;
-    color: #676879;
-    text-align: center;
-    margin: 0;
-    flex-shrink: 0;
+.header {
+  padding: 20px;
+  border-bottom: 1px solid #e6e9ef;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: #f7f9fa;
 }
 
-.typeButtons {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 12px;
-    width: 100%;
-    flex-shrink: 0;
+.header h2 {
+  margin: 0;
+  font-size: 1.2rem;
+  color: #323338;
+  font-weight: 600;
 }
 
-.typeButton {
-    padding: 12px 8px;
-    background-color: transparent;
-    color: #1f2b3e;
-    border: 2px solid #1f2b3e;
-    border-radius: 8px;
-    font-size: 14px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s;
-    text-align: center;
+.closeButton {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #676879;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: 4px;
 }
 
-.typeButton.selected {
-    background-color: #1f2b3e;
-    color: #ffffff;
+.closeButton:hover {
+  background-color: #e6e9ef;
 }
 
-.typeButtonFullWidth {
-    grid-column: 1 / -1;
-    margin-top: 8px;
-    flex-shrink: 0;
+.content {
+  padding: 24px;
+  overflow-y: auto;
+  flex: 1;
 }
 
-.reportsContainer {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    flex: 1;
-    min-height: 0;
-    overflow: hidden;
+/* --- תפריט ראשי --- */
+.menuContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
-.reportsScrollable {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    overflow-y: auto;
-    overflow-x: hidden;
-    flex: 1;
-    padding-right: 4px;
+.menuButton {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 20px;
+  border: 1px solid #d0d4e4;
+  border-radius: 8px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: #323338;
+  position: relative;
+  overflow: hidden;
+}
+
+.menuButton:hover {
+  background-color: #f0f3ff;
+  border-color: #0073ea;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+
+.btnVacation:hover { border-right: 6px solid #00c875; }
+.btnSick:hover { border-right: 6px solid #e2445c; }
+.btnReserves:hover { border-right: 6px solid #579bfc; }
+
+.btnMultiple { 
+  background-color: #f5f6f8; 
+  border: 1px dashed #676879;
+}
+.btnMultiple:hover {
+  background-color: #fff;
+  border-style: solid;
+  border-right: 6px solid #a25ddc;
+}
+
+.icon {
+  margin-left: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: rgba(0,0,0,0.05);
+}
+
+/* --- תצוגה מפוצלת --- */
+.splitView {
+  display: flex;
+  height: 100%;
+  gap: 20px;
+}
+
+.sidebar {
+  width: 25%;
+  border-left: 1px solid #e6e9ef;
+  padding-left: 16px;
+  display: flex;
+  flex-direction: column;
+  background-color: #fcfcfd;
+  border-radius: 8px;
+}
+
+.sidebarHeader {
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: #676879;
+  font-size: 0.9rem;
+}
+
+.searchBox {
+  width: 100%;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  border: 1px solid #d0d4e4;
+  border-radius: 4px;
+  font-size: 0.9rem;
+}
+
+.searchBox:focus {
+  border-color: #0073ea;
+  outline: none;
+}
+
+.customerList {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-right: 2px;
+}
+
+.customerItem {
+  padding: 10px 12px;
+  background: white;
+  border: 1px solid #e6e9ef;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: 0.2s;
+  text-align: right;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.customerItem:hover {
+  border-color: #0073ea;
+  background-color: #f0f3ff;
+  color: #0073ea;
+}
+
+.mainForm {
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .reportRow {
-    display: grid;
-    grid-template-columns: 15% 35% 15% 25%;
-    gap: 8px;
-    align-items: center;
-    padding: 0;
-    width: 100%;
+  background: #fff;
+  border: 1px solid #e6e9ef;
+  padding: 16px;
+  border-radius: 8px;
+  position: relative;
+  transition: 0.2s;
 }
 
-.projectName {
-    font-size: 13px;
-    color: #323338;
-    font-weight: 500;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+.reportRow:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+  border-color: #c5c7d0;
 }
 
-.input {
-    padding: 10px 16px;
-    background-color: transparent;
-    border: 2px solid #1f2b3e;
-    border-radius: 50px;
-    font-size: 13px;
-    color: #1f2b3e;
-    outline: none;
-    box-sizing: border-box;
+.rowGrid {
+  display: grid;
+  /* grid-template-columns יוגדר inline לפי נוכחות שדה המוצר */
+  gap: 12px;
+  align-items: end;
 }
 
-.saveButton {
-    border: 3px solid #1f2b3e;
-    border-radius: 4px;
-    padding: 10px 40px;
-    font-size: 18px;
-    font-weight: 600;
-    align-self: center;
-    margin-top: auto;
-    flex-shrink: 0;
-    transition: all 0.2s;
+.fieldGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.saveButton.active {
-    background-color: #6a5acd;
-    color: white;
-    cursor: pointer;
-    opacity: 1;
+.fieldGroup label {
+  font-size: 0.8rem;
+  color: #676879;
+  font-weight: 500;
 }
 
-.saveButton.inactive {
-    background-color: #d0d4e4;
-    color: #676879;
-    cursor: not-allowed;
-    opacity: 0.6;
+.input, .select {
+  padding: 8px;
+  border: 1px solid #d0d4e4;
+  border-radius: 4px;
+  width: 100%;
+  font-size: 0.9rem;
+  transition: border-color 0.2s;
+  background-color: white;
 }
 
+.input:focus, .select:focus {
+  border-color: #0073ea;
+  outline: none;
+}
+
+.removeBtn {
+  background: none;
+  border: none;
+  color: #e2445c;
+  cursor: pointer;
+  font-size: 1.2rem;
+  padding: 6px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s;
+}
+
+.removeBtn:hover {
+  background-color: #ffe0e6;
+}
+
+.footer {
+  padding: 20px;
+  border-top: 1px solid #e6e9ef;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  background-color: #f7f9fa;
+}
+
+.button {
+  padding: 8px 24px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  border: none;
+  transition: all 0.2s;
+}
+
+.cancelBtn {
+  background-color: white;
+  border: 1px solid #d0d4e4;
+  color: #323338;
+}
+
+.cancelBtn:hover {
+  background-color: #dcdfec;
+}
+
+.saveBtn {
+  background-color: #0073ea;
+  color: white;
+}
+
+.saveBtn:hover {
+  background-color: #0060b9;
+}
+
+.emptyState {
+  text-align: center;
+  color: #676879;
+  margin-top: 80px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}

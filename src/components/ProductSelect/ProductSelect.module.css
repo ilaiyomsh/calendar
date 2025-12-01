@@ -5,16 +5,25 @@
 
 .trigger {
     width: 100%;
-    background-color: transparent;
-    border: 2px solid #1f2b3e;
-    border-radius: 50px;
-    padding: 12px 20px;
+    background-color: white;
+    border: 1px solid #d0d4e4;
+    border-radius: 4px;
+    padding: 8px;
     display: flex;
     align-items: center;
     justify-content: space-between;
     cursor: pointer;
     transition: all 0.2s;
     box-sizing: border-box;
+}
+
+.trigger:hover {
+    border-color: #0073ea;
+}
+
+.trigger:focus-within {
+    border-color: #0073ea;
+    outline: none;
 }
 
 .trigger:disabled,
@@ -25,8 +34,8 @@
 }
 
 .triggerText {
-    font-size: 14px;
-    color: #1f2b3e;
+    font-size: 0.9rem;
+    color: #323338;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -36,19 +45,19 @@
 }
 
 .triggerIcon {
-    color: #1f2b3e;
-    font-size: 16px;
+    color: #676879;
+    font-size: 12px;
     margin-right: 4px;
 }
 
 .dropdown {
     position: fixed;
     z-index: 10020;
-    margin-top: 0;
+    margin-top: 4px;
     background-color: #ffffff;
-    border: 2px solid #1f2b3e;
-    border-radius: 8px;
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+    border: 1px solid #d0d4e4;
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     max-height: 240px;
     overflow: hidden;
     display: flex;
@@ -73,19 +82,19 @@
 }
 
 .productItem:hover {
-    background-color: #f0f2f5;
-    color: #1f2b3e;
+    background-color: #f6f7fb;
+    color: #323338;
 }
 
 .productItem.selected {
-    background-color: #1f2b3e;
-    color: #ffffff;
-    font-weight: 600;
+    background-color: #e3f2fd;
+    color: #0073e6;
+    font-weight: 500;
 }
 
 .productItem.selected:hover {
-    background-color: #1f2b3e;
-    color: #ffffff;
+    background-color: #e3f2fd;
+    color: #0073e6;
 }
 
 .emptyState {
@@ -103,20 +112,21 @@
 
 .addButton {
     width: 100%;
-    padding: 10px 12px;
+    padding: 8px 12px;
     background-color: #ffffff;
-    border: 1px solid #1f2b3e;
-    border-radius: 6px;
-    font-size: 13px;
-    font-weight: 600;
-    color: #1f2b3e;
+    border: 1px solid #d0d4e4;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: #323338;
     cursor: pointer;
     transition: all 0.2s;
 }
 
 .addButton:hover {
-    background-color: #f0f2f5;
-    border-color: #1f2b3e;
+    background-color: #f6f7fb;
+    border-color: #0073ea;
+    color: #0073ea;
 }
 
 .createForm {
@@ -127,32 +137,44 @@
 .createInput {
     flex: 1;
     padding: 8px 12px;
-    border: 1px solid #1f2b3e;
-    border-radius: 6px;
-    font-size: 13px;
+    border: 1px solid #d0d4e4;
+    border-radius: 4px;
+    font-size: 0.9rem;
     outline: none;
     box-sizing: border-box;
 }
 
+.createInput:focus {
+    border-color: #0073ea;
+}
+
 .createButton {
     padding: 8px 12px;
-    background-color: #1f2b3e;
+    background-color: #0073ea;
     color: white;
     border: none;
-    border-radius: 6px;
+    border-radius: 4px;
     cursor: pointer;
-    font-size: 13px;
-    font-weight: 600;
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+.createButton:hover {
+    background-color: #0060b9;
 }
 
 .cancelButton {
     padding: 8px 12px;
-    background-color: #f0f2f5;
-    color: #1f2b3e;
+    background-color: #ffffff;
+    color: #323338;
     border: 1px solid #d0d4e4;
-    border-radius: 6px;
+    border-radius: 4px;
     cursor: pointer;
-    font-size: 13px;
-    font-weight: 600;
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+.cancelButton:hover {
+    background-color: #f6f7fb;
 }
 

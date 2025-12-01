@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { format } from 'date-fns';
 import { useSettings } from '../contexts/SettingsContext';
 import { createBoardItem, deleteItem, updateItemColumnValues } from '../utils/mondayApi';
@@ -13,6 +13,81 @@ export const useMondayEvents = (monday, context) => {
     const [events, setEvents] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
+    const [currentFilter, setCurrentFilter] = useState(null);
+    const [viewRange, setViewRange] = useState(null);
+    const viewRangeRef = useRef(null);
+
+    // האזנה לשינויים ב-filter
+    useEffect(() => {
+        if (!monday) return;
+
+        // האזנה ל-filter
+        const unsubscribeFilter = monday.listen("filter", (res) => {
+            const filter = res?.data || res;
+            setCurrentFilter(filter);
+            logger.debug('useMondayEvents', 'Filter updated', filter);
+        });
+
+        // קריאה ראשונית לטעינת הפילטר הנוכחי
+        (async () => {
+            try {
+                const filter = await monday.get("filter");
+                setCurrentFilter(filter?.data || filter);
+            } catch (error) {
+                logger.error('useMondayEvents', 'Error fetching initial filter', error);
+            }
+        })();
+
+        // ניקוי בעת unmount
+        return () => {
+            if (unsubscribeFilter) unsubscribeFilter();
+        };
+    }, [monday]);
+
+    /**
+     * המרת חוקים לפורמט GraphQL
+     * חשוב: operator הוא enum ב-GraphQL, לכן בלי מרכאות
+     */
+    const rulesToGraphQL = useCallback((rules) => {
+        return rules.map(rule => {
+            const compareValue = JSON.stringify(rule.compare_value);
+            return `{
+                column_id: "${rule.column_id}",
+                compare_value: ${compareValue},
+                operator: ${rule.operator}
+            }`;
+        }).join(',\n');
+    }, []);
+
+    /**
+     * בניית כל החוקים: תאריכים + פילטר + חיפוש טקסט
+     */
+    const buildAllRules = useCallback((fromDateStr, toDateStr, filter) => {
+        const rules = [];
+        
+        // חוק תאריכים (תמיד קיים)
+        rules.push({
+            column_id: customSettings.dateColumnId,
+            compare_value: [fromDateStr, toDateStr],
+            operator: "between"
+        });
+        
+        // חוקי הפילטר מ-Monday (אם יש)
+        if (filter && filter.rules && Array.isArray(filter.rules) && filter.rules.length > 0) {
+            rules.push(...filter.rules);
+        }
+        
+        // חיפוש טקסט (term)
+        if (filter && filter.term) {
+            rules.push({
+                column_id: "name",
+                compare_value: [filter.term],
+                operator: "contains_text"
+            });
+        }
+        
+        return rules;
+    }, [customSettings.dateColumnId]);
 
     /**
      * טעינת אירועים מ-Monday בטווח תאריכים
@@ -23,72 +98,97 @@ export const useMondayEvents = (monday, context) => {
             return;
         }
 
+        // שמירת הטווח לשימוש ברענון אוטומטי
+        setViewRange({ start: startDate, end: endDate });
+        viewRangeRef.current = { start: startDate, end: endDate };
+
         setLoading(true);
         setError(null);
 
         try {
-            logger.functionStart('useMondayEvents.loadEvents', { startDate, endDate });
+            logger.functionStart('useMondayEvents.loadEvents', { startDate, endDate, filter: currentFilter });
             
             const fromDateStr = format(startDate, 'yyyy-MM-dd');
             const toDateStr = format(endDate, 'yyyy-MM-dd');
 
-            const query = `query {
-                boards (ids: [${context.boardId}]) {
-                    items_page (
-                        limit: 500,
-                        query_params: {
-                            rules: [
-                                {
-                                    column_id: "${customSettings.dateColumnId}",
-                                    compare_value: ["${fromDateStr}", "${toDateStr}"],
-                                    operator: between
-                                }
-                            ]
-                        }
-                    ) {
-                        items {
-                            id
-                            name
-                            column_values {
+            // בניית כל החוקים (תאריכים + פילטר + term)
+            const allRules = buildAllRules(fromDateStr, toDateStr, currentFilter);
+            const rulesGraphQL = rulesToGraphQL(allRules);
+            const operator = currentFilter?.operator || 'and';
+
+            // פונקציה פנימית לטעינת דף אחד
+            const loadEventsPage = async (cursor = null) => {
+                const cursorParam = cursor ? `, cursor: "${cursor}"` : '';
+                
+                const query = `query {
+                    boards (ids: [${context.boardId}]) {
+                        items_page (
+                            limit: 500${cursorParam},
+                            query_params: {
+                                rules: [${rulesGraphQL}],
+                                operator: ${operator}
+                            }
+                        ) {
+                            cursor
+                            items {
                                 id
-                                value
-                                ... on DateValue {
-                                    date
-                                    time
-                                }
-                                ... on PeopleValue {
-                                    text
-                                    persons_and_teams {
-                                        id
-                                        kind
-                                    }
-                                    updated_at
-                                }
-                                ... on StatusValue {
+                                name
+                                column_values {
                                     id
-                                    index
-                                    label
-                                    text
-                                    is_done
-                                    label_style {
-                                        color
+                                    value
+                                    ... on DateValue {
+                                        date
+                                        time
+                                    }
+                                    ... on PeopleValue {
+                                        text
+                                        persons_and_teams {
+                                            id
+                                            kind
+                                        }
+                                        updated_at
+                                    }
+                                    ... on StatusValue {
+                                        id
+                                        index
+                                        label
+                                        text
+                                        is_done
+                                        label_style {
+                                            color
+                                        }
                                     }
                                 }
                             }
                         }
                     }
-                }
-            }`;
+                }`;
 
-            const res = await monday.api(query);
-            
-            if (!res.data?.boards?.[0]?.items_page?.items) {
+                return await monday.api(query);
+            };
+
+            // לולאת pagination
+            let allItems = [];
+            let cursor = null;
+
+            do {
+                const res = await loadEventsPage(cursor);
+                const page = res.data?.boards?.[0]?.items_page;
+                
+                if (page?.items) {
+                    allItems = [...allItems, ...page.items];
+                }
+                
+                cursor = page?.cursor || null;
+            } while (cursor);
+
+            if (allItems.length === 0) {
                 logger.warn('useMondayEvents.loadEvents', 'No items found in response');
                 setEvents([]);
                 return;
             }
 
-            const rawItems = res.data.boards[0].items_page.items;
+            const rawItems = allItems;
 
             // מיפוי וחישוב לתצוגה
             const mappedEvents = rawItems.map(item => {
@@ -202,7 +302,21 @@ export const useMondayEvents = (monday, context) => {
         } finally {
             setLoading(false);
         }
-    }, [context, customSettings, monday]);
+    }, [context, customSettings, monday, currentFilter, buildAllRules, rulesToGraphQL]);
+
+    // עדכון viewRangeRef כשהטווח משתנה
+    useEffect(() => {
+        if (viewRange) {
+            viewRangeRef.current = viewRange;
+        }
+    }, [viewRange]);
+
+    // רענון אוטומטי כשהפילטר משתנה
+    useEffect(() => {
+        if (currentFilter !== null && viewRangeRef.current) {
+            loadEvents(viewRangeRef.current.start, viewRangeRef.current.end);
+        }
+    }, [currentFilter, loadEvents]);
 
     /**
      * בניית column values ליצירה/עדכון

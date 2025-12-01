@@ -101,18 +101,18 @@ const ProductSelect = ({
         setTimeout(() => inputRef.current?.focus(), 0);
     };
 
-    const handleCreateProduct = () => {
+    const handleCreateProduct = async () => {
         if (newProductName.trim()) {
-            onCreateNew(newProductName);
+            await onCreateNew(newProductName);
             setNewProductName('');
             setIsCreating(false);
             setIsOpen(false);
         }
     };
 
-    const handleKeyDown = (e) => {
+    const handleKeyDown = async (e) => {
         if (e.key === 'Enter') {
-            handleCreateProduct();
+            await handleCreateProduct();
         } else if (e.key === 'Escape') {
             setIsCreating(false);
             setNewProductName('');

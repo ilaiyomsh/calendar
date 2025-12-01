@@ -111,6 +111,9 @@ export default function SettingsDialog({ monday, onClose, context }) {
     }
     if (customSettings.statusColumnId) {
       setStatusColumnId(customSettings.statusColumnId);
+    } else {
+      // אם אין עמודת סטטוס, נגדיר לריק (אופציה "ללא")
+      setStatusColumnId('');
     }
     
     // טעינת הגדרות מוצרים
@@ -309,7 +312,11 @@ export default function SettingsDialog({ monday, onClose, context }) {
         const statusCols = columns
           .filter(col => col.type === 'status')
           .map(col => ({ id: col.id, name: col.title }));
-        setStatusColumns(statusCols);
+        // הוספת אופציה "ללא" בתחילת הרשימה
+        setStatusColumns([
+          { id: '', name: 'ללא עמודת סטטוס' },
+          ...statusCols
+        ]);
       }
     } catch (err) {
       console.error('Error fetching current board columns:', err);

@@ -24,12 +24,19 @@ const CalendarToolbar = ({
   const handleDebug = async () => {
     const ctx = await monday.get("context");
     const stg = await monday.get("settings");
+    const filter = await monday.get("filter");
+    const itemIds = await monday.get("itemIds");
+
     console.log("🐛 Debug Info:");
     console.log("Context:", ctx);
     console.log("Settings:", stg);
+    console.log("Filter:", filter);
+    console.log("Item IDs:", itemIds);
+    console.log("================================================");
     console.log("Custom Settings:", customSettings);
     console.log("Column IDs:", columnIds);
     console.log("Current Events:", events);
+    
   };
 
   return (

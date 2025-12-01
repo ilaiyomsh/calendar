@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Sun, Thermometer, Briefcase, FileText, Plus, Trash2, X } from 'lucide-react';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useCustomers } from '../../hooks/useCustomers';
 import { useProductsMultiple } from '../../hooks/useProductsMultiple';
@@ -18,7 +19,13 @@ export default function AllDayEventModal({
     
     // State - בחירת סוג אירוע
     const [selectedType, setSelectedType] = useState(null); // 'sick' | 'vacation' | 'reserves' | 'reports'
-    const [projectReports, setProjectReports] = useState([]);
+    
+    // State - ניהול תצוגה
+    const [viewMode, setViewMode] = useState('menu'); // 'menu' | 'form'
+    const [searchTerm, setSearchTerm] = useState('');
+    
+    // State - דיווחים שנוספו (במקום projectReports שמכיל את כל הלקוחות)
+    const [addedReports, setAddedReports] = useState([]);
     
     // State - מוצרים נבחרים
     const [selectedProducts, setSelectedProducts] = useState({});
@@ -28,74 +35,73 @@ export default function AllDayEventModal({
     // איפוס state כאשר התיבה נפתחת או נסגרת
     useEffect(() => {
         if (isOpen) {
-            // איפוס כאשר התיבה נפתחת - רק selectedType, לא projectReports
-            // projectReports יתעדכן על ידי fetchProjects כש-selectedType משתנה ל-'reports'
-            logger.debug('AllDayEventModal', 'Modal opened - resetting selectedType only');
+            logger.debug('AllDayEventModal', 'Modal opened - resetting state');
             setSelectedType(null);
+            setViewMode('menu');
+            setAddedReports([]);
+            setSearchTerm('');
             setSelectedProducts({});
             setIsCreatingProduct({});
             // רענון רשימת הלקוחות והמוצרים
             refetchCustomers().then(() => {
                 logger.debug('AllDayEventModal', 'Customers refetched after modal opened');
             });
-            // לא מאפסים projectReports כאן - זה יקרה ב-fetchProjects
         } else {
             // איפוס גם כאשר התיבה נסגרת (למקרה שהמשתמש סגר בלי לשמור)
             logger.debug('AllDayEventModal', 'Modal closed - resetting all state');
             setSelectedType(null);
-            setProjectReports([]);
+            setViewMode('menu');
+            setAddedReports([]);
+            setSearchTerm('');
             setSelectedProducts({});
             setIsCreatingProduct({});
         }
     }, [isOpen, refetchCustomers]);
     
-    // אחזור רשימת פרויקטים (לקוחות) - משתמש ב-customers מה-hook שכבר כולל מוצרים
-    const fetchProjects = React.useCallback(() => {
-        logger.debug('AllDayEventModal', `fetchProjects called - customers count: ${customers.length}`);
+    // הוספת שורת דיווח מלקוח
+    const addReportRow = (customer) => {
+        if (!customer) return;
         
-        if (customers.length === 0) {
-            logger.warn('AllDayEventModal', 'No customers available');
+        // בדיקה אם הלקוח כבר קיים
+        if (addedReports.some(r => r.projectId === customer.id)) {
             return;
         }
         
-        logger.functionStart('AllDayEventModal.fetchProjects');
-        
-        // Initialize projectReports with empty hours, notes and product, כולל מוצרים
-        const newProjectReports = customers.map(customer => ({
+        setAddedReports(prev => [...prev, {
+            id: Date.now(),
             projectId: customer.id,
             projectName: customer.name,
+            products: customer.products || [],
             hours: '',
             notes: '',
-            productId: '',
-            products: customer.products || []
-        }));
-        
-        logger.debug('AllDayEventModal', `Setting projectReports with ${newProjectReports.length} items:`, newProjectReports.map(r => r.projectName));
-        setProjectReports(newProjectReports);
-        
-        logger.functionEnd('AllDayEventModal.fetchProjects', { count: newProjectReports.length });
-    }, [customers]);
+            productId: ''
+        }]);
+    };
     
-    // אחזור פרויקטים בעת פתיחת ה-Modal
-    useEffect(() => {
-        logger.debug('AllDayEventModal', `useEffect triggered - isOpen: ${isOpen}, selectedType: ${selectedType}`);
-        if (isOpen && selectedType === 'reports') {
-            logger.debug('AllDayEventModal', 'Calling fetchProjects from useEffect - resetting projectReports first');
-            // איפוס מפורש לפני טעינה חדשה
-            setProjectReports([]);
-            fetchProjects();
-        } else if (selectedType !== 'reports' && projectReports.length > 0) {
-            // אם הסוג שונה מ-'reports', נאפס את projectReports
-            logger.debug('AllDayEventModal', 'Selected type changed away from reports - clearing projectReports');
-            setProjectReports([]);
+    // הסרת שורת דיווח
+    const removeReportRow = (id) => {
+        const report = addedReports.find(r => r.id === id);
+        if (report) {
+            // הסרת המוצר הנבחר
+            setSelectedProducts(prev => {
+                const newSelected = { ...prev };
+                delete newSelected[report.projectId];
+                return newSelected;
+            });
         }
-    }, [isOpen, selectedType, fetchProjects]);
+        setAddedReports(prev => prev.filter(r => r.id !== id));
+    };
     
-    // עדכון שעות, הערות או מוצר לפרויקט
-    const updateProjectReport = (projectId, field, value) => {
-        setProjectReports(prev =>
+    // סינון לקוחות לפי חיפוש
+    const filteredCustomers = customers.filter(c => 
+        c.name.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+    
+    // עדכון שעות, הערות או מוצר לדיווח
+    const updateReport = (id, field, value) => {
+        setAddedReports(prev =>
             prev.map(report =>
-                report.projectId === projectId
+                report.id === id
                     ? { ...report, [field]: value }
                     : report
             )
@@ -103,34 +109,62 @@ export default function AllDayEventModal({
     };
     
     // עדכון מוצר שנבחר
-    const updateSelectedProduct = (projectId, productId) => {
-        setSelectedProducts(prev => ({
-            ...prev,
-            [projectId]: productId
-        }));
-        updateProjectReport(projectId, 'productId', productId);
+    const updateSelectedProduct = (reportId, productId) => {
+        const report = addedReports.find(r => r.id === reportId);
+        if (report) {
+            setSelectedProducts(prev => ({
+                ...prev,
+                [report.projectId]: productId
+            }));
+            updateReport(reportId, 'productId', productId);
+        }
     };
     
-    const handleCreateProduct = async (projectId, productName) => {
-        setIsCreatingProduct(prev => ({ ...prev, [projectId]: true }));
+    const handleCreateProduct = async (reportId, productName) => {
+        const report = addedReports.find(r => r.id === reportId);
+        if (!report) return;
+        
+        setIsCreatingProduct(prev => ({ ...prev, [report.projectId]: true }));
         try {
-            const newProduct = await createProduct(projectId, productName);
+            const newProduct = await createProduct(report.projectId, productName);
             if (newProduct) {
-                // עדכון projectReports עם המוצר החדש
-                setProjectReports(prev =>
-                    prev.map(report =>
-                        report.projectId === projectId
+                // עדכון addedReports עם המוצר החדש
+                setAddedReports(prev =>
+                    prev.map(r =>
+                        r.id === reportId
                             ? { 
-                                ...report, 
-                                products: [...(report.products || []), newProduct]
+                                ...r, 
+                                products: [...(r.products || []), newProduct]
                             }
-                            : report
+                            : r
                     )
                 );
-                updateSelectedProduct(projectId, newProduct.id);
+                updateSelectedProduct(reportId, newProduct.id);
             }
         } finally {
-            setIsCreatingProduct(prev => ({ ...prev, [projectId]: false }));
+            setIsCreatingProduct(prev => ({ ...prev, [report.projectId]: false }));
+        }
+    };
+    
+    // טיפול בבחירת סוג אירוע (sick/vacation/reserves)
+    const handleSingleTypeSelect = (type) => {
+        setSelectedType(type);
+        onCreate({
+            type: type,
+            date: pendingDate
+        });
+        onClose();
+    };
+    
+    // טיפול בחזרה/ביטול
+    const handleCancelOrBack = () => {
+        if (viewMode === 'form') {
+            setViewMode('menu');
+            setSelectedType(null);
+            setAddedReports([]);
+            setSearchTerm('');
+        } else {
+            onClose();
         }
     };
     
@@ -139,7 +173,7 @@ export default function AllDayEventModal({
         
         if (selectedType === 'reports') {
             // סינון דיווחים עם שעות
-            const validReports = projectReports.filter(r => r.hours && parseFloat(r.hours) > 0);
+            const validReports = addedReports.filter(r => r.hours && parseFloat(r.hours) > 0);
             if (validReports.length === 0) {
                 alert('יש להוסיף לפחות פרויקט אחד עם שעות');
                 return;
@@ -154,10 +188,19 @@ export default function AllDayEventModal({
                 }
             }
             
+            // המרה לפורמט המקורי (ללא id הפנימי)
+            const formattedReports = validReports.map(r => ({
+                projectId: r.projectId,
+                projectName: r.projectName,
+                hours: r.hours,
+                notes: r.notes,
+                productId: r.productId
+            }));
+            
             onCreate({
                 type: 'reports',
                 date: pendingDate,
-                reports: validReports
+                reports: formattedReports
             });
         } else {
             onCreate({
@@ -168,7 +211,9 @@ export default function AllDayEventModal({
         
         // איפוס state לפני סגירה
         setSelectedType(null);
-        setProjectReports([]);
+        setViewMode('menu');
+        setAddedReports([]);
+        setSearchTerm('');
         setSelectedProducts({});
         
         onClose();
@@ -181,9 +226,9 @@ export default function AllDayEventModal({
                 if (selectedType !== 'reports') {
                     // לבחירות sick/vacation/reserves - שמור מיד
                     handleCreate();
-                } else {
+                } else if (viewMode === 'form') {
                     // לדיווחים מרובים - בדוק אם יש דיווחים עם שעות
-                    const validReports = projectReports.filter(r => r.hours && parseFloat(r.hours) > 0);
+                    const validReports = addedReports.filter(r => r.hours && parseFloat(r.hours) > 0);
                     if (validReports.length > 0) {
                         handleCreate();
                     }
@@ -195,7 +240,7 @@ export default function AllDayEventModal({
             document.addEventListener('keydown', handleKeyDown);
             return () => document.removeEventListener('keydown', handleKeyDown);
         }
-    }, [selectedType, isOpen, projectReports]);
+    }, [selectedType, isOpen, addedReports, viewMode]);
     
     if (!isOpen || !pendingDate) return null;
     
@@ -206,104 +251,215 @@ export default function AllDayEventModal({
         day: 'numeric'
     });
     
-    return (
-        <div className={styles.overlay} onClick={(e) => e.target === e.currentTarget && onClose()}>
-            <div className={styles.container}>
-                <h2 className={styles.title}>אירוע יומי</h2>
-                <p className={styles.subtitle}>{dateStr}</p>
-                
-                {/* כפתורי סוג אירוע */}
-                <div className={styles.typeButtons}>
-                    <button
-                        onClick={() => { setSelectedType('sick'); setProjectReports([]); }}
-                        className={`${styles.typeButton} ${selectedType === 'sick' ? styles.selected : ''}`}
-                    >
-                        מחלה
-                    </button>
-                    <button
-                        onClick={() => { setSelectedType('vacation'); setProjectReports([]); }}
-                        className={`${styles.typeButton} ${selectedType === 'vacation' ? styles.selected : ''}`}
-                    >
-                        חופשה
-                    </button>
-                    <button
-                        onClick={() => { setSelectedType('reserves'); setProjectReports([]); }}
-                        className={`${styles.typeButton} ${selectedType === 'reserves' ? styles.selected : ''}`}
-                    >
-                        מילואים
-                    </button>
-                </div>
-                
-                {/* כפתור דיווחים מרובים */}
-                <button
-                    onClick={() => {
-                        logger.debug('AllDayEventModal', 'Button clicked - setting selectedType to reports');
-                        setSelectedType('reports');
-                    }}
-                    className={`${styles.typeButton} ${styles.typeButtonFullWidth} ${selectedType === 'reports' ? styles.selected : ''}`}
-                >
-                    דיווחים מרובים לפרויקטים
-                </button>
-                
-                {/* טבלת דיווחים */}
-                {selectedType === 'reports' && (
-                    <div className={styles.reportsContainer}>
-                        <p className={styles.subtitle} style={{ margin: '8px 0', flexShrink: 0 }}>
-                            {loadingCustomers ? 'טוען פרויקטים...' : `בחר פרויקטים (${projectReports.filter(r => r.hours).length} מוגדרים)`}
-                        </p>
-                        
-                        <div className={styles.reportsScrollable}>
-                            {(() => {
-                                logger.debug('AllDayEventModal', `Rendering ${projectReports.length} project reports:`, projectReports.map(r => r.projectName));
-                                return null;
-                            })()}
-                            {!loadingCustomers && projectReports.map((report) => (
-                                <div key={report.projectId} className={styles.reportRow}>
-                                    <div className={styles.projectName}>{report.projectName}</div>
-                                    {customSettings.productColumnId && (
+    // רינדור תפריט ראשי
+    const renderMenu = () => (
+        <div className={styles.menuContainer}>
+            <button 
+                className={`${styles.menuButton} ${styles.btnVacation}`} 
+                onClick={() => handleSingleTypeSelect('vacation')}
+            >
+                <span className={styles.icon}><Sun size={20} color="#00c875" /></span>
+                <span style={{ marginRight: '12px' }}>חופשה</span>
+            </button>
+            <button 
+                className={`${styles.menuButton} ${styles.btnSick}`} 
+                onClick={() => handleSingleTypeSelect('sick')}
+            >
+                <span className={styles.icon}><Thermometer size={20} color="#e2445c" /></span>
+                <span style={{ marginRight: '12px' }}>מחלה</span>
+            </button>
+            <button 
+                className={`${styles.menuButton} ${styles.btnReserves}`} 
+                onClick={() => handleSingleTypeSelect('reserves')}
+            >
+                <span className={styles.icon}><Briefcase size={20} color="#579bfc" /></span>
+                <span style={{ marginRight: '12px' }}>מילואים</span>
+            </button>
+            <button 
+                className={`${styles.menuButton} ${styles.btnMultiple}`} 
+                onClick={() => {
+                    logger.debug('AllDayEventModal', 'Button clicked - setting viewMode to form');
+                    setSelectedType('reports');
+                    setViewMode('form');
+                }}
+            >
+                <span className={styles.icon}><FileText size={20} color="#a25ddc" /></span>
+                <span style={{ marginRight: '12px' }}>דיווחים מרובים / שעות עבודה</span>
+            </button>
+        </div>
+    );
+    
+    // רינדור תצוגה מפוצלת
+    const renderSplitForm = () => {
+        const hasProductColumn = customSettings.productColumnId;
+        const gridColumns = hasProductColumn 
+            ? '1.5fr 1.5fr 0.7fr 1.5fr 30px'  // לקוח, מוצר, שעות, הערות, מחיקה
+            : '2fr 0.7fr 1.5fr 30px';         // לקוח, שעות, הערות, מחיקה
+        
+        return (
+            <div className={styles.splitView}>
+                <div className={styles.mainForm}>
+                    {addedReports.length === 0 && (
+                        <div className={styles.emptyState}>
+                            <FileText size={48} color="#d0d4e4" />
+                            <div>
+                                בחר לקוח מהרשימה בצד שמאל כדי להתחיל
+                            </div>
+                        </div>
+                    )}
+                    {addedReports.map((report) => (
+                        <div key={report.id} className={styles.reportRow}>
+                            <div 
+                                className={styles.rowGrid}
+                                style={{ gridTemplateColumns: gridColumns }}
+                            >
+                                {/* שדה לקוח (קריאה בלבד) */}
+                                <div className={styles.fieldGroup}>
+                                    <label>לקוח</label>
+                                    <input
+                                        className={styles.input}
+                                        value={report.projectName}
+                                        readOnly
+                                        style={{ backgroundColor: '#f7f9fa', color: '#666', border: '1px solid #e6e9ef' }}
+                                    />
+                                </div>
+
+                                {/* שדה מוצר */}
+                                {hasProductColumn && (
+                                    <div className={styles.fieldGroup}>
+                                        <label>מוצר</label>
                                         <ProductSelect 
                                             products={report.products || []}
                                             selectedProduct={selectedProducts[report.projectId] || ''}
-                                            onSelectProduct={(productId) => updateSelectedProduct(report.projectId, productId)}
-                                            onCreateNew={(productName) => handleCreateProduct(report.projectId, productName)}
+                                            onSelectProduct={(productId) => updateSelectedProduct(report.id, productId)}
+                                            onCreateNew={async (productName) => await handleCreateProduct(report.id, productName)}
                                             isLoading={false}
                                             disabled={false}
                                             isCreatingProduct={isCreatingProduct[report.projectId] || false}
                                         />
-                                    )}
+                                    </div>
+                                )}
+
+                                {/* שדה שעות */}
+                                <div className={styles.fieldGroup}>
+                                    <label>משך (שעות)</label>
                                     <input
                                         type="number"
-                                        placeholder="שעות"
+                                        className={styles.input}
                                         value={report.hours}
-                                        onChange={(e) => updateProjectReport(report.projectId, 'hours', e.target.value)}
+                                        onChange={(e) => updateReport(report.id, 'hours', e.target.value)}
+                                        step="0.5"
                                         min="0"
-                                        step="0.25"
-                                        className={styles.input}
-                                    />
-                                    <input
-                                        type="text"
-                                        placeholder="הערות"
-                                        value={report.notes}
-                                        onChange={(e) => updateProjectReport(report.projectId, 'notes', e.target.value)}
-                                        className={styles.input}
+                                        placeholder="שעות"
                                     />
                                 </div>
-                            ))}
+
+                                {/* שדה הערות */}
+                                <div className={styles.fieldGroup}>
+                                    <label>הערות</label>
+                                    <input
+                                        className={styles.input}
+                                        value={report.notes}
+                                        onChange={(e) => updateReport(report.id, 'notes', e.target.value)}
+                                        placeholder="..."
+                                    />
+                                </div>
+
+                                {/* מחיקה */}
+                                <button 
+                                    className={styles.removeBtn} 
+                                    onClick={() => removeReportRow(report.id)}
+                                    title="הסר דיווח"
+                                >
+                                    <Trash2 size={18} />
+                                </button>
+                            </div>
                         </div>
+                    ))}
+                </div>
+
+                <div className={styles.sidebar}>
+                    <div className={styles.sidebarHeader}>בחר לקוח להוספה</div>
+                    <input 
+                        type="text" 
+                        placeholder="חיפוש לקוח..." 
+                        className={styles.searchBox}
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        autoFocus
+                    />
+                    <div className={styles.customerList}>
+                        {loadingCustomers ? (
+                            <div style={{ padding: '10px', color: '#999', fontSize: '0.8rem', textAlign: 'center' }}>
+                                טוען לקוחות...
+                            </div>
+                        ) : filteredCustomers.length > 0 ? (
+                            filteredCustomers.map(customer => {
+                                const isAlreadyAdded = addedReports.some(r => r.projectId === customer.id);
+                                return (
+                                    <div 
+                                        key={customer.id} 
+                                        className={styles.customerItem}
+                                        onClick={() => !isAlreadyAdded && addReportRow(customer)}
+                                        style={{
+                                            opacity: isAlreadyAdded ? 0.5 : 1,
+                                            cursor: isAlreadyAdded ? 'not-allowed' : 'pointer'
+                                        }}
+                                        title={isAlreadyAdded ? 'לקוח זה כבר נוסף' : 'לחץ להוספה'}
+                                    >
+                                        <span>{customer.name}</span>
+                                        {!isAlreadyAdded && <Plus size={14} color="#0073ea" />}
+                                    </div>
+                                );
+                            })
+                        ) : (
+                            <div style={{ padding: '10px', color: '#999', fontSize: '0.8rem', textAlign: 'center' }}>
+                                {searchTerm ? 'לא נמצאו לקוחות' : 'אין לקוחות זמינים'}
+                            </div>
+                        )}
                     </div>
-                )}
-                
-                {/* כפתור שמירה */}
-                <button
-                    onClick={handleCreate}
-                    disabled={!selectedType}
-                    className={`${styles.saveButton} ${selectedType ? styles.active : styles.inactive}`}
-                    title={selectedType ? 'או לחץ Enter' : 'בחר סוג אירוע'}
-                >
-                    שמור
-                </button>
+                </div>
+            </div>
+        );
+    };
+    
+    return (
+        <div className={styles.overlay} onClick={(e) => e.target === e.currentTarget && onClose()}>
+            <div 
+                className={`${styles.modal} ${viewMode === 'form' ? styles.modalWide : ''}`}
+                onClick={e => e.stopPropagation()}
+            >
+                <div className={styles.header}>
+                    <h2>
+                        {viewMode === 'menu' ? 'סוג דיווח ליום זה' : 'דיווח שעות מרוכז'}
+                        {pendingDate && ` - ${pendingDate.toLocaleDateString('he-IL')}`}
+                    </h2>
+                    <button className={styles.closeButton} onClick={onClose}>
+                        <X size={24} />
+                    </button>
+                </div>
+
+                <div className={styles.content}>
+                    {viewMode === 'menu' ? renderMenu() : renderSplitForm()}
+                </div>
+
+                <div className={styles.footer}>
+                    <button 
+                        className={`${styles.button} ${styles.cancelBtn}`} 
+                        onClick={handleCancelOrBack}
+                    >
+                        {viewMode === 'menu' ? 'ביטול' : 'חזרה לתפריט'}
+                    </button>
+                    {viewMode === 'form' && (
+                        <button 
+                            className={`${styles.button} ${styles.saveBtn}`} 
+                            onClick={handleCreate}
+                        >
+                            שמור דיווחים
+                        </button>
+                    )}
+                </div>
             </div>
         </div>
     );
 }
-
