@@ -3,6 +3,7 @@
  */
 
 import { format, parse } from 'date-fns';
+import logger from './logger';
 
 /**
  * קבלת מזהי העמודות מההגדרות
@@ -53,7 +54,8 @@ export const parseDateColumn = (valueJson) => {
         
         return parse(dateStr, 'yyyy-MM-dd HH:mm:ss', new Date());
     } catch (error) {
-        console.error('Error parsing date column:', error);
+        // לוג שגיאה קריטי - נשאר פעיל גם בפרודקשן
+        logger.error('mondayColumns', 'Error parsing date column', error);
         return null;
     }
 };
@@ -72,7 +74,8 @@ export const parseHourColumn = (valueJson) => {
         const minutes = parsed.minute || 0;
         return hours * 60 + minutes;
     } catch (error) {
-        console.error('Error parsing hour column:', error);
+        // לוג שגיאה קריטי - נשאר פעיל גם בפרודקשן
+        logger.error('mondayColumns', 'Error parsing hour column', error);
         return 60;
     }
 };
@@ -89,7 +92,8 @@ export const parseBoardRelationColumn = (valueJson) => {
         const parsed = JSON.parse(valueJson);
         return parsed.linkedPulseIds || [];
     } catch (error) {
-        console.error('Error parsing board relation column:', error);
+        // לוג שגיאה קריטי - נשאר פעיל גם בפרודקשן
+        logger.error('mondayColumns', 'Error parsing board relation column', error);
         return [];
     }
 };
@@ -110,7 +114,8 @@ export const mapItemToEvent = (item, columnIds) => {
     // פרסור תאריך התחלה
     const startDate = parseDateColumn(dateColumn?.value);
     if (!startDate) {
-        console.warn(`Item ${item.id} has no valid start date`);
+        // לוג להערה - ניתן להפעיל לצורך דיבוג
+        // logger.warn('mondayColumns', `Item ${item.id} has no valid start date`);
         return null;
     }
 

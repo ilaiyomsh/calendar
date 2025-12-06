@@ -1,4 +1,5 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
+import logger from '../utils/logger';
 
 // יצירת Context
 const SettingsContext = createContext(null);
@@ -8,8 +9,8 @@ const DEFAULT_SETTINGS = {
   // לוח חיצוני לשיוך אייטמים (לקוחות)
   connectedBoardId: null,
   
-  // עמודת people בלוח החיצוני (לסינון לפי משתמש)
-  peopleColumnId: null,
+  // עמודות people בלוח החיצוני (לסינון לפי משתמש) - array של עמודות
+  peopleColumnIds: [],
   
   // עמודות בלוח הנוכחי (context.boardId)
   dateColumnId: null,          // עמודת Date למועד התחלה
@@ -18,6 +19,7 @@ const DEFAULT_SETTINGS = {
   notesColumnId: null,         // עמודת Text להערות חופשיות
   reporterColumnId: null,      // עמודת People למדווח
   statusColumnId: null,        // עמודת Status לצביעת אירועים לפי צבע הסטטוס
+  eventTypeStatusColumnId: null, // עמודת Status להגדרת סוג האירוע (חופשה/מחלה/מילואים/שעתי)
   
   // הגדרות מוצרים - רמת היררכיה נוספת
   productsBoardId: null,       // מזהה לוח המוצרים
@@ -42,14 +44,16 @@ export function SettingsProvider({ monday, children }) {
   const loadSettings = async () => {
     try {
       const result = await monday.storage.instance.getItem('customSettings');
-      console.log('📥 Loaded settings from storage:', result);
+      // לוג להערה - ניתן להפעיל לצורך דיבוג
+      // logger.debug('SettingsContext', 'Loaded settings from storage', result);
       
       if (result.data && result.data.value) {
         const savedSettings = JSON.parse(result.data.value);
         setCustomSettings(prev => ({ ...DEFAULT_SETTINGS, ...savedSettings }));
       }
     } catch (error) {
-      console.warn('⚠️ Failed to load settings from storage:', error);
+      // לוג שגיאה קריטי - נשאר פעיל גם בפרודקשן
+      logger.error('SettingsContext', 'Failed to load settings from storage', error);
     } finally {
       setIsLoading(false);
     }
@@ -62,11 +66,13 @@ export function SettingsProvider({ monday, children }) {
       setCustomSettings(updatedSettings);
       
       await monday.storage.instance.setItem('customSettings', JSON.stringify(updatedSettings));
-      console.log('💾 Saved settings to storage:', updatedSettings);
+      // לוג להערה - ניתן להפעיל לצורך דיבוג
+      // logger.debug('SettingsContext', 'Saved settings to storage', updatedSettings);
       
       return true;
     } catch (error) {
-      console.error('❌ Failed to save settings:', error);
+      // לוג שגיאה קריטי - נשאר פעיל גם בפרודקשן
+      logger.error('SettingsContext', 'Failed to save settings', error);
       return false;
     }
   };
@@ -76,10 +82,12 @@ export function SettingsProvider({ monday, children }) {
     try {
       setCustomSettings(DEFAULT_SETTINGS);
       await monday.storage.instance.setItem('customSettings', JSON.stringify(DEFAULT_SETTINGS));
-      console.log('🔄 Reset settings to default');
+      // לוג להערה - ניתן להפעיל לצורך דיבוג
+      // logger.debug('SettingsContext', 'Reset settings to default');
       return true;
     } catch (error) {
-      console.error('❌ Failed to reset settings:', error);
+      // לוג שגיאה קריטי - נשאר פעיל גם בפרודקשן
+      logger.error('SettingsContext', 'Failed to reset settings', error);
       return false;
     }
   };

@@ -4,9 +4,11 @@ import mondaySdk from "monday-sdk-js";
 import MondayCalendar from "./MondayCalendar";
 import { SettingsProvider, useSettings } from "./contexts/SettingsContext";
 import SettingsDialog from "./components/SettingsDialog/SettingsDialog";
+import logger from "./utils/logger";
 
 const monday = mondaySdk();
-console.log('app start');
+// לוג להערה - ניתן להפעיל לצורך דיבוג
+// logger.debug('App', 'App started');
 // רכיב פנימי שמשתמש ב-Settings Context
 const AppContent = () => {
   const { customSettings, isLoading } = useSettings();
@@ -19,7 +21,8 @@ const AppContent = () => {
     monday.get('context').then(res => {
       if (res.data) {
         setContext(res.data);
-        console.log('📍 Context loaded:', res.data);
+        // לוג להערה - ניתן להפעיל לצורך דיבוג
+        // logger.debug('App', 'Context loaded', res.data);
       }
     });
   }, []);

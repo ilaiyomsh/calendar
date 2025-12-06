@@ -1,6 +1,47 @@
 /**
  * מערכת לוגים עם מצב debug
  * מאפשרת שליטה ברמת הלוגים והדפסת מידע מפורט לקריאות API
+ * 
+ * @overview
+ * מערכת הלוגים מספקת שליטה מלאה על רמת הלוגים המוצגים בקונסול.
+ * בפרודקשן מוצגות רק שגיאות קריטיות (ERROR), בעוד שבסביבת פיתוח מוצגים כל הלוגים (DEBUG).
+ * 
+ * @usage
+ * ```javascript
+ * import logger from './utils/logger';
+ * 
+ * // לוגים רגילים
+ * logger.debug('ModuleName', 'Debug message', optionalData);
+ * logger.info('ModuleName', 'Info message', optionalData);
+ * logger.warn('ModuleName', 'Warning message', optionalData);
+ * logger.error('ModuleName', 'Error message', errorObject);
+ * 
+ * // לוגים מיוחדים ל-API
+ * logger.api('functionName', query, variables);
+ * logger.apiResponse('functionName', response, duration);
+ * logger.apiError('functionName', error);
+ * 
+ * // לוגים לפונקציות
+ * logger.functionStart('functionName', params);
+ * logger.functionEnd('functionName', result);
+ * ```
+ * 
+ * @production
+ * בפרודקשן (import.meta.env.PROD === true):
+ * - מוצגות רק שגיאות קריטיות (ERROR)
+ * - כל הלוגים האחרים (DEBUG, INFO, WARN) מושתקים
+ * - apiError תמיד מוצג (שגיאות API הן קריטיות)
+ * 
+ * @development
+ * בסביבת פיתוח (import.meta.env.PROD !== true):
+ * - מוצגים כל הלוגים (DEBUG, INFO, WARN, ERROR)
+ * - כולל מידע מפורט על קריאות API
+ * - כולל לוגים של תחילת וסיום פונקציות
+ * 
+ * @note
+ * - אין להשתמש ב-console.log/error/warn ישירות בקוד
+ * - כל הלוגים צריכים לעבור דרך logger
+ * - לוגים שצריך להשאיר בקוד (לצורך דיבוג עתידי) יש להעיר עם הערה
  */
 
 const LOG_LEVELS = {
@@ -12,9 +53,15 @@ const LOG_LEVELS = {
 };
 
 // רמת לוג נוכחית - ניתן לשנות ב-runtime
-let currentLevel = process.env.NODE_ENV === 'development' 
-  ? LOG_LEVELS.DEBUG 
-  : LOG_LEVELS.WARN;
+// בפרודקשן: רק שגיאות קריטיות (ERROR)
+// בפיתוח: כל הלוגים (DEBUG)
+// שימוש ב-import.meta.env.PROD עבור Vite (במקום process.env.NODE_ENV)
+// עם fallback ל-process.env.NODE_ENV למקרה ש-Vite לא מוגדר
+const isProduction = (typeof import.meta !== 'undefined' && import.meta.env?.PROD === true) ||
+                     (typeof process !== 'undefined' && process.env?.NODE_ENV === 'production');
+let currentLevel = isProduction 
+  ? LOG_LEVELS.ERROR 
+  : LOG_LEVELS.DEBUG;
 
 // צבעים לקונסול
 const COLORS = {

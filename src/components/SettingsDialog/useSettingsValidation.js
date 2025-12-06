@@ -14,8 +14,8 @@ export const useSettingsValidation = (settings, context) => {
     if (!settings.connectedBoardId) {
       errs.connectedBoardId = 'יש לבחור לוח חיצוני';
     }
-    if (settings.connectedBoardId && !settings.peopleColumnId) {
-      errs.peopleColumnId = 'יש לבחור עמודת אנשים';
+    if (settings.connectedBoardId && (!settings.peopleColumnIds || settings.peopleColumnIds.length === 0)) {
+      errs.peopleColumnIds = 'יש לבחור לפחות עמודת אנשים אחת';
     }
 
     // בדיקת לוח נוכחי
@@ -30,6 +30,12 @@ export const useSettingsValidation = (settings, context) => {
       }
       if (!settings.projectColumnId) {
         errs.projectColumnId = 'יש לבחור עמודת קישור לפרויקט';
+      }
+      if (!settings.reporterColumnId) {
+        errs.reporterColumnId = 'יש לבחור עמודת מדווח';
+      }
+      if (!settings.eventTypeStatusColumnId) {
+        errs.eventTypeStatusColumnId = 'יש לבחור עמודת סטטוס לסוג אירוע';
       }
     }
 

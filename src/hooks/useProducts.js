@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import mondaySdk from 'monday-sdk-js';
 import { useSettings } from '../contexts/SettingsContext';
 import logger from '../utils/logger';
@@ -13,12 +13,22 @@ export const useProducts = () => {
     const { customSettings } = useSettings();
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(false);
+    
+    // Cache ל-customerLinkColumnId כדי לא לחפש אותו כל פעם
+    const customerLinkColumnCacheRef = useRef(null);
 
     /**
      * מציאת עמודת Connected Board בלוח המוצרים שמקשרת ללוח הלקוחות
      */
     const findCustomerLinkColumn = useCallback(async (productsBoardId, customerBoardId) => {
         if (!productsBoardId || !customerBoardId) return null;
+        
+        // בדיקה אם יש cache
+        const cacheKey = `${productsBoardId}_${customerBoardId}`;
+        if (customerLinkColumnCacheRef.current?.key === cacheKey) {
+            logger.debug('useProducts', `Using cached customer link column: ${customerLinkColumnCacheRef.current.columnId}`);
+            return customerLinkColumnCacheRef.current.columnId;
+        }
 
         try {
             const query = `query {
@@ -42,6 +52,8 @@ export const useProducts = () => {
                         const settings = JSON.parse(col.settings_str || '{}');
                         if (settings.boardIds && settings.boardIds.includes(parseInt(customerBoardId))) {
                             logger.debug('useProducts', `Found customer link column: ${col.id}`);
+                            // שמירה ב-cache
+                            customerLinkColumnCacheRef.current = { key: cacheKey, columnId: col.id };
                             return col.id;
                         }
                     } catch {
@@ -64,6 +76,12 @@ export const useProducts = () => {
     const fetchForCustomer = useCallback(async (customerId) => {
         if (!customSettings.productsBoardId || !customSettings.connectedBoardId || !customerId) {
             logger.warn('useProducts', 'Missing settings or customerId for fetching products');
+            return;
+        }
+        
+        // מניעת קריאות כפולות - אם כבר טוענים, לא לטעון שוב
+        if (loading) {
+            logger.debug('useProducts', 'Already loading products, skipping duplicate call');
             return;
         }
 

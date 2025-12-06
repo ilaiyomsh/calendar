@@ -372,6 +372,13 @@ export const useMondayEvents = (monday, context) => {
                 personsAndTeams: [{ id: parseInt(currentUser.id), kind: "person" }]
             };
         }
+        
+        // הוספת סטטוס "שעתי" לאירועים שעתיים
+        if (customSettings.eventTypeStatusColumnId) {
+            columnValues[customSettings.eventTypeStatusColumnId] = {
+                label: "שעתי"
+            };
+        }
 
         return columnValues;
     }, [customSettings]);
@@ -464,11 +471,12 @@ export const useMondayEvents = (monday, context) => {
             // עדכון שם האייטם אם השתנה
             const event = events.find(e => e.id === eventId);
             if (event && itemName !== event.title) {
+                const columnValues = { name: itemName };
                 const updateNameMutation = `mutation {
-                    change_simple_column_value(
+                    change_multiple_column_values(
                         item_id: ${eventId},
-                        column_id: "name",
-                        value: "${itemName}"
+                        board_id: ${context.boardId},
+                        column_values: ${JSON.stringify(JSON.stringify(columnValues))}
                     ) {
                         id
                     }
@@ -561,6 +569,27 @@ export const useMondayEvents = (monday, context) => {
 
             const durationHours = durationMinutes / 60;
             columnValues[customSettings.durationColumnId] = durationHours.toFixed(2);
+            
+            // הוספת סטטוס לפי סוג האירוע
+            if (customSettings.eventTypeStatusColumnId) {
+                // אם זה אירוע יומי, נבדוק את הכותרת
+                if (event.allDay) {
+                    const typeNames = {
+                        'מחלה': 'מחלה',
+                        'חופשה': 'חופשה',
+                        'מילואים': 'מילואים'
+                    };
+                    const statusLabel = typeNames[event.title] || 'שעתי';
+                    columnValues[customSettings.eventTypeStatusColumnId] = {
+                        label: statusLabel
+                    };
+                } else {
+                    // אירוע שעתי
+                    columnValues[customSettings.eventTypeStatusColumnId] = {
+                        label: "שעתי"
+                    };
+                }
+            }
 
             await updateItemColumnValues(monday, context.boardId, event.mondayItemId, columnValues);
 

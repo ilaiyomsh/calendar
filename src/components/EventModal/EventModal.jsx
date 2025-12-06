@@ -2,7 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useCustomers } from '../../hooks/useCustomers';
 import { useProducts } from '../../hooks/useProducts';
+import { fetchCurrentUser } from '../../utils/mondayApi';
 import ProductSelect from '../ProductSelect';
+import ConfirmDialog from '../ConfirmDialog';
 import styles from './EventModal.module.css';
 
 export default function EventModal({
@@ -15,11 +17,12 @@ export default function EventModal({
     onUpdate = null,
     onDelete = null,
     selectedItem: propSelectedItem = null,
-    setSelectedItem: setPropSelectedItem = null
+    setSelectedItem: setPropSelectedItem = null,
+    monday
 }) {
     const { customSettings } = useSettings();
     const { customers, loading: loadingCustomers, error: customersError, refetch: refetchCustomers } = useCustomers();
-    const { createProduct } = useProducts();
+    const { createProduct, fetchForCustomer, products, loading: loadingProducts } = useProducts();
     
     // State - משתמש ב-prop אם קיים, אחרת state פנימי
     const [internalSelectedItem, setInternalSelectedItem] = useState(null);
@@ -36,27 +39,24 @@ export default function EventModal({
         : internalSelectedItem;
     const setSelectedItem = setPropSelectedItem || setInternalSelectedItem;
     
-    // עדכון selectedItem כש-localCustomers משתנה (אם יש propSelectedItem)
-    useEffect(() => {
-        if (propSelectedItem !== null && localCustomers.length > 0 && setPropSelectedItem) {
-            const updatedCustomer = localCustomers.find(c => c.id === propSelectedItem.id);
-            if (updatedCustomer) {
-                // עדכון רק אם יש שינוי במוצרים
-                const currentProducts = propSelectedItem.products || [];
-                const newProducts = updatedCustomer.products || [];
-                if (currentProducts.length !== newProducts.length || 
-                    !currentProducts.every((p, i) => p.id === newProducts[i]?.id)) {
-                    setPropSelectedItem(updatedCustomer);
-                }
-            }
-        }
-    }, [localCustomers, propSelectedItem, setPropSelectedItem]);
-    
+    // State - צריך להיות מוגדר לפני useEffect שמשתמש בו
     const [notes, setNotes] = useState("");
     const [selectedProduct, setSelectedProduct] = useState(null);
     const [isCreatingProduct, setIsCreatingProduct] = useState(false);
     // State נפרד למוצרים של הלקוח הנבחר - כמו ב-AllDayEventModal
     const [selectedItemProducts, setSelectedItemProducts] = useState([]);
+    
+    // State - תיבת אישור למחיקה
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    
+    // עדכון selectedItem כש-localCustomers משתנה (אם יש propSelectedItem)
+    // אבל לא בעת יצירת מוצר חדש כדי למנוע race conditions
+    useEffect(() => {
+        if (propSelectedItem !== null && localCustomers.length > 0 && setPropSelectedItem && !isCreatingProduct) {
+            // לא צריך לעדכן את propSelectedItem כאן - המוצרים ייטענו דרך useProducts
+            // כשהלקוח נבחר
+        }
+    }, [localCustomers, propSelectedItem, setPropSelectedItem, isCreatingProduct]);
 
     // Reset state when dialog opens
     useEffect(() => {
@@ -70,7 +70,17 @@ export default function EventModal({
                     const customer = localCustomers.find(c => c.id === eventToEdit.customerId);
                     if (customer) {
                         setSelectedItem(customer);
-                        setSelectedItemProducts(customer.products || []);
+                        
+                        // הוספת המוצר הנבחר לרשימה מיד (בלי לחכות לטעינת כל המוצרים)
+                        if (eventToEdit.selectedProductData) {
+                            setSelectedItemProducts([eventToEdit.selectedProductData]);
+                            setSelectedProduct(eventToEdit.selectedProductData.id);
+                        }
+                        
+                        // טעינת כל המוצרים ברקע (לא חוסם את פתיחת התיבה)
+                        if (customSettings.productsCustomerColumnId) {
+                            fetchForCustomer(customer.id);
+                        }
                     }
                 }
             } else {
@@ -82,17 +92,43 @@ export default function EventModal({
                 setIsCreatingProduct(false);
             }
         }
-    }, [isOpen, isEditMode, eventToEdit, localCustomers, setSelectedItem]);
+    }, [isOpen, isEditMode, eventToEdit, localCustomers, setSelectedItem, customSettings.productsCustomerColumnId, fetchForCustomer]);
 
-    // עדכון selectedItemProducts כשמשנים לקוח (אבל לא בעת יצירת מוצר חדש)
+    // טעינת מוצרים כשמשתמש בוחר לקוח
     useEffect(() => {
-        if (selectedItem && !isCreatingProduct) {
-            setSelectedItemProducts(selectedItem.products || []);
-            setSelectedProduct(null);
+        if (selectedItem && !isCreatingProduct && customSettings.productsCustomerColumnId) {
+            // במצב יצירה - טעינת מוצרים
+            if (!isEditMode) {
+                setSelectedItemProducts([]);
+                setSelectedProduct(null);
+                fetchForCustomer(selectedItem.id);
+            }
+            // במצב עריכה - לא עושים כלום כאן (כי כבר טענו ב-useEffect הקודם)
         } else if (!selectedItem) {
             setSelectedItemProducts([]);
         }
-    }, [selectedItem, isCreatingProduct]);
+    }, [selectedItem, isCreatingProduct, customSettings.productsCustomerColumnId, fetchForCustomer, isEditMode]);
+    
+    // עדכון selectedItemProducts כשהמוצרים נטענים (במצב עריכה - עדכון הרשימה אחרי שהתיבה כבר נפתחה)
+    useEffect(() => {
+        if (products && products.length > 0 && selectedItem) {
+            // עדכון הרשימה עם כל המוצרים (מחליף את המוצר הבודד שהיה)
+            setSelectedItemProducts(products);
+            // במצב עריכה, אם יש productId ב-eventToEdit, נבחר אותו
+            if (isEditMode && eventToEdit?.productId) {
+                // בדיקה שהמוצר קיים ברשימה
+                const productExists = products.some(p => p.id === eventToEdit.productId);
+                if (productExists) {
+                    setSelectedProduct(eventToEdit.productId);
+                }
+            }
+        } else if (products && products.length === 0 && selectedItem) {
+            // אם אין מוצרים, אבל יש מוצר נבחר במצב עריכה, נשאיר אותו
+            if (!isEditMode || !eventToEdit?.selectedProductData) {
+                setSelectedItemProducts([]);
+            }
+        }
+    }, [products, selectedItem, isEditMode, eventToEdit]);
 
     const handleCreateProduct = async (productName) => {
         if (!selectedItem) return;
@@ -108,28 +144,15 @@ export default function EventModal({
                 // בחירת המוצר החדש - מיד אחרי עדכון selectedItemProducts
                 setSelectedProduct(newProduct.id);
                 
-                // עדכון localCustomers עם המוצר החדש - רק הלקוח הספציפי
-                // זה נעשה אחרי בחירת המוצר כדי למנוע race conditions
-                const updatedCustomers = localCustomers.map(customer =>
-                    customer.id === selectedItem.id
-                        ? { ...customer, products: [...(customer.products || []), newProduct] }
-                        : customer
-                );
-                setLocalCustomers(updatedCustomers);
-                
-                // עדכון selectedItem עם המוצר החדש
-                const updatedSelectedItem = {
-                    ...selectedItem,
-                    products: [...(selectedItem.products || []), newProduct]
-                };
-                setSelectedItem(updatedSelectedItem);
+                // לא צריך לעדכן את localCustomers או selectedItem - המוצרים נשמרים ב-selectedItemProducts
+                // והם ייטענו מחדש דרך useProducts כשצריך
             }
         } finally {
             setIsCreatingProduct(false);
         }
     };
 
-    const handleCreate = () => {
+    const handleCreate = async () => {
         // מאפשרים שמירה גם אם רק יש הערה, או רק פרויקט, או שניהם
         if (!selectedItem && !notes.trim()) return;
         
@@ -139,8 +162,14 @@ export default function EventModal({
             return;
         }
 
+        // שליפת שם המשתמש ושם המוצר
+        const currentUser = await fetchCurrentUser(monday);
+        const reporterName = currentUser?.name || 'לא ידוע';
+        const product = selectedItemProducts.find(p => p.id === selectedProduct);
+        const productName = product?.name || 'ללא מוצר';
+        
         const eventData = {
-            title: selectedItem ? selectedItem.name : "אירוע ללא פרויקט",
+            title: `${productName} - ${reporterName}`,  // במקום selectedItem.name
             itemId: selectedItem?.id,
             notes: notes,
             productId: selectedProduct
@@ -183,7 +212,15 @@ export default function EventModal({
     };
 
     return (
-        <div className={styles.overlay} onClick={(e) => e.target === e.currentTarget && onClose()}>
+        <div className={styles.overlay} onClick={(e) => {
+            // לא לסגור אם תיבת confirm פתוחה
+            if (showDeleteConfirm) {
+                return;
+            }
+            if (e.target === e.currentTarget) {
+                onClose();
+            }
+        }}>
             <div 
                 className={styles.modal} 
                 onClick={(e) => e.stopPropagation()} 
@@ -203,24 +240,35 @@ export default function EventModal({
                 <div className={styles.content}>
                     {/* לקוח / פרויקט */}
                     <div className={styles.formGroup}>
-                        <label className={styles.label}>לקוח / פרויקט</label>
-                        <div className={styles.grid}>
-                            {loadingCustomers ? (
-                                <div className={styles.loading}>טוען...</div>
-                            ) : customersError ? (
-                                <div className={styles.loading}>{customersError}</div>
-                            ) : localCustomers.map(item => (
-                                <button
-                                    key={item.id}
-                                    onClick={() => {
-                                        setSelectedItem(item.id === selectedItem?.id ? null : item);
-                                    }}
-                                    className={`${styles.itemButton} ${selectedItem?.id === item.id ? styles.selected : ''}`}
-                                >
-                                    {item.name}
-                                </button>
-                            ))}
-                        </div>
+                        <label className={styles.label}>לקוח</label>
+                        {isEditMode ? (
+                            // במצב עריכה - הצגה read-only
+                            <div className={styles.readOnlyField}>
+                                {selectedItem ? selectedItem.name : 'לא נבחר לקוח'}
+                            </div>
+                        ) : (
+                            // במצב יצירה - כפתורי בחירה
+                            <div className={styles.grid}>
+                                {loadingCustomers ? (
+                                    <div className={styles.loading}>טוען...</div>
+                                ) : customersError ? (
+                                    <div className={styles.loading}>{customersError}</div>
+                                ) : localCustomers
+                                    .slice()
+                                    .sort((a, b) => a.name.localeCompare(b.name, 'he'))
+                                    .map(item => (
+                                        <button
+                                            key={item.id}
+                                            onClick={() => {
+                                                setSelectedItem(item.id === selectedItem?.id ? null : item);
+                                            }}
+                                            className={`${styles.itemButton} ${selectedItem?.id === item.id ? styles.selected : ''}`}
+                                        >
+                                            {item.name}
+                                        </button>
+                                    ))}
+                            </div>
+                        )}
                     </div>
                     
                     {/* סעיף בחירת מוצר */}
@@ -260,12 +308,7 @@ export default function EventModal({
                     {isEditMode && onDelete && (
                         <button 
                             className={`${styles.btn} ${styles.btnDanger}`}
-                            onClick={() => {
-                                if (window.confirm('האם אתה בטוח שברצונך למחוק את האירוע?')) {
-                                    onDelete();
-                                    onClose();
-                                }
-                            }}
+                            onClick={() => setShowDeleteConfirm(true)}
                         >
                             מחק
                         </button>
@@ -285,6 +328,25 @@ export default function EventModal({
                     </button>
                 </div>
             </div>
+            
+            {/* תיבת אישור למחיקה */}
+            <ConfirmDialog
+                isOpen={showDeleteConfirm}
+                onClose={() => setShowDeleteConfirm(false)}
+                onConfirm={() => {
+                    setShowDeleteConfirm(false);
+                    if (onDelete) {
+                        onDelete();
+                    }
+                    onClose();
+                }}
+                onCancel={() => setShowDeleteConfirm(false)}
+                title="מחיקת אירוע"
+                message="האם אתה בטוח שברצונך למחוק את האירוע?"
+                confirmText="מחק"
+                cancelText="ביטול"
+                confirmButtonStyle="danger"
+            />
         </div>
     );
 }

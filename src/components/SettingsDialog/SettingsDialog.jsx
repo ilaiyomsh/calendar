@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useSettings } from '../../contexts/SettingsContext';
 import { Button } from '@vibe/core';
 import SearchableSelect from './SearchableSelect';
+import MultiSelect from './MultiSelect';
 import SettingsAccordion from './SettingsAccordion';
 import SettingsSection from './SettingsSection';
 import SettingsTabs from './SettingsTabs';
 import { useSettingsValidation } from './useSettingsValidation';
+import logger from '../../utils/logger';
 import styles from './SettingsDialog.module.css';
 
 export default function SettingsDialog({ monday, onClose, context }) {
@@ -15,7 +17,7 @@ export default function SettingsDialog({ monday, onClose, context }) {
   const [boards, setBoards] = useState([]);
   const [peopleColumns, setPeopleColumns] = useState([]);
   const [connectedBoardId, setConnectedBoardId] = useState('');
-  const [peopleColumnId, setPeopleColumnId] = useState('');
+  const [peopleColumnIds, setPeopleColumnIds] = useState([]);
   const [loadingBoards, setLoadingBoards] = useState(false);
   const [loadingPeopleColumns, setLoadingPeopleColumns] = useState(false);
   
@@ -32,6 +34,7 @@ export default function SettingsDialog({ monday, onClose, context }) {
   const [notesColumnId, setNotesColumnId] = useState('');
   const [reporterColumnId, setReporterColumnId] = useState('');
   const [statusColumnId, setStatusColumnId] = useState('');
+  const [eventTypeStatusColumnId, setEventTypeStatusColumnId] = useState('');
   const [loadingCurrentBoardColumns, setLoadingCurrentBoardColumns] = useState(false);
   
   // State - לוח מוצרים
@@ -50,13 +53,14 @@ export default function SettingsDialog({ monday, onClose, context }) {
   // חישוב הגדרות נוכחיות ל-validation
   const currentSettings = {
     connectedBoardId,
-    peopleColumnId,
+    peopleColumnIds,
     dateColumnId,
     durationColumnId,
     projectColumnId,
     notesColumnId,
     reporterColumnId,
     statusColumnId,
+    eventTypeStatusColumnId,
     productsBoardId,
     productsCustomerColumnId,
     productColumnId,
@@ -67,8 +71,8 @@ export default function SettingsDialog({ monday, onClose, context }) {
   const { errors, isValid, getFieldError } = useSettingsValidation(currentSettings, context);
 
   // בדיקה אם קטגוריה הוגדרה במלואה
-  const isExternalBoardComplete = connectedBoardId && peopleColumnId;
-  const isCurrentBoardComplete = context?.boardId && dateColumnId && durationColumnId && projectColumnId;
+  const isExternalBoardComplete = connectedBoardId && peopleColumnIds.length > 0;
+  const isCurrentBoardComplete = context?.boardId && dateColumnId && durationColumnId && projectColumnId && reporterColumnId && eventTypeStatusColumnId;
   const isProductsComplete = productsCustomerColumnId ? (productsBoardId && productColumnId) : true;
   const isWorkHoursComplete = workDayStart && workDayEnd;
 
@@ -82,8 +86,11 @@ export default function SettingsDialog({ monday, onClose, context }) {
       fetchPeopleColumns(customSettings.connectedBoardId);
       fetchCustomerProductsColumns(customSettings.connectedBoardId);
     }
-    if (customSettings.peopleColumnId) {
-      setPeopleColumnId(customSettings.peopleColumnId);
+    if (customSettings.peopleColumnIds && Array.isArray(customSettings.peopleColumnIds)) {
+      setPeopleColumnIds(customSettings.peopleColumnIds);
+    } else if (customSettings.peopleColumnId) {
+      // תמיכה ב-backward compatibility - אם יש peopleColumnId ישן, להמיר ל-array
+      setPeopleColumnIds([customSettings.peopleColumnId]);
     }
     
     // טעינת הגדרות לוח נוכחי
@@ -114,6 +121,11 @@ export default function SettingsDialog({ monday, onClose, context }) {
     } else {
       // אם אין עמודת סטטוס, נגדיר לריק (אופציה "ללא")
       setStatusColumnId('');
+    }
+    if (customSettings.eventTypeStatusColumnId) {
+      setEventTypeStatusColumnId(customSettings.eventTypeStatusColumnId);
+    } else {
+      setEventTypeStatusColumnId('');
     }
     
     // טעינת הגדרות מוצרים
@@ -146,12 +158,13 @@ export default function SettingsDialog({ monday, onClose, context }) {
   const fetchBoards = async () => {
     setLoadingBoards(true);
     try {
-      const res = await monday.api(`query { boards(limit: 100) { id name } }`);
+      const res = await monday.api(`query { boards(limit: 500) { id name } }`);
       if (res.data && res.data.boards) {
         setBoards(res.data.boards);
       }
     } catch (err) {
-      console.error('Error fetching boards:', err);
+      // לוג שגיאה קריטי - נשאר פעיל גם בפרודקשן
+      logger.error('SettingsDialog', 'Error fetching boards', err);
     } finally {
       setLoadingBoards(false);
     }
@@ -164,6 +177,9 @@ export default function SettingsDialog({ monday, onClose, context }) {
     setPeopleColumns([]);
     try {
       const res = await monday.api(`query { boards(ids: [${boardId}]) { columns { id title type } } }`);
+      // לוגים להערה - ניתן להפעיל לצורך דיבוג
+      // console.log("query: ", `query { boards(ids: [${boardId}]) { columns { id title type } } }`);
+      // console.log("response: ", res);
       if (res.data && res.data.boards && res.data.boards[0]) {
         const cols = res.data.boards[0].columns
           .filter(col => col.type === 'people')
@@ -171,7 +187,8 @@ export default function SettingsDialog({ monday, onClose, context }) {
         setPeopleColumns(cols);
       }
     } catch (err) {
-      console.error('Error fetching people columns:', err);
+      // לוג שגיאה קריטי - נשאר פעיל גם בפרודקשן
+      logger.error('SettingsDialog', 'Error fetching people columns', err);
     } finally {
       setLoadingPeopleColumns(false);
     }
@@ -195,11 +212,13 @@ export default function SettingsDialog({ monday, onClose, context }) {
           .map(col => ({ id: col.id, name: col.title, settings_str: col.settings_str }));
         setProductsCustomerColumns(connectCols);
       } else {
-        console.warn('No boards found in response');
+        // לוג להערה - ניתן להפעיל לצורך דיבוג
+        // logger.warn('SettingsDialog', 'No boards found in response');
         setProductsCustomerColumns([]);
       }
     } catch (err) {
-      console.error('Error fetching customer products columns:', err);
+      // לוג שגיאה קריטי - נשאר פעיל גם בפרודקשן
+      logger.error('SettingsDialog', 'Error fetching customer products columns', err);
       setProductsCustomerColumns([]);
     } finally {
       setLoadingProductsColumns(false);
@@ -231,12 +250,14 @@ export default function SettingsDialog({ monday, onClose, context }) {
             setProductBoards([]);
           }
         } catch (e) {
-          console.error('Error parsing column settings:', e);
+          // לוג שגיאה קריטי - נשאר פעיל גם בפרודקשן
+          logger.error('SettingsDialog', 'Error parsing column settings', e);
           setProductBoards([]);
         }
       }
     } catch (err) {
-      console.error('Error extracting product boards from column:', err);
+      // לוג שגיאה קריטי - נשאר פעיל גם בפרודקשן
+      logger.error('SettingsDialog', 'Error extracting product boards from column', err);
       setProductBoards([]);
     }
   };
@@ -312,14 +333,15 @@ export default function SettingsDialog({ monday, onClose, context }) {
         const statusCols = columns
           .filter(col => col.type === 'status')
           .map(col => ({ id: col.id, name: col.title }));
-        // הוספת אופציה "ללא" בתחילת הרשימה
+        // הוספת אופציה "ללא" בתחילת הרשימה (רק עבור עמודת סטטוס רגילה)
         setStatusColumns([
           { id: '', name: 'ללא עמודת סטטוס' },
           ...statusCols
         ]);
       }
     } catch (err) {
-      console.error('Error fetching current board columns:', err);
+      // לוג שגיאה קריטי - נשאר פעיל גם בפרודקשן
+      logger.error('SettingsDialog', 'Error fetching current board columns', err);
     } finally {
       setLoadingCurrentBoardColumns(false);
     }
@@ -328,7 +350,7 @@ export default function SettingsDialog({ monday, onClose, context }) {
   // טיפול בשינוי לוח חיצוני (לקוח)
   const handleConnectedBoardChange = (newBoardId) => {
     setConnectedBoardId(newBoardId);
-    setPeopleColumnId('');
+    setPeopleColumnIds([]);
     setProductsCustomerColumnId('');
     setProductsBoardId('');
     setProductColumnId('');
@@ -377,9 +399,9 @@ export default function SettingsDialog({ monday, onClose, context }) {
     setProductColumnId(newColumnId);
   };
 
-  // טיפול בשינוי עמודת people
-  const handlePeopleColumnChange = (newColumnId) => {
-    setPeopleColumnId(newColumnId);
+  // טיפול בשינוי עמודות people (בחירה מרובה)
+  const handlePeopleColumnsChange = (newColumnIds) => {
+    setPeopleColumnIds(newColumnIds);
   };
 
   // טיפול בשינוי עמודות הלוח הנוכחי
@@ -407,6 +429,64 @@ export default function SettingsDialog({ monday, onClose, context }) {
     setStatusColumnId(newColumnId);
   };
 
+  const handleEventTypeStatusColumnChange = async (newColumnId) => {
+    setEventTypeStatusColumnId(newColumnId);
+    
+    // אם נבחרה עמודה, נעדכן את התוויות שלה
+    if (newColumnId && context?.boardId) {
+      try {
+        // שליפת revision של העמודה
+        const columnQuery = `query {
+          boards(ids: [${context.boardId}]) {
+            columns(ids: ["${newColumnId}"]) {
+              id
+              revision
+              settings
+            }
+          }
+        }`;
+        
+        const columnRes = await monday.api(columnQuery);
+        const column = columnRes.data?.boards?.[0]?.columns?.[0];
+        
+        if (!column) {
+          // לוג שגיאה קריטי - נשאר פעיל גם בפרודקשן
+          logger.error('SettingsDialog', 'Column not found');
+          return;
+        }
+        
+        const revision = column.revision;
+        
+        // עדכון התוויות של העמודה
+        const updateMutation = `mutation {
+          update_status_column(
+            board_id: ${context.boardId}
+            id: "${newColumnId}"
+            revision: "${revision}"
+            settings: {
+              labels: [
+                { color: grass_green, label: "חופשה", index: 0 },
+                { color: stuck_red, label: "מחלה", index: 1 },
+                { color: river, label: "מילואים", index: 2 },
+                { color: bright_blue, label: "שעתי", index: 3 }
+              ]
+            }
+          ) {
+            id
+          }
+        }`;
+        
+        await monday.api(updateMutation);
+        // לוג להערה - ניתן להפעיל לצורך דיבוג
+        // logger.info('SettingsDialog', 'Status column labels updated successfully');
+      } catch (error) {
+        // לוג שגיאה קריטי - נשאר פעיל גם בפרודקשן
+        logger.error('SettingsDialog', 'Error updating status column labels', error);
+        alert('שגיאה בעדכון תוויות עמודת הסטטוס. אנא ודא שיש לך הרשאות מתאימות.');
+      }
+    }
+  };
+
   // שמירה סופית
   const handleSave = async () => {
     if (!isValid) {
@@ -417,13 +497,14 @@ export default function SettingsDialog({ monday, onClose, context }) {
 
     const success = await updateSettings({ 
       connectedBoardId: connectedBoardId || null,
-      peopleColumnId: peopleColumnId || null,
+      peopleColumnIds: peopleColumnIds.length > 0 ? peopleColumnIds : [],
       dateColumnId: dateColumnId || null,
       durationColumnId: durationColumnId || null,
       projectColumnId: projectColumnId || null,
       notesColumnId: notesColumnId || null,
       reporterColumnId: reporterColumnId || null,
       statusColumnId: statusColumnId || null,
+      eventTypeStatusColumnId: eventTypeStatusColumnId || null,
       productsBoardId: productsBoardId || null,
       productsCustomerColumnId: productsCustomerColumnId || null,
       productColumnId: productColumnId || null,
@@ -482,17 +563,17 @@ export default function SettingsDialog({ monday, onClose, context }) {
             </FieldWrapper>
 
             <FieldWrapper
-              label="עמודת לשיוך (אנשים)"
+              label="עמודות לשיוך (אנשים) *"
               required
-              description="עמודה לפי המשתמש בלוח החיצוני - רק אייטמים שבהם המשתמש מופיע יוצגו"
-              error={getFieldError('peopleColumnId')}
+              description="עמודות לפי המשתמש בלוח החיצוני - רק אייטמים שבהם המשתמש מופיע באחת מהעמודות יוצגו"
+              error={getFieldError('peopleColumnIds')}
             >
               <div className={connectedBoardId ? '' : styles.disabled}>
-                <SearchableSelect 
+                <MultiSelect 
                   options={peopleColumns}
-                  value={peopleColumnId}
-                  onChange={handlePeopleColumnChange}
-                  placeholder="בחר עמודת אנשים..."
+                  value={peopleColumnIds}
+                  onChange={handlePeopleColumnsChange}
+                  placeholder="בחר עמודות אנשים..."
                   isLoading={loadingPeopleColumns}
                   disabled={!connectedBoardId}
                 />
@@ -526,6 +607,7 @@ export default function SettingsDialog({ monday, onClose, context }) {
                       placeholder="בחר עמודת מוצרים..."
                       isLoading={loadingProductsColumns}
                       disabled={!connectedBoardId}
+                      showSearch={false}
                     />
                     {connectedBoardId && !loadingProductsColumns && productsCustomerColumns.length === 0 && (
                       <p className={styles.warning}>
@@ -549,6 +631,7 @@ export default function SettingsDialog({ monday, onClose, context }) {
                       placeholder="בחר לוח מוצרים..."
                       isLoading={loadingProductsColumns}
                       disabled={!productsCustomerColumnId}
+                      showSearch={false}
                     />
                     {productsCustomerColumnId && productBoards.length === 0 && (
                       <p className={styles.warning}>
@@ -573,6 +656,7 @@ export default function SettingsDialog({ monday, onClose, context }) {
                         placeholder="בחר עמודת מוצר..."
                         isLoading={loadingCurrentBoardColumns}
                         disabled={!context?.boardId || !productsBoardId}
+                        showSearch={false}
                       />
                       {context?.boardId && !loadingCurrentBoardColumns && currentBoardProductColumns.length === 0 && (
                         <p className={styles.warning}>
@@ -611,6 +695,7 @@ export default function SettingsDialog({ monday, onClose, context }) {
                   placeholder="בחר עמודת תאריך..."
                   isLoading={loadingCurrentBoardColumns}
                   disabled={!context?.boardId}
+                  showSearch={false}
                 />
                 {context?.boardId && !loadingCurrentBoardColumns && dateColumns.length === 0 && (
                   <p className={styles.warning}>
@@ -634,6 +719,7 @@ export default function SettingsDialog({ monday, onClose, context }) {
                   placeholder="בחר עמודת משך זמן..."
                   isLoading={loadingCurrentBoardColumns}
                   disabled={!context?.boardId}
+                  showSearch={false}
                 />
                 {context?.boardId && !loadingCurrentBoardColumns && durationColumns.length === 0 && (
                   <p className={styles.warning}>
@@ -657,6 +743,7 @@ export default function SettingsDialog({ monday, onClose, context }) {
                   placeholder="בחר עמודת קישור..."
                   isLoading={loadingCurrentBoardColumns}
                   disabled={!context?.boardId}
+                  showSearch={false}
                 />
                 {context?.boardId && !loadingCurrentBoardColumns && projectColumns.length === 0 && (
                   <p className={styles.warning}>
@@ -678,6 +765,7 @@ export default function SettingsDialog({ monday, onClose, context }) {
                   placeholder="בחר עמודת הערות..."
                   isLoading={loadingCurrentBoardColumns}
                   disabled={!context?.boardId}
+                  showSearch={false}
                 />
                 {context?.boardId && !loadingCurrentBoardColumns && textColumns.length === 0 && (
                   <p className={styles.warning}>
@@ -689,7 +777,9 @@ export default function SettingsDialog({ monday, onClose, context }) {
 
             <FieldWrapper
               label="עמודת מדווח"
+              required
               description="עמודת People למשתמש שיצר את הדיווח (מדווח)"
+              error={getFieldError('reporterColumnId')}
             >
               <div className={context?.boardId ? '' : styles.disabled}>
                 <SearchableSelect 
@@ -699,6 +789,7 @@ export default function SettingsDialog({ monday, onClose, context }) {
                   placeholder="בחר עמודת מדווח..."
                   isLoading={loadingCurrentBoardColumns}
                   disabled={!context?.boardId}
+                  showSearch={false}
                 />
                 {context?.boardId && !loadingCurrentBoardColumns && reporterColumns.length === 0 && (
                   <p className={styles.warning}>
@@ -720,8 +811,33 @@ export default function SettingsDialog({ monday, onClose, context }) {
                   placeholder="בחר עמודת סטטוס..."
                   isLoading={loadingCurrentBoardColumns}
                   disabled={!context?.boardId}
+                  showSearch={false}
                 />
                 {context?.boardId && !loadingCurrentBoardColumns && statusColumns.length === 0 && (
+                  <p className={styles.warning}>
+                    ⚠️ לא נמצאו עמודות מסוג "status" בלוח זה
+                  </p>
+                )}
+              </div>
+            </FieldWrapper>
+
+            <FieldWrapper
+              label="עמודת סטטוס לסוג דיווח"
+              required
+              description="עמודת Status להגדרת סוג הדיווח. בחירה בעמודה תשנה את ההגדרות שלה"
+              error={getFieldError('eventTypeStatusColumnId')}
+            >
+              <div className={context?.boardId ? '' : styles.disabled}>
+                <SearchableSelect 
+                  options={statusColumns.filter(col => col.id !== '')}
+                  value={eventTypeStatusColumnId}
+                  onChange={handleEventTypeStatusColumnChange}
+                  placeholder="בחר עמודת סטטוס לסוג דיווח..."
+                  isLoading={loadingCurrentBoardColumns}
+                  disabled={!context?.boardId}
+                  showSearch={false}
+                />
+                {context?.boardId && !loadingCurrentBoardColumns && statusColumns.filter(col => col.id !== '').length === 0 && (
                   <p className={styles.warning}>
                     ⚠️ לא נמצאו עמודות מסוג "status" בלוח זה
                   </p>

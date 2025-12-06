@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { Sun, Thermometer, Briefcase, FileText, Plus, Trash2, X } from 'lucide-react';
+import { Sun, Thermometer, Briefcase, FileText, Plus, Trash2, X, Clock } from 'lucide-react';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useCustomers } from '../../hooks/useCustomers';
 import { useProductsMultiple } from '../../hooks/useProductsMultiple';
 import ProductSelect from '../ProductSelect';
+import ConfirmDialog from '../ConfirmDialog';
 import logger from '../../utils/logger';
 import styles from './AllDayEventModal.module.css';
 
@@ -11,11 +12,15 @@ export default function AllDayEventModal({
     isOpen,
     onClose,
     pendingDate,
-    onCreate
+    onCreate,
+    eventToEdit = null,
+    isEditMode = false,
+    onUpdate = null,
+    onDelete = null
 }) {
     const { customSettings } = useSettings();
     const { customers, loading: loadingCustomers, refetch: refetchCustomers } = useCustomers();
-    const { createProduct } = useProductsMultiple();
+    const { createProduct, fetchForCustomer, products: productsByCustomer } = useProductsMultiple();
     
     // State - בחירת סוג אירוע
     const [selectedType, setSelectedType] = useState(null); // 'sick' | 'vacation' | 'reserves' | 'reports'
@@ -32,20 +37,63 @@ export default function AllDayEventModal({
     // State - יצירת מוצר לכל פרויקט
     const [isCreatingProduct, setIsCreatingProduct] = useState({});
     
+    // State - תיבות אישור
+    const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [editingDuration, setEditingDuration] = useState({}); // state מקומי לעריכת שדה המשך
+    
+    // --- פונקציות עזר לחישובי זמן (בהתאם לדוגמה) ---
+    const parseTime = (timeStr) => {
+        if (!timeStr) return 0;
+        const [h, m] = timeStr.split(':').map(Number);
+        return h * 60 + m;
+    };
+
+    const formatTime = (minutes) => {
+        let h = Math.floor(minutes / 60) % 24;
+        let m = minutes % 60;
+        return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+    };
+
+    const addTime = (start, durationStr) => {
+        if (!start) return '';
+        const totalMinutes = parseTime(start) + parseTime(durationStr || '01:00');
+        return formatTime(totalMinutes);
+    };
+    
     // איפוס state כאשר התיבה נפתחת או נסגרת
     useEffect(() => {
         if (isOpen) {
             logger.debug('AllDayEventModal', 'Modal opened - resetting state');
-            setSelectedType(null);
-            setViewMode('menu');
-            setAddedReports([]);
-            setSearchTerm('');
-            setSelectedProducts({});
-            setIsCreatingProduct({});
-            // רענון רשימת הלקוחות והמוצרים
-            refetchCustomers().then(() => {
-                logger.debug('AllDayEventModal', 'Customers refetched after modal opened');
-            });
+            
+            // אם במצב עריכה, זיהוי סוג האירוע לפי הכותרת
+            if (isEditMode && eventToEdit) {
+                const titleToType = {
+                    'מחלה': 'sick',
+                    'חופשה': 'vacation',
+                    'מילואים': 'reserves'
+                };
+                const detectedType = titleToType[eventToEdit.title];
+                if (detectedType) {
+                    setSelectedType(detectedType);
+                    logger.debug('AllDayEventModal', `Edit mode - detected type: ${detectedType}`);
+                }
+                // במצב עריכה של אירוע יומי פשוט - לא צריך לטעון לקוחות
+            } else {
+                // מצב יצירה - איפוס
+                setSelectedType(null);
+                setViewMode('menu');
+                setAddedReports([]);
+                setSearchTerm('');
+                setSelectedProducts({});
+                setIsCreatingProduct({});
+                setEditingDuration({}); // איפוס state של עריכת משך
+                
+                // רענון רשימת הלקוחות רק במצב יצירה (למקרה שיבחר "דיווחים מרובים")
+                refetchCustomers().then(() => {
+                    logger.debug('AllDayEventModal', 'Customers refetched after modal opened');
+                });
+            }
         } else {
             // איפוס גם כאשר התיבה נסגרת (למקרה שהמשתמש סגר בלי לשמור)
             logger.debug('AllDayEventModal', 'Modal closed - resetting all state');
@@ -55,24 +103,57 @@ export default function AllDayEventModal({
             setSearchTerm('');
             setSelectedProducts({});
             setIsCreatingProduct({});
+            setEditingDuration({}); // איפוס state של עריכת משך
         }
-    }, [isOpen, refetchCustomers]);
+    }, [isOpen, isEditMode, eventToEdit, refetchCustomers]);
+    
+    // עדכון מוצרים ב-addedReports כשהמוצרים נטענים
+    useEffect(() => {
+        setAddedReports(prev => prev.map(report => ({
+            ...report,
+            products: productsByCustomer[report.projectId] || []
+        })));
+    }, [productsByCustomer]);
     
     // הוספת שורת דיווח מלקוח
     const addReportRow = (customer) => {
         if (!customer) return;
         
-        // בדיקה אם הלקוח כבר קיים
-        if (addedReports.some(r => r.projectId === customer.id)) {
-            return;
+        // מאפשרים הוספת אותו לקוח מספר פעמים
+        
+        // טעינת מוצרים של הלקוח
+        if (customSettings.productsCustomerColumnId) {
+            fetchForCustomer(customer.id);
         }
+        
+        // חישוב שעת התחלה: הלקוח הראשון מקבל 8:00, האחרים ממשיכים מהסיום של הקודם
+        let startTime = '08:00';
+        if (addedReports.length > 0) {
+            const lastReport = addedReports[addedReports.length - 1];
+            if (lastReport.endTime) {
+                startTime = lastReport.endTime;
+            } else if (lastReport.startTime && lastReport.hours) {
+                // אם יש התחלה ומשך, מחשבים את הסיום
+                const hoursInMinutes = parseFloat(lastReport.hours) * 60;
+                const startTotalMins = parseTime(lastReport.startTime);
+                const endTotalMins = startTotalMins + hoursInMinutes;
+                startTime = formatTime(endTotalMins);
+            }
+        }
+        
+        // משך ברירת מחדל: שעה אחת
+        const defaultDuration = '01:00';
+        const endTime = addTime(startTime, defaultDuration);
+        const hours = '1.00'; // שעה אחת בפורמט שעות עשרוניות
         
         setAddedReports(prev => [...prev, {
             id: Date.now(),
             projectId: customer.id,
             projectName: customer.name,
-            products: customer.products || [],
-            hours: '',
+            products: [],
+            hours: hours,
+            startTime: startTime,
+            endTime: endTime,
             notes: '',
             productId: ''
         }]);
@@ -85,27 +166,185 @@ export default function AllDayEventModal({
             // הסרת המוצר הנבחר
             setSelectedProducts(prev => {
                 const newSelected = { ...prev };
-                delete newSelected[report.projectId];
+                delete newSelected[id];  // שימוש ב-id (reportId) במקום projectId
                 return newSelected;
             });
         }
         setAddedReports(prev => prev.filter(r => r.id !== id));
     };
     
-    // סינון לקוחות לפי חיפוש
-    const filteredCustomers = customers.filter(c => 
-        c.name.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    // סינון לקוחות לפי חיפוש ומיון לפי הא"ב
+    const filteredCustomers = customers
+        .filter(c => 
+            c.name.toLowerCase().includes(searchTerm.toLowerCase())
+        )
+        .slice() // יצירת עותק כדי לא לשנות את המערך המקורי
+        .sort((a, b) => a.name.localeCompare(b.name, 'he')); // מיון לפי הא"ב בעברית
     
-    // עדכון שעות, הערות או מוצר לדיווח
+    // פונקציה לחישוב משך זמן משעות התחלה וסיום
+    const calculateHoursFromTimeRange = (startTime, endTime) => {
+        if (!startTime || !endTime) return null;
+        
+        const startTotalMinutes = parseTime(startTime);
+        const endTotalMinutes = parseTime(endTime);
+        
+        if (endTotalMinutes <= startTotalMinutes) return null; // זמן סיום צריך להיות אחרי זמן התחלה
+        
+        const diffMinutes = endTotalMinutes - startTotalMinutes;
+        const diffHours = diffMinutes / 60;
+        
+        return diffHours.toFixed(2);
+    };
+    
+    // פונקציה לחישוב משך זמן בפורמט HH:mm
+    const calculateDurationStr = (start, end) => {
+        if (!start || !end) return '01:00';
+        let diff = parseTime(end) - parseTime(start);
+        if (diff < 0) diff += 24 * 60; // טיפול במעבר יום
+        return formatTime(diff);
+    };
+    
+    // --- לוגיקת Smart Cascade (פתרון חפיפות אוטומטי) ---
+    const resolveOverlaps = (currentEntries, startIndex) => {
+        const updated = [...currentEntries];
+        
+        for (let i = startIndex; i < updated.length - 1; i++) {
+            const current = updated[i];
+            const next = updated[i + 1];
+
+            // בדיקה אם יש שעות התחלה וסיום
+            if (!current.startTime || !current.endTime || !next.startTime) {
+                break; // אם אין שעות, לא מטפלים בחפיפות
+            }
+
+            // המרה לדקות להשוואה קלה
+            const currentEndMins = parseTime(current.endTime);
+            const nextStartMins = parseTime(next.startTime);
+
+            // תנאי החפיפה: אם הסיום של הנוכחי "נכנס" לתוך ההתחלה של הבא
+            if (currentEndMins > nextStartMins) {
+                // שמירת המשך המקורי של הבא לפני השינוי
+                let originalDuration = '01:00'; // ברירת מחדל
+                if (next.endTime && next.startTime) {
+                    originalDuration = calculateDurationStr(next.startTime, next.endTime);
+                } else if (next.hours) {
+                    originalDuration = formatTime(parseFloat(next.hours) * 60);
+                }
+                
+                // דחיפת ההתחלה של הבא להיות שווה לסיום של הנוכחי
+                next.startTime = current.endTime;
+                
+                // עדכון הסיום של הבא כדי לשמור על המשך (Duration) המקורי שלו
+                next.endTime = addTime(next.startTime, originalDuration);
+                
+                // עדכון המשך בפורמט שעות עשרוניות
+                if (next.startTime && next.endTime) {
+                    const calculatedHours = calculateHoursFromTimeRange(next.startTime, next.endTime);
+                    if (calculatedHours) {
+                        next.hours = calculatedHours;
+                    }
+                }
+            } else {
+                // אם אין חפיפה (יש רווח או שהם צמודים), אין צורך להמשיך לבדוק את השאר
+                break; 
+            }
+        }
+        return updated;
+    };
+    
+    // פונקציה לבדיקה אם יש דיווחים תקפים
+    const hasValidReports = () => {
+        if (selectedType !== 'reports' || viewMode !== 'form') return false;
+        
+        // בדיקה אם יש לפחות דיווח אחד עם לקוח, מוצר ומשך זמן (משך ישיר או מחושב משעות)
+        const validReports = addedReports.filter(r => {
+            const hasDirectHours = r.hours && parseFloat(r.hours) > 0;
+            const hasTimeRange = r.startTime && r.endTime;
+            const calculatedHours = hasTimeRange ? calculateHoursFromTimeRange(r.startTime, r.endTime) : null;
+            const hasHours = hasDirectHours || (calculatedHours && parseFloat(calculatedHours) > 0);
+            const hasProduct = !customSettings.productColumnId || r.productId;
+            return hasHours && hasProduct;
+        });
+        
+        return validReports.length > 0;
+    };
+    
+    // פונקציה לטיפול בסגירה עם אישור
+    const handleCloseAttempt = () => {
+        if (hasValidReports()) {
+            // הצגת תיבת אישור
+            setShowCloseConfirm(true);
+        } else {
+            // אין דיווחים תקפים - סוגר מיד
+            onClose();
+        }
+    };
+    
+    // עדכון שעות, הערות או מוצר לדיווח (עם Smart Cascade)
     const updateReport = (id, field, value) => {
-        setAddedReports(prev =>
-            prev.map(report =>
-                report.id === id
-                    ? { ...report, [field]: value }
-                    : report
-            )
-        );
+        setAddedReports(prev => {
+            let newEntries = [...prev];
+            const index = newEntries.findIndex(e => e.id === id);
+            if (index === -1) return prev;
+
+            const entry = { ...newEntries[index] }; // עותק לאירוע הבודד
+
+            // עדכון השדה הספציפי
+            entry[field] = value;
+
+            // חישובים פנימיים לאותה שורה
+            if (field === 'startTime') {
+                // שינוי התחלה -> משמרים משך, מזיזים סיום
+                // שמירת המשך המקורי לפני השינוי
+                let originalDuration = '01:00'; // ברירת מחדל
+                if (entry.endTime && entry.startTime) {
+                    originalDuration = calculateDurationStr(entry.startTime, entry.endTime);
+                } else if (entry.hours) {
+                    originalDuration = formatTime(parseFloat(entry.hours) * 60);
+                }
+                
+                // עדכון ההתחלה
+                entry.startTime = value;
+                
+                // עדכון הסיום לפי המשך המקורי
+                entry.endTime = addTime(value, originalDuration);
+                
+                // עדכון המשך בפורמט שעות עשרוניות
+                if (entry.startTime && entry.endTime) {
+                    const calculatedHours = calculateHoursFromTimeRange(entry.startTime, entry.endTime);
+                    if (calculatedHours) {
+                        entry.hours = calculatedHours;
+                    }
+                }
+            } else if (field === 'endTime') {
+                // שינוי סיום -> משנים משך
+                if (entry.startTime) {
+                    const calculatedHours = calculateHoursFromTimeRange(entry.startTime, value);
+                    if (calculatedHours) {
+                        entry.hours = calculatedHours;
+                    }
+                }
+            } else if (field === 'hours') {
+                // שינוי משך -> מזיזים סיום
+                if (entry.startTime && value) {
+                    const hoursInMinutes = parseFloat(value) * 60;
+                    const startTotalMins = parseTime(entry.startTime);
+                    const endTotalMins = startTotalMins + hoursInMinutes;
+                    entry.endTime = formatTime(endTotalMins);
+                }
+            }
+
+            // החזרת האירוע המעודכן למערך
+            newEntries[index] = entry;
+
+            // הפעלת מנגנון פתרון חפיפות מהאירוע הנוכחי ומטה
+            // (רק אם שונתה שעת סיום או התחלה שמשפיעה על המיקום)
+            if (field === 'startTime' || field === 'endTime' || field === 'hours') {
+                newEntries = resolveOverlaps(newEntries, index);
+            }
+
+            return newEntries;
+        });
     };
     
     // עדכון מוצר שנבחר
@@ -114,7 +353,7 @@ export default function AllDayEventModal({
         if (report) {
             setSelectedProducts(prev => ({
                 ...prev,
-                [report.projectId]: productId
+                [reportId]: productId  // שימוש ב-reportId כמפתח ייחודי לכל דיווח
             }));
             updateReport(reportId, 'productId', productId);
         }
@@ -134,7 +373,7 @@ export default function AllDayEventModal({
                         r.id === reportId
                             ? { 
                                 ...r, 
-                                products: [...(r.products || []), newProduct]
+                                products: [...(productsByCustomer[r.projectId] || []), newProduct]
                             }
                             : r
                     )
@@ -148,6 +387,21 @@ export default function AllDayEventModal({
     
     // טיפול בבחירת סוג אירוע (sick/vacation/reserves)
     const handleSingleTypeSelect = (type) => {
+        // במצב עריכה, אם משנים את הסוג - מעדכנים את האירוע
+        if (isEditMode) {
+            // אם זה אותו סוג שכבר נבחר, לא עושים כלום
+            if (selectedType === type) {
+                return;
+            }
+            
+            // אם יש שינוי בסוג, מעדכנים את האירוע
+            if (onUpdate) {
+                onUpdate(type);
+            }
+            return;
+        }
+        
+        // במצב יצירה, יוצרים את האירוע
         setSelectedType(type);
         onCreate({
             type: type,
@@ -157,12 +411,18 @@ export default function AllDayEventModal({
     };
     
     // טיפול בחזרה/ביטול
-    const handleCancelOrBack = () => {
+    const handleCancelOrBack = async () => {
         if (viewMode === 'form') {
-            setViewMode('menu');
-            setSelectedType(null);
-            setAddedReports([]);
-            setSearchTerm('');
+            // אם יש דיווחים תקפים, שואלים אם לשמור
+            if (hasValidReports()) {
+                await handleCloseAttempt();
+            } else {
+                // אין דיווחים תקפים - חוזר לתפריט
+                setViewMode('menu');
+                setSelectedType(null);
+                setAddedReports([]);
+                setSearchTerm('');
+            }
         } else {
             onClose();
         }
@@ -189,13 +449,32 @@ export default function AllDayEventModal({
             }
             
             // המרה לפורמט המקורי (ללא id הפנימי)
-            const formattedReports = validReports.map(r => ({
-                projectId: r.projectId,
-                projectName: r.projectName,
-                hours: r.hours,
-                notes: r.notes,
-                productId: r.productId
-            }));
+            const formattedReports = validReports.map(r => {
+                // אם יש שעות התחלה וסיום, מחשבים את המשך
+                let hours = r.hours;
+                if (r.startTime && r.endTime) {
+                    const calculatedHours = calculateHoursFromTimeRange(r.startTime, r.endTime);
+                    if (calculatedHours) {
+                        hours = calculatedHours;
+                    }
+                }
+                
+                // מציאת שם המוצר
+                const products = productsByCustomer[r.projectId] || [];
+                const product = products.find(p => p.id === r.productId);
+                const productName = product?.name || 'ללא מוצר';
+                
+                return {
+                    projectId: r.projectId,
+                    projectName: r.projectName,
+                    hours: hours,
+                    notes: r.notes,
+                    productId: r.productId,
+                    productName: productName,  // הוספת שם המוצר
+                    startTime: r.startTime || null,
+                    endTime: r.endTime || null
+                };
+            });
             
             onCreate({
                 type: 'reports',
@@ -219,6 +498,20 @@ export default function AllDayEventModal({
         onClose();
     };
     
+    // חישוב סה"כ שעות
+    const calculateTotalHours = () => {
+        let totalMinutes = 0;
+        addedReports.forEach(report => {
+            if (report.startTime && report.endTime) {
+                const duration = calculateDurationStr(report.startTime, report.endTime);
+                totalMinutes += parseTime(duration);
+            } else if (report.hours) {
+                totalMinutes += parseFloat(report.hours) * 60;
+            }
+        });
+        return formatTime(totalMinutes);
+    };
+    
     // טיפול בלחיצת Enter
     useEffect(() => {
         const handleKeyDown = (e) => {
@@ -228,7 +521,12 @@ export default function AllDayEventModal({
                     handleCreate();
                 } else if (viewMode === 'form') {
                     // לדיווחים מרובים - בדוק אם יש דיווחים עם שעות
-                    const validReports = addedReports.filter(r => r.hours && parseFloat(r.hours) > 0);
+                    const validReports = addedReports.filter(r => {
+                        const hasDirectHours = r.hours && parseFloat(r.hours) > 0;
+                        const hasTimeRange = r.startTime && r.endTime;
+                        const calculatedHours = hasTimeRange ? calculateHoursFromTimeRange(r.startTime, r.endTime) : null;
+                        return hasDirectHours || (calculatedHours && parseFloat(calculatedHours) > 0);
+                    });
                     if (validReports.length > 0) {
                         handleCreate();
                     }
@@ -255,46 +553,49 @@ export default function AllDayEventModal({
     const renderMenu = () => (
         <div className={styles.menuContainer}>
             <button 
-                className={`${styles.menuButton} ${styles.btnVacation}`} 
+                className={`${styles.menuButton} ${styles.btnVacation} ${selectedType === 'vacation' ? styles.selected : ''}`} 
                 onClick={() => handleSingleTypeSelect('vacation')}
             >
                 <span className={styles.icon}><Sun size={20} color="#00c875" /></span>
                 <span style={{ marginRight: '12px' }}>חופשה</span>
+                {isEditMode && selectedType === 'vacation' && <span style={{ marginRight: 'auto', color: '#00c875', fontWeight: 600 }}>✓ נבחר</span>}
             </button>
             <button 
-                className={`${styles.menuButton} ${styles.btnSick}`} 
+                className={`${styles.menuButton} ${styles.btnSick} ${selectedType === 'sick' ? styles.selected : ''}`} 
                 onClick={() => handleSingleTypeSelect('sick')}
             >
                 <span className={styles.icon}><Thermometer size={20} color="#e2445c" /></span>
                 <span style={{ marginRight: '12px' }}>מחלה</span>
+                {isEditMode && selectedType === 'sick' && <span style={{ marginRight: 'auto', color: '#e2445c', fontWeight: 600 }}>✓ נבחר</span>}
             </button>
             <button 
-                className={`${styles.menuButton} ${styles.btnReserves}`} 
+                className={`${styles.menuButton} ${styles.btnReserves} ${selectedType === 'reserves' ? styles.selected : ''}`} 
                 onClick={() => handleSingleTypeSelect('reserves')}
             >
                 <span className={styles.icon}><Briefcase size={20} color="#579bfc" /></span>
                 <span style={{ marginRight: '12px' }}>מילואים</span>
+                {isEditMode && selectedType === 'reserves' && <span style={{ marginRight: 'auto', color: '#579bfc', fontWeight: 600 }}>✓ נבחר</span>}
             </button>
-            <button 
-                className={`${styles.menuButton} ${styles.btnMultiple}`} 
-                onClick={() => {
-                    logger.debug('AllDayEventModal', 'Button clicked - setting viewMode to form');
-                    setSelectedType('reports');
-                    setViewMode('form');
-                }}
-            >
-                <span className={styles.icon}><FileText size={20} color="#a25ddc" /></span>
-                <span style={{ marginRight: '12px' }}>דיווחים מרובים / שעות עבודה</span>
-            </button>
+            {!isEditMode && (
+                <button 
+                    className={`${styles.menuButton} ${styles.btnMultiple}`} 
+                    onClick={() => {
+                        logger.debug('AllDayEventModal', 'Button clicked - setting viewMode to form');
+                        setSelectedType('reports');
+                        setViewMode('form');
+                    }}
+                >
+                    <span className={styles.icon}><FileText size={20} color="#a25ddc" /></span>
+                    <span style={{ marginRight: '12px' }}>דיווחים מרובים / שעות עבודה</span>
+                </button>
+            )}
         </div>
     );
     
     // רינדור תצוגה מפוצלת
     const renderSplitForm = () => {
-        const hasProductColumn = customSettings.productColumnId;
-        const gridColumns = hasProductColumn 
-            ? '1.5fr 1.5fr 0.7fr 1.5fr 30px'  // לקוח, מוצר, שעות, הערות, מחיקה
-            : '2fr 0.7fr 1.5fr 30px';         // לקוח, שעות, הערות, מחיקה
+        // מבנה Grid: לקוח+מוצר (200px) | הערות (1fr) | התחלה (auto) | - (auto) | סיום (auto) | משך (100px) | מחיקה (50px)
+        const gridColumns = '200px 1fr auto auto auto 100px 50px';
         
         return (
             <div className={styles.splitView}>
@@ -307,30 +608,27 @@ export default function AllDayEventModal({
                             </div>
                         </div>
                     )}
-                    {addedReports.map((report) => (
+                    {addedReports.map((report, index) => (
                         <div key={report.id} className={styles.reportRow}>
-                            <div 
-                                className={styles.rowGrid}
-                                style={{ gridTemplateColumns: gridColumns }}
+                            {/* כפתור מחיקה - איקס בפינה השמאלית העליונה */}
+                            <button 
+                                onClick={() => removeReportRow(report.id)}
+                                className={styles.deleteButtonTop}
+                                title="מחק שורה"
                             >
-                                {/* שדה לקוח (קריאה בלבד) */}
-                                <div className={styles.fieldGroup}>
-                                    <label>לקוח</label>
-                                    <input
-                                        className={styles.input}
-                                        value={report.projectName}
-                                        readOnly
-                                        style={{ backgroundColor: '#f7f9fa', color: '#666', border: '1px solid #e6e9ef' }}
-                                    />
+                                <X size={18} strokeWidth={2} />
+                            </button>
+                            
+                            {/* 1. לקוח + מוצר */}
+                            <div className={styles.customerProductGroup}>
+                                <div className={styles.customerName}>
+                                    {report.projectName}
                                 </div>
-
-                                {/* שדה מוצר */}
-                                {hasProductColumn && (
-                                    <div className={styles.fieldGroup}>
-                                        <label>מוצר</label>
+                                {customSettings.productColumnId && (
+                                    <div className={styles.productField}>
                                         <ProductSelect 
-                                            products={report.products || []}
-                                            selectedProduct={selectedProducts[report.projectId] || ''}
+                                            products={productsByCustomer[report.projectId] || []}
+                                            selectedProduct={selectedProducts[report.id] || ''}  // שימוש ב-report.id כמפתח ייחודי
                                             onSelectProduct={(productId) => updateSelectedProduct(report.id, productId)}
                                             onCreateNew={async (productName) => await handleCreateProduct(report.id, productName)}
                                             isLoading={false}
@@ -339,41 +637,104 @@ export default function AllDayEventModal({
                                         />
                                     </div>
                                 )}
-
-                                {/* שדה שעות */}
-                                <div className={styles.fieldGroup}>
-                                    <label>משך (שעות)</label>
-                                    <input
-                                        type="number"
-                                        className={styles.input}
-                                        value={report.hours}
-                                        onChange={(e) => updateReport(report.id, 'hours', e.target.value)}
-                                        step="0.5"
-                                        min="0"
-                                        placeholder="שעות"
-                                    />
-                                </div>
-
-                                {/* שדה הערות */}
-                                <div className={styles.fieldGroup}>
-                                    <label>הערות</label>
-                                    <input
-                                        className={styles.input}
-                                        value={report.notes}
-                                        onChange={(e) => updateReport(report.id, 'notes', e.target.value)}
-                                        placeholder="..."
-                                    />
-                                </div>
-
-                                {/* מחיקה */}
-                                <button 
-                                    className={styles.removeBtn} 
-                                    onClick={() => removeReportRow(report.id)}
-                                    title="הסר דיווח"
-                                >
-                                    <Trash2 size={18} />
-                                </button>
                             </div>
+
+                            {/* 2. Times - All Editable */}
+                            <div className={styles.timesGroup}>
+                                {/* Start Time */}
+                                <div className={styles.timeFieldWrapper}>
+                                    <span className={styles.timeLabelSmall}>התחלה</span>
+                                    <input 
+                                        type="time" 
+                                        value={report.startTime || ''}
+                                        onChange={(e) => updateReport(report.id, 'startTime', e.target.value)}
+                                        className={styles.timeInputInline}
+                                        title="שעת התחלה (ניתן לעריכה ידנית)"
+                                    />
+                                </div>
+                                
+                                <span className={styles.timeSeparatorInline}>-</span>
+                                
+                                {/* End Time */}
+                                <div className={styles.timeFieldWrapper}>
+                                    <span className={styles.timeLabelSmall}>סיום</span>
+                                    <input 
+                                        type="time" 
+                                        value={report.endTime || ''}
+                                        onChange={(e) => updateReport(report.id, 'endTime', e.target.value)}
+                                        className={styles.timeInputInline}
+                                        title="שעת סיום"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* SEPARATOR - Visual Divider */}
+                            <div className={styles.visualSeparator}></div>
+
+                            {/* 3. Duration */}
+                            <div className={styles.durationWrapper}>
+                                <span className={styles.timeLabelSmall}>משך</span>
+                                <input
+                                    type="text"
+                                    value={editingDuration[report.id] !== undefined 
+                                        ? editingDuration[report.id] // אם המשתמש עורך, השתמש בערך הזמני
+                                        : (report.startTime && report.endTime 
+                                            ? calculateDurationStr(report.startTime, report.endTime)
+                                            : (report.hours 
+                                                ? (report.hours.includes(':') 
+                                                    ? report.hours 
+                                                    : formatTime(parseFloat(report.hours) * 60))
+                                                : ''))
+                                    }
+                                    onFocus={(e) => {
+                                        // כשהשדה מקבל פוקוס, שמור את הערך הנוכחי
+                                        setEditingDuration(prev => ({
+                                            ...prev,
+                                            [report.id]: e.target.value
+                                        }));
+                                    }}
+                                    onChange={(e) => {
+                                        const value = e.target.value;
+                                        // שמירת הערך הזמני ב-state
+                                        setEditingDuration(prev => ({ ...prev, [report.id]: value }));
+                                        
+                                        if (value.length === 5 && value.includes(':')) {
+                                            const minutes = parseTime(value);
+                                            const hours = (minutes / 60).toFixed(2);
+                                            updateReport(report.id, 'hours', hours);
+                                        } else if (value === '') {
+                                            updateReport(report.id, 'hours', '');
+                                        } else {
+                                            const numValue = parseFloat(value);
+                                            if (!isNaN(numValue)) {
+                                                updateReport(report.id, 'hours', value);
+                                            }
+                                        }
+                                    }}
+                                    onBlur={() => {
+                                        // כשהשדה מאבד פוקוס, מנקים את הערך הזמני
+                                        setEditingDuration(prev => {
+                                            const newState = { ...prev };
+                                            delete newState[report.id];
+                                            return newState;
+                                        });
+                                    }}
+                                    placeholder="00:00"
+                                    className={styles.durationInputInline}
+                                />
+                            </div>
+
+                            {/* 4. Notes */}
+                            <div className={styles.notesWrapper}>
+                                <input 
+                                    type="text" 
+                                    value={report.notes}
+                                    onChange={(e) => updateReport(report.id, 'notes', e.target.value)}
+                                    placeholder="הוסף הערה..." 
+                                    className={styles.notesInput}
+                                />
+                            </div>
+
                         </div>
                     ))}
                 </div>
@@ -395,20 +756,15 @@ export default function AllDayEventModal({
                             </div>
                         ) : filteredCustomers.length > 0 ? (
                             filteredCustomers.map(customer => {
-                                const isAlreadyAdded = addedReports.some(r => r.projectId === customer.id);
                                 return (
                                     <div 
                                         key={customer.id} 
                                         className={styles.customerItem}
-                                        onClick={() => !isAlreadyAdded && addReportRow(customer)}
-                                        style={{
-                                            opacity: isAlreadyAdded ? 0.5 : 1,
-                                            cursor: isAlreadyAdded ? 'not-allowed' : 'pointer'
-                                        }}
-                                        title={isAlreadyAdded ? 'לקוח זה כבר נוסף' : 'לחץ להוספה'}
+                                        onClick={() => addReportRow(customer)}
+                                        title="לחץ להוספה"
                                     >
                                         <span>{customer.name}</span>
-                                        {!isAlreadyAdded && <Plus size={14} color="#0073ea" />}
+                                        <Plus size={14} color="#0073ea" />
                                     </div>
                                 );
                             })
@@ -424,7 +780,15 @@ export default function AllDayEventModal({
     };
     
     return (
-        <div className={styles.overlay} onClick={(e) => e.target === e.currentTarget && onClose()}>
+        <div className={styles.overlay} onClick={(e) => {
+            // לא לסגור אם תיבת confirm פתוחה
+            if (showCloseConfirm || showDeleteConfirm) {
+                return;
+            }
+            if (e.target === e.currentTarget) {
+                handleCloseAttempt();
+            }
+        }}>
             <div 
                 className={`${styles.modal} ${viewMode === 'form' ? styles.modalWide : ''}`}
                 onClick={e => e.stopPropagation()}
@@ -434,7 +798,7 @@ export default function AllDayEventModal({
                         {viewMode === 'menu' ? 'סוג דיווח ליום זה' : 'דיווח שעות מרוכז'}
                         {pendingDate && ` - ${pendingDate.toLocaleDateString('he-IL')}`}
                     </h2>
-                    <button className={styles.closeButton} onClick={onClose}>
+                    <button className={styles.closeButton} onClick={handleCloseAttempt}>
                         <X size={24} />
                     </button>
                 </div>
@@ -444,11 +808,25 @@ export default function AllDayEventModal({
                 </div>
 
                 <div className={styles.footer}>
+                    {isEditMode && onDelete && (
+                        <button 
+                            className={`${styles.button} ${styles.deleteBtn}`} 
+                            onClick={() => setShowDeleteConfirm(true)}
+                        >
+                            מחק
+                        </button>
+                    )}
+                    {viewMode === 'form' && addedReports.length > 0 && (
+                        <div className={styles.totalHours}>
+                            <span className={styles.totalHoursLabel}>סה"כ שעות</span>
+                            <span className={styles.totalHoursValue}>{calculateTotalHours()}</span>
+                        </div>
+                    )}
                     <button 
                         className={`${styles.button} ${styles.cancelBtn}`} 
                         onClick={handleCancelOrBack}
                     >
-                        {viewMode === 'menu' ? 'ביטול' : 'חזרה לתפריט'}
+                        {viewMode === 'menu' ? 'ביטול' : 'חזרה'}
                     </button>
                     {viewMode === 'form' && (
                         <button 
@@ -460,6 +838,43 @@ export default function AllDayEventModal({
                     )}
                 </div>
             </div>
+            
+            {/* תיבת אישור לסגירה */}
+            <ConfirmDialog
+                isOpen={showCloseConfirm}
+                onClose={() => setShowCloseConfirm(false)}
+                onConfirm={() => {
+                    setShowCloseConfirm(false);
+                    handleCreate();
+                }}
+                onCancel={() => {
+                    setShowCloseConfirm(false);
+                    onClose();
+                }}
+                title="שמירת דיווחים"
+                message="יש דיווחים שלא נשמרו. האם ברצונך לשמור את הדיווחים לפני סגירה?"
+                confirmText="שמור דיווחים"
+                cancelText="בטל"
+                confirmButtonStyle="primary"
+            />
+            
+            {/* תיבת אישור למחיקה */}
+            <ConfirmDialog
+                isOpen={showDeleteConfirm}
+                onClose={() => setShowDeleteConfirm(false)}
+                onConfirm={() => {
+                    setShowDeleteConfirm(false);
+                    if (onDelete) {
+                        onDelete();
+                    }
+                }}
+                onCancel={() => setShowDeleteConfirm(false)}
+                title="מחיקת אירוע"
+                message="האם אתה בטוח שברצונך למחוק את האירוע?"
+                confirmText="מחק"
+                cancelText="ביטול"
+                confirmButtonStyle="danger"
+            />
         </div>
     );
 }

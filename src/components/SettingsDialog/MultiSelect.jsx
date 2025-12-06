@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import styles from './SearchableSelect.module.css';
 
-const SearchableSelect = ({ options, value, onChange, placeholder, isLoading, disabled, showSearch = true }) => {
+const MultiSelect = ({ options, value = [], onChange, placeholder, isLoading, disabled }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [dropdownPosition, setDropdownPosition] = useState({ top: 'auto', bottom: 'auto' });
@@ -67,19 +67,28 @@ const SearchableSelect = ({ options, value, onChange, placeholder, isLoading, di
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // סינון האפשרויות לפי החיפוש (רק אם יש חיפוש)
-  const filteredOptions = showSearch 
-    ? options.filter(option => 
-        option.name.toLowerCase().includes(searchTerm.toLowerCase())
-      )
-    : options;
+  // סינון האפשרויות לפי החיפוש
+  const filteredOptions = options.filter(option => 
+    option.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
-  const selectedOption = options.find(o => o.id === value);
+  const selectedOptions = options.filter(o => value.includes(o.id));
 
-  const handleSelect = (option) => {
-    onChange(option.id);
-    setIsOpen(false);
-    setSearchTerm("");
+  const handleSelect = (optionId) => {
+    const newValue = value.includes(optionId)
+      ? value.filter(id => id !== optionId) // הסרה
+      : [...value, optionId]; // הוספה
+    onChange(newValue);
+  };
+
+  const getDisplayText = () => {
+    if (selectedOptions.length === 0) {
+      return isLoading ? "טוען..." : placeholder;
+    }
+    if (selectedOptions.length === 1) {
+      return selectedOptions[0].name;
+    }
+    return `${selectedOptions.length} נבחרו`;
   };
 
   return (
@@ -89,8 +98,8 @@ const SearchableSelect = ({ options, value, onChange, placeholder, isLoading, di
         className={`${styles.trigger} ${isOpen ? styles.triggerOpen : ''} ${disabled ? styles.triggerDisabled : ''}`}
         onClick={() => !disabled && !isLoading && setIsOpen(!isOpen)}
       >
-        <span className={`${styles.triggerText} ${!selectedOption ? styles.triggerTextPlaceholder : ''}`}>
-          {selectedOption ? selectedOption.name : (isLoading ? "טוען..." : placeholder)}
+        <span className={`${styles.triggerText} ${selectedOptions.length === 0 ? styles.triggerTextPlaceholder : ''}`}>
+          {getDisplayText()}
         </span>
         <div className={styles.triggerIcon}>
           {isLoading ? "⏳" : (isOpen ? "▲" : "▼")}
@@ -109,47 +118,52 @@ const SearchableSelect = ({ options, value, onChange, placeholder, isLoading, di
             ...dropdownPosition
           }}
         >
-          {/* שדה החיפוש - רק אם showSearch הוא true */}
-          {showSearch && (
-            <div className={styles.searchContainer}>
-              <div className={styles.searchWrapper}>
-                <input 
-                  autoFocus
-                  type="text"
-                  className={styles.searchInput}
-                  placeholder="חפש ברשימה..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  onClick={(e) => e.stopPropagation()}
-                />
-                <div className={styles.searchIcon}>
-                  🔍
-                </div>
+          {/* שדה החיפוש */}
+          <div className={styles.searchContainer}>
+            <div className={styles.searchWrapper}>
+              <input 
+                autoFocus
+                type="text"
+                className={styles.searchInput}
+                placeholder="חפש ברשימה..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+              />
+              <div className={styles.searchIcon}>
+                🔍
               </div>
             </div>
-          )}
+          </div>
 
           {/* רשימת האפשרויות */}
           <div className={styles.optionsList}>
             {filteredOptions.length > 0 ? (
-              filteredOptions.map((option) => (
-                <div
-                  key={option.id}
-                  className={`${styles.option} ${value === option.id ? styles.optionSelected : ''}`}
-                  onClick={() => handleSelect(option)}
-                >
-                  {option.name}
-                  {value === option.id && (
-                    <span className={styles.optionIndicator}></span>
-                  )}
-                </div>
-              ))
+              filteredOptions.map((option) => {
+                const isSelected = value.includes(option.id);
+                return (
+                  <div
+                    key={option.id}
+                    className={`${styles.option} ${isSelected ? styles.optionSelected : ''}`}
+                    onClick={() => handleSelect(option.id)}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => handleSelect(option.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      style={{ marginLeft: '8px', marginRight: '8px' }}
+                    />
+                    {option.name}
+                    {isSelected && (
+                      <span className={styles.optionIndicator}></span>
+                    )}
+                  </div>
+                );
+              })
             ) : (
               <div className={styles.noResults}>
-                {showSearch 
-                  ? `לא נמצאו תוצאות עבור "${searchTerm}"`
-                  : 'אין אפשרויות זמינות'
-                }
+                לא נמצאו תוצאות עבור "{searchTerm}"
               </div>
             )}
           </div>
@@ -159,5 +173,5 @@ const SearchableSelect = ({ options, value, onChange, placeholder, isLoading, di
   );
 };
 
-export default SearchableSelect;
+export default MultiSelect;
 

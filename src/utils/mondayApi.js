@@ -130,41 +130,86 @@ export const fetchAllBoardItems = async (monday, boardId) => {
 export const createBoardItem = async (monday, boardId, itemName, columnValues = null) => {
     logger.functionStart('createBoardItem', { boardId, itemName, hasColumnValues: !!columnValues });
 
-    const mutation = columnValues 
-        ? `mutation {
+    if (columnValues) {
+        // המרת columnValues ל-JSON string פעם אחת
+        const columnValuesJson = (columnValues);
+        
+        // GraphQL מצפה ל-string literal, אז אנחנו צריכים escape של הגרשיים הפנימיים
+        // אבל לא לעשות JSON.stringify נוסף - רק להשתמש ב-columnValuesJson ישירות
+        // Template string יעשה את ה-escape הנדרש
+        const mutation = `mutation {
             create_item (
                 board_id: ${boardId},
-                item_name: "${itemName}",
-                column_values: ${JSON.stringify(columnValues)}
-            ) {
-                id
-                name
-            }
-        }`
-        : `mutation {
-            create_item (
-                board_id: ${boardId},
-                item_name: "${itemName}"
+                item_name: ${JSON.stringify(itemName)},
+                column_values: "${columnValuesJson.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"
             ) {
                 id
                 name
             }
         }`;
 
-    logger.api('createBoardItem', mutation);
+        // לוגים להערה - ניתן להפעיל לצורך דיבוג
+        // console.log('[createBoardItem] Mutation:', mutation);
+        // console.log('[createBoardItem] Column Values (raw):', columnValues);
+        // console.log('[createBoardItem] Column Values (JSON):', columnValuesJson);
+        
+        logger.api('createBoardItem', mutation);
 
-    try {
-        const startTime = Date.now();
-    const response = await monday.api(mutation);
-        const duration = Date.now() - startTime;
+        try {
+            const startTime = Date.now();
+            const response = await monday.api(mutation);
+            const duration = Date.now() - startTime;
 
-        logger.apiResponse('createBoardItem', response, duration);
-        logger.functionEnd('createBoardItem', { item: response.data?.create_item });
-    
-    return response.data?.create_item;
-    } catch (error) {
-        logger.apiError('createBoardItem', error);
-        throw error;
+            logger.apiResponse('createBoardItem', response, duration);
+            
+            // בדיקה אם ה-API החזיר שגיאות
+            if (response.errors) {
+                throw new Error(JSON.stringify(response.errors));
+            }
+            
+            logger.functionEnd('createBoardItem', { item: response.data?.create_item });
+        
+            return response.data?.create_item;
+        } catch (error) {
+            // לוג שגיאה קריטי - נשאר פעיל גם בפרודקשן
+            logger.apiError('createBoardItem', error);
+            throw error;
+        }
+    } else {
+        const mutation = `mutation {
+            create_item (
+                board_id: ${boardId},
+                item_name: ${JSON.stringify(itemName)}
+            ) {
+                id
+                name
+            }
+        }`;
+
+        // לוג להערה - ניתן להפעיל לצורך דיבוג
+        // console.log('[createBoardItem] Mutation (no column values):', mutation);
+        logger.api('createBoardItem', mutation);
+
+        try {
+            const startTime = Date.now();
+            const response = await monday.api(mutation);
+            const duration = Date.now() - startTime;
+
+            logger.apiResponse('createBoardItem', response, duration);
+            
+            // בדיקה אם ה-API החזיר שגיאות
+            if (response.errors) {
+                throw new Error(JSON.stringify(response.errors));
+            }
+            
+            logger.functionEnd('createBoardItem', { item: response.data?.create_item });
+        
+            return response.data?.create_item;
+        } catch (error) {
+            // לוג שגיאה קריטי - נשאר פעיל גם בפרודקשן
+            logger.apiError('createBoardItem', error);
+            throw error;
+        }
     }
 };
 
@@ -191,20 +236,41 @@ export const fetchEventsFromBoard = async (monday, query) => {
 };
 
 // אחזור לקוחות המשויכים למשתמש
-export const fetchCustomersForUser = async (monday, boardId, peopleColumnId) => {
-    logger.functionStart('fetchCustomersForUser', { boardId, peopleColumnId });
+export const fetchCustomersForUser = async (monday, boardId, peopleColumnIds) => {
+    // תמיכה ב-backward compatibility - אם זה string, להמיר ל-array
+    const columnIds = Array.isArray(peopleColumnIds) ? peopleColumnIds : (peopleColumnIds ? [peopleColumnIds] : []);
+    
+    logger.functionStart('fetchCustomersForUser', { boardId, peopleColumnIds: columnIds });
+
+    if (columnIds.length === 0) {
+        logger.warn('fetchCustomersForUser', 'No people column IDs provided');
+        return [];
+    }
+
+    // בניית rules לכל עמודת people
+    const rules = columnIds.map(columnId => ({
+        column_id: columnId,
+        compare_value: ["assigned_to_me"],
+        operator: "any_of"
+    }));
+
+    // המרת rules ל-GraphQL format
+    const rulesGraphQL = rules.map(rule => 
+        `{
+            column_id: "${rule.column_id}",
+            compare_value: ${JSON.stringify(rule.compare_value)},
+            operator: ${rule.operator}
+        }`
+    ).join(',\n');
+
+    const operator = columnIds.length > 1 ? 'or' : 'and';
 
     const query = `query {
         boards(ids: ${boardId}) {
             items_page(
                 query_params: {
-                    rules: [
-                        {
-                            column_id: "${peopleColumnId}",
-                            compare_value: ["assigned_to_me"],
-                            operator: any_of
-                        }
-                    ]
+                    operator: ${operator},
+                    rules: [${rulesGraphQL}]
                 }
             ) {
                 items {
@@ -406,43 +472,62 @@ export const updateItemColumnValues = async (monday, boardId, itemId, columnValu
     }
 };
 
+// אחזור פרטי המשתמש הנוכחי
+export const fetchCurrentUser = async (monday) => {
+    logger.functionStart('fetchCurrentUser');
+
+    const query = `query {
+        me {
+            name
+            id
+        }
+    }`;
+
+    logger.api('fetchCurrentUser', query);
+
+    try {
+        const startTime = Date.now();
+        const response = await monday.api(query);
+        const duration = Date.now() - startTime;
+
+        logger.apiResponse('fetchCurrentUser', response, duration);
+        
+        const user = response.data?.me;
+        logger.functionEnd('fetchCurrentUser', { hasUser: !!user });
+        
+        return user;
+    } catch (error) {
+        logger.apiError('fetchCurrentUser', error);
+        throw error;
+    }
+};
+
 // מחיקת אייטם
 // אחזור אייטם בודד לפי ID
 export const fetchItemById = async (monday, boardId, itemId) => {
     logger.functionStart('fetchItemById', { boardId, itemId });
 
     const query = `query {
-        boards(ids: [${boardId}]) {
-            items_page(
-                limit: 1,
-                query_params: {
-                    rules: [
-                        {
-                            column_id: "id",
-                            compare_value: [${itemId}],
-                            operator: any_of
-                        }
-                    ]
+        items(ids: [${itemId}]) {
+            id
+            name
+            column_values {
+                id
+                value
+                type
+                ... on DateValue {
+                    date
+                    time
                 }
-            ) {
-                items {
-                    id
-                    name
-                    column_values {
+                ... on BoardRelationValue {
+                    value
+                    linked_items {
+                        name
                         id
-                        value
-                        type
-                        ... on DateValue {
-                            date
-                            time
-                        }
-                        ... on BoardRelationValue {
-                            value
-                        }
-                        ... on TextValue {
-                            text
-                        }
                     }
+                }
+                ... on TextValue {
+                    text
                 }
             }
         }
@@ -457,7 +542,7 @@ export const fetchItemById = async (monday, boardId, itemId) => {
 
         logger.apiResponse('fetchItemById', response, duration);
 
-        const items = response.data?.boards?.[0]?.items_page?.items || [];
+        const items = response.data?.items || [];
         const item = items.length > 0 ? items[0] : null;
         
         logger.functionEnd('fetchItemById', { found: !!item });
@@ -473,24 +558,9 @@ export const fetchCustomerById = async (monday, boardId, customerId) => {
     logger.functionStart('fetchCustomerById', { boardId, customerId });
 
     const query = `query {
-        boards(ids: [${boardId}]) {
-            items_page(
-                limit: 1,
-                query_params: {
-                    rules: [
-                        {
-                            column_id: "id",
-                            compare_value: [${customerId}],
-                            operator: any_of
-                        }
-                    ]
-                }
-            ) {
-                items {
-                    id
-                    name
-                }
-            }
+        items(ids: [${customerId}]) {
+            id
+            name
         }
     }`;
 
@@ -503,7 +573,7 @@ export const fetchCustomerById = async (monday, boardId, customerId) => {
 
         logger.apiResponse('fetchCustomerById', response, duration);
 
-        const items = response.data?.boards?.[0]?.items_page?.items || [];
+        const items = response.data?.items || [];
         const customer = items.length > 0 ? { id: items[0].id, name: items[0].name } : null;
         
         logger.functionEnd('fetchCustomerById', { found: !!customer });

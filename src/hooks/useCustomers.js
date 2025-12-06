@@ -16,50 +16,47 @@ export const useCustomers = () => {
     const [error, setError] = useState(null);
 
     const fetchCustomers = useCallback(async () => {
-        if (!customSettings.connectedBoardId || !customSettings.peopleColumnId) {
-            logger.warn('useCustomers', 'Missing settings: connectedBoardId or peopleColumnId');
+        if (!customSettings.connectedBoardId || !customSettings.peopleColumnIds || customSettings.peopleColumnIds.length === 0) {
+            logger.warn('useCustomers', 'Missing settings: connectedBoardId or peopleColumnIds');
             setError("חסרות הגדרות לוח");
             return;
         }
 
         logger.functionStart('useCustomers.fetchCustomers', {
             boardId: customSettings.connectedBoardId,
-            peopleColumnId: customSettings.peopleColumnId,
-            productsColumnId: customSettings.productsCustomerColumnId
+            peopleColumnIds: customSettings.peopleColumnIds
         });
 
         setLoading(true);
         setError(null);
 
         try {
+            // בניית rules לכל עמודת people
+            const rules = customSettings.peopleColumnIds.map(columnId => ({
+                column_id: columnId,
+                compare_value: ["assigned_to_me"],
+                operator: "any_of"
+            }));
+
+            const rulesString = rules.map(rule => 
+                `{
+                    column_id: "${rule.column_id}",
+                    compare_value: ${JSON.stringify(rule.compare_value)},
+                    operator: ${rule.operator}
+                }`
+            ).join(',\n');
+
             const query = `query {
                 boards(ids: ${customSettings.connectedBoardId}) {
                     items_page(
                         query_params: {
-                            rules: [
-                                {
-                                    column_id: "${customSettings.peopleColumnId}",
-                                    compare_value: ["assigned_to_me"],
-                                    operator: any_of
-                                }
-                            ]
+                            operator: or,
+                            rules: [${rulesString}]
                         }
                     ) {
                         items {
                             id
                             name
-                            ${customSettings.productsCustomerColumnId ? `column_values(ids: "${customSettings.productsCustomerColumnId}") {
-                                column {
-                                    id
-                                    title
-                                }
-                                ... on BoardRelationValue {
-                                    linked_items {
-                                        id
-                                        name
-                                    }
-                                }
-                            }` : ''}
                         }
                     }
                 }
@@ -76,35 +73,15 @@ export const useCustomers = () => {
             if (res.data && res.data.boards && res.data.boards[0]) {
                 const items = res.data.boards[0].items_page.items || [];
                 
-                // עיבוד הנתונים - הוספת מוצרים לכל לקוח
-                const processedCustomers = items.map(item => {
-                    const customer = {
-                        id: item.id,
-                        name: item.name,
-                        products: []
-                    };
-
-                    // חילוץ מוצרים מ-column_values אם קיים
-                    if (item.column_values && item.column_values.length > 0) {
-                        const productsColumn = item.column_values.find(
-                            cv => cv.column?.id === customSettings.productsCustomerColumnId
-                        );
-                        
-                        if (productsColumn?.linked_items) {
-                            customer.products = productsColumn.linked_items.map(product => ({
-                                id: product.id,
-                                name: product.name
-                            }));
-                        }
-                    }
-
-                    return customer;
-                });
+                // עיבוד הנתונים - רק לקוחות, ללא מוצרים (מוצרים ייטענו מאוחר יותר)
+                const processedCustomers = items.map(item => ({
+                    id: item.id,
+                    name: item.name
+                }));
 
                 setCustomers(processedCustomers);
                 logger.functionEnd('useCustomers.fetchCustomers', { 
-                    count: processedCustomers.length,
-                    withProducts: !!customSettings.productsCustomerColumnId
+                    count: processedCustomers.length
                 });
             } else {
                 setCustomers([]);
@@ -118,10 +95,10 @@ export const useCustomers = () => {
         } finally {
             setLoading(false);
         }
-    }, [customSettings.connectedBoardId, customSettings.peopleColumnId, customSettings.productsCustomerColumnId]);
+    }, [customSettings.connectedBoardId, customSettings.peopleColumnIds]);
 
     useEffect(() => {
-        if (customSettings.connectedBoardId && customSettings.peopleColumnId) {
+        if (customSettings.connectedBoardId && customSettings.peopleColumnIds && customSettings.peopleColumnIds.length > 0) {
             fetchCustomers();
         }
     }, [fetchCustomers]);

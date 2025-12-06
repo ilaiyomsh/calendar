@@ -1,0 +1,118 @@
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: transparent;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 10010;
+  direction: rtl;
+  font-family: 'Figtree', sans-serif;
+  pointer-events: none;
+}
+
+.dialog {
+  background-color: white;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 450px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  pointer-events: auto;
+}
+
+.header {
+  padding: 20px;
+  border-bottom: 1px solid #e6e9ef;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: #f7f9fa;
+}
+
+.header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: #323338;
+  font-weight: 600;
+}
+
+.closeButton {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #676879;
+  transition: color 0.2s;
+}
+
+.closeButton:hover {
+  color: #323338;
+}
+
+.content {
+  padding: 24px 20px;
+  color: #323338;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.content p {
+  margin: 0;
+}
+
+.footer {
+  padding: 16px 20px;
+  border-top: 1px solid #e6e9ef;
+  display: flex;
+  justify-content: flex-start;
+  gap: 12px;
+  background-color: #f7f9fa;
+}
+
+.button {
+  padding: 8px 24px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  border: none;
+  transition: all 0.2s;
+}
+
+.cancelBtn {
+  background-color: white;
+  border: 1px solid #d0d4e4;
+  color: #323338;
+}
+
+.cancelBtn:hover {
+  background-color: #dcdfec;
+}
+
+.confirmBtn {
+  background-color: #0073ea;
+  color: white;
+}
+
+.confirmBtn:hover {
+  background-color: #0060b9;
+}
+
+.dangerBtn {
+  background-color: #e2445c;
+  color: white;
+}
+
+.dangerBtn:hover {
+  background-color: #d0394e;
+}
+

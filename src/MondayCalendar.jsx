@@ -12,7 +12,7 @@ import './calendar-custom.css';
 import { localizer, hebrewMessages, formats } from './constants/calendarConfig';
 
 // פונקציות עזר
-import { fetchColumnSettings, fetchAllBoardItems as fetchBoardItems, createBoardItem, fetchEventsFromBoard, deleteItem, fetchItemById, fetchCustomerById } from './utils/mondayApi';
+import { fetchColumnSettings, fetchAllBoardItems as fetchBoardItems, createBoardItem, fetchEventsFromBoard, deleteItem, fetchItemById, fetchCustomerById, fetchCurrentUser } from './utils/mondayApi';
 import { getColumnIds, mapItemToEvent, buildColumnValues, buildFetchEventsQuery } from './utils/mondayColumns';
 import logger from './utils/logger';
 
@@ -61,6 +61,8 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
     // State - All-day events
     const [isAllDayModalOpen, setIsAllDayModalOpen] = useState(false);
     const [pendingAllDayDate, setPendingAllDayDate] = useState(null);
+    const [allDayEventToEdit, setAllDayEventToEdit] = useState(null);
+    const [isAllDayEditMode, setIsAllDayEditMode] = useState(false);
     
     // Hook לניהול לקוחות
     const { customers, loading: isLoadingItems } = useCustomers();
@@ -199,40 +201,51 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
                 // חילוץ לקוח
                 if (customSettings.projectColumnId) {
                     const projectColumn = item.column_values.find(col => col.id === customSettings.projectColumnId);
-                    if (projectColumn?.value) {
-                        try {
-                            // BoardRelationValue מחזיר JSON string עם item_ids
-                            const parsedValue = typeof projectColumn.value === 'string' 
-                                ? JSON.parse(projectColumn.value) 
-                                : projectColumn.value;
+                    if (projectColumn) {
+                        // שימוש ב-linked_items במקום value (עובד גם כש-value הוא null)
+                        if (projectColumn.linked_items && projectColumn.linked_items.length > 0) {
+                            const linkedItem = projectColumn.linked_items[0];
+                            const customerId = linkedItem.id;
+                            updatedEvent.customerId = customerId;
                             
-                            if (parsedValue?.item_ids && parsedValue.item_ids.length > 0) {
-                                const customerId = parsedValue.item_ids[0].toString();
-                                updatedEvent.customerId = customerId;
+                            // שימוש ישיר בנתונים מ-linked_items
+                            setSelectedItem({ id: linkedItem.id, name: linkedItem.name });
+                            logger.debug('loadEventDataForEdit', `Found customer from linked_items: ${linkedItem.name} (${linkedItem.id})`);
+                        } else if (projectColumn?.value) {
+                            // Fallback למקרה הישן (אם אין linked_items)
+                            try {
+                                const parsedValue = typeof projectColumn.value === 'string' 
+                                    ? JSON.parse(projectColumn.value) 
+                                    : projectColumn.value;
+                                
+                                if (parsedValue?.item_ids && parsedValue.item_ids.length > 0) {
+                                    const customerId = parsedValue.item_ids[0].toString();
+                                    updatedEvent.customerId = customerId;
 
-                                // נטען את הלקוח - שימוש ב-query ממוקד
-                                if (settings?.perent_item_board && context?.boardId) {
-                                    try {
-                                        const columnId = Object.keys(settings.perent_item_board)[0];
-                                        if (columnId) {
-                                            const columnSettings = await fetchColumnSettings(monday, context.boardId, columnId);
-                                            
-                                            if (columnSettings?.boardIds && columnSettings.boardIds.length > 0) {
-                                                const boardId = columnSettings.boardIds[0];
-                                                const customer = await fetchCustomerById(monday, boardId, customerId);
+                                    // נטען את הלקוח - שימוש ב-query ממוקד
+                                    if (settings?.perent_item_board && context?.boardId) {
+                                        try {
+                                            const columnId = Object.keys(settings.perent_item_board)[0];
+                                            if (columnId) {
+                                                const columnSettings = await fetchColumnSettings(monday, context.boardId, columnId);
                                                 
-                                                if (customer) {
-                                                    setSelectedItem({ id: customer.id, name: customer.name });
+                                                if (columnSettings?.boardIds && columnSettings.boardIds.length > 0) {
+                                                    const boardId = columnSettings.boardIds[0];
+                                                    const customer = await fetchCustomerById(monday, boardId, customerId);
+                                                    
+                                                    if (customer) {
+                                                        setSelectedItem({ id: customer.id, name: customer.name });
+                                                    }
                                                 }
                                             }
+                                        } catch (err) {
+                                            logger.error('loadEventDataForEdit', 'Error loading customer', err);
                                         }
-                                    } catch (err) {
-                                        logger.error('loadEventDataForEdit', 'Error loading customer', err);
                                     }
                                 }
+                            } catch (err) {
+                                logger.error('loadEventDataForEdit', 'Error parsing project column value', err);
                             }
-                        } catch (err) {
-                            logger.error('loadEventDataForEdit', 'Error parsing project column value', err);
                         }
                     }
                 }
@@ -240,18 +253,29 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
                 // חילוץ מוצר
                 if (customSettings.productColumnId) {
                     const productColumn = item.column_values.find(col => col.id === customSettings.productColumnId);
-                    if (productColumn?.value) {
-                        try {
-                            const parsedValue = typeof productColumn.value === 'string' 
-                                ? JSON.parse(productColumn.value) 
-                                : productColumn.value;
-                            
-                            if (parsedValue?.item_ids && parsedValue.item_ids.length > 0) {
-                                const productId = parsedValue.item_ids[0].toString();
-                                updatedEvent.productId = productId;
+                    if (productColumn) {
+                        // שימוש ב-linked_items במקום value (עובד גם כש-value הוא null)
+                        if (productColumn.linked_items && productColumn.linked_items.length > 0) {
+                            const linkedItem = productColumn.linked_items[0];
+                            const productId = linkedItem.id;
+                            updatedEvent.productId = productId;
+                            // שמירת נתוני המוצר הנבחר להצגה מידית
+                            updatedEvent.selectedProductData = { id: linkedItem.id, name: linkedItem.name };
+                            logger.debug('loadEventDataForEdit', `Found product from linked_items: ${linkedItem.name} (${linkedItem.id})`);
+                        } else if (productColumn?.value) {
+                            // Fallback למקרה הישן (אם אין linked_items)
+                            try {
+                                const parsedValue = typeof productColumn.value === 'string' 
+                                    ? JSON.parse(productColumn.value) 
+                                    : productColumn.value;
+                                
+                                if (parsedValue?.item_ids && parsedValue.item_ids.length > 0) {
+                                    const productId = parsedValue.item_ids[0].toString();
+                                    updatedEvent.productId = productId;
+                                }
+                            } catch (err) {
+                                logger.error('loadEventDataForEdit', 'Error parsing product column value', err);
                             }
-                        } catch (err) {
-                            logger.error('loadEventDataForEdit', 'Error parsing product column value', err);
                         }
                     }
                 }
@@ -278,7 +302,22 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
     const handleEventClick = useCallback(async (event) => {
         logger.functionStart('handleEventClick', { eventId: event.id, title: event.title });
         
-        // איפוס מצב יצירה
+        // בדיקה אם זה אירוע יומי (מחלה/חופשה/מילואים)
+        const isAllDayEvent = event.allDay || 
+            event.title === 'מחלה' || 
+            event.title === 'חופשה' || 
+            event.title === 'מילואים';
+        
+        if (isAllDayEvent) {
+            // פתיחת AllDayEventModal במצב עריכה
+            setIsAllDayEditMode(true);
+            setAllDayEventToEdit(event);
+            setPendingAllDayDate(event.start);
+            setIsAllDayModalOpen(true);
+            return;
+        }
+        
+        // אירוע רגיל - פתיחת EventModal
         setIsEditMode(true);
         setEventToEdit(event);
         setPendingSlot({ start: event.start, end: event.end });
@@ -333,6 +372,13 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
         setEventToEdit(null);
     };
 
+    const handleCloseAllDayModal = () => {
+        setIsAllDayModalOpen(false);
+        setPendingAllDayDate(null);
+        setAllDayEventToEdit(null);
+        setIsAllDayEditMode(false);
+    };
+
 
     const handleCreateEvent = async (eventData) => {
         if (!pendingSlot || !eventData?.title) {
@@ -384,6 +430,78 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
         } catch (error) {
             showError('שגיאה במחיקת האירוע. האירוע לא נמחק.');
             logger.error('MondayCalendar', 'Error in handleDeleteEvent', error);
+        }
+    };
+
+    // עדכון אירוע יומי
+    const handleUpdateAllDayEvent = async (newType) => {
+        if (!allDayEventToEdit || !allDayEventToEdit.mondayItemId) {
+            logger.error('handleUpdateAllDayEvent', 'Missing event ID for update');
+            showError('שגיאה: לא נמצא מזהה אירוע לעדכון');
+            return;
+        }
+
+        try {
+            const typeNames = {
+                sick: 'מחלה',
+                vacation: 'חופשה',
+                reserves: 'מילואים'
+            };
+
+            const newName = typeNames[newType];
+            if (!newName) {
+                showError('סוג אירוע לא תקין');
+                return;
+            }
+
+            // עדכון שם האייטם וסטטוס
+            const columnValues = { name: newName };
+            
+            // הוספת סטטוס לפי סוג האירוע
+            if (customSettings.eventTypeStatusColumnId) {
+                columnValues[customSettings.eventTypeStatusColumnId] = {
+                    label: newName // "מחלה", "חופשה", או "מילואים"
+                };
+            }
+            
+            const updateNameMutation = `mutation {
+                change_multiple_column_values(
+                    item_id: ${allDayEventToEdit.mondayItemId},
+                    board_id: ${context.boardId},
+                    column_values: ${JSON.stringify(JSON.stringify(columnValues))}
+                ) {
+                    id
+                }
+            }`;
+            
+            await monday.api(updateNameMutation);
+            
+            // עדכון האירוע ב-state
+            await updateEvent(allDayEventToEdit.id, { title: newName }, allDayEventToEdit.start, allDayEventToEdit.end);
+            
+            showSuccess('האירוע עודכן בהצלחה');
+            handleCloseAllDayModal();
+        } catch (error) {
+            showError('שגיאה בעדכון האירוע. השינויים בוטלו.');
+            logger.error('MondayCalendar', 'Error in handleUpdateAllDayEvent', error);
+        }
+    };
+
+    // מחיקת אירוע יומי
+    const handleDeleteAllDayEvent = async () => {
+        if (!allDayEventToEdit || !allDayEventToEdit.mondayItemId) {
+            logger.error('handleDeleteAllDayEvent', 'Missing event ID for deletion');
+            showError('שגיאה: לא נמצא מזהה אירוע למחיקה');
+            return;
+        }
+
+        try {
+            await deleteEvent(allDayEventToEdit.id);
+            showSuccess('האירוע נמחק בהצלחה');
+            handleCloseAllDayModal();
+        } catch (error) {
+            showError('שגיאה במחיקת האירוע. האירוע לא נמחק.');
+            logger.error('MondayCalendar', 'Error in handleDeleteAllDayEvent', error);
         }
     };
 
@@ -477,7 +595,9 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
         try {
             const dateStr = format(allDayData.date, 'yyyy-MM-dd');
             
-            // שימוש ב-context.user.id במקום קריאת API
+            // שליפת שם המשתמש
+            const currentUser = await fetchCurrentUser(monday);
+            const reporterName = currentUser?.name || 'לא ידוע';
             const reporterId = context?.user?.id || null;
             
             if (allDayData.type === 'reports') {
@@ -486,19 +606,48 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
                 currentStart.setHours(8, 0, 0, 0);
                 
                 for (const report of allDayData.reports) {
-                    const durationMinutes = parseFloat(report.hours) * 60;
-                    const end = new Date(currentStart.getTime() + durationMinutes * 60000);
+                    // חישוב זמן התחלה וסיום
+                    let eventStart = new Date(currentStart);
+                    let eventEnd;
+                    
+                    // אם יש שעות התחלה וסיום, משתמשים בהן
+                    if (report.startTime && report.endTime) {
+                        const [startHours, startMinutes] = report.startTime.split(':').map(Number);
+                        const [endHours, endMinutes] = report.endTime.split(':').map(Number);
+                        
+                        eventStart.setHours(startHours, startMinutes, 0, 0);
+                        eventEnd = new Date(eventStart);
+                        eventEnd.setHours(endHours, endMinutes, 0, 0);
+                        
+                        // אם זמן סיום לפני זמן התחלה, מוסיפים יום
+                        if (eventEnd <= eventStart) {
+                            eventEnd.setDate(eventEnd.getDate() + 1);
+                        }
+                    } else {
+                        // אחרת, משתמשים במשך הזמן
+                        const durationMinutes = parseFloat(report.hours) * 60;
+                        eventEnd = new Date(eventStart.getTime() + durationMinutes * 60000);
+                    }
                     
                     // בניית column values
                     const columnValues = {};
                     
                     columnValues[customSettings.dateColumnId] = {
-                        date: format(currentStart, 'yyyy-MM-dd'),
-                        time: format(currentStart, 'HH:mm:ss')
+                        date: format(eventStart, 'yyyy-MM-dd'),
+                        time: format(eventStart, 'HH:mm:ss')
                     };
                     
+                    // חישוב משך זמן בדקות
+                    const durationMinutes = (eventEnd.getTime() - eventStart.getTime()) / 60000;
                     const durationHours = durationMinutes / 60;
                     columnValues[customSettings.durationColumnId] = durationHours.toFixed(2);
+                    
+                    // הוספת לקוח אם קיימת עמודה
+                    if (report.projectId && customSettings.projectColumnId) {
+                        columnValues[customSettings.projectColumnId] = {
+                            item_ids: [parseInt(report.projectId)]
+                        };
+                    }
                     
                     // הוספת הערות אם יש
                     if (report.notes && customSettings.notesColumnId) {
@@ -521,13 +670,24 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
                         };
                     }
                     
+                    // הוספת סטטוס "שעתי" לכל דיווח
+                    if (customSettings.eventTypeStatusColumnId) {
+                        columnValues[customSettings.eventTypeStatusColumnId] = {
+                            label: "שעתי"
+                        };
+                    }
+                    
                     const columnValuesJson = JSON.stringify(columnValues);
+                    
+                    // קביעת שם האייטם: "{שם המוצר} - {שם המדווח}"
+                    const productName = report.productName || 'ללא מוצר';
+                    const itemName = `${productName} - ${reporterName}`;
                     
                     // יצירת אירוע
                     const createdItem = await createBoardItem(
                         monday,
                         context.boardId,
-                        report.projectName,
+                        itemName,  // במקום report.projectName
                         columnValuesJson
                     );
                     
@@ -536,16 +696,16 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
                         const newEvent = {
                             id: createdItem.id,
                             title: report.projectName,
-                            start: currentStart,
-                            end: end,
+                            start: eventStart,
+                            end: eventEnd,
                             notes: report.notes,
                             mondayItemId: createdItem.id
                         };
                         addEvent(newEvent);
                     }
                     
-                    // מעבר לאירוע הבא
-                    currentStart = end;
+                    // מעבר לאירוע הבא - אם יש שעות התחלה וסיום, מתחיל מהסיום, אחרת מהסיום המחושב
+                    currentStart = eventEnd;
                 }
                 
                 logger.functionEnd('handleCreateAllDayEvent', { type: 'reports', count: allDayData.reports.length });
@@ -558,6 +718,9 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
                 };
                 
                 const eventName = typeNames[allDayData.type];
+                
+                // קביעת שם האייטם: "יומי - {שם המדווח}"
+                const itemName = `יומי - ${reporterName}`;
                 
                 const columnValues = {};
                 columnValues[customSettings.dateColumnId] = {
@@ -574,12 +737,19 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
                     };
                 }
                 
+                // הוספת סטטוס לפי סוג האירוע (מחלה/חופשה/מילואים)
+                if (customSettings.eventTypeStatusColumnId) {
+                    columnValues[customSettings.eventTypeStatusColumnId] = {
+                        label: eventName // "מחלה", "חופשה", או "מילואים"
+                    };
+                }
+                
                 const columnValuesJson = JSON.stringify(columnValues);
                 
                 const createdItem = await createBoardItem(
                     monday,
                     context.boardId,
-                    eventName,
+                    itemName,  // במקום eventName
                     columnValuesJson
                 );
                 
@@ -678,6 +848,7 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
                 isOpen={isModalOpen}
                 onClose={handleCloseModal}
                 pendingSlot={pendingSlot}
+                monday={monday}
                 boardItems={boardItems}
                 isLoadingItems={isLoadingItems}
                 newEventTitle={newEventTitle}
@@ -702,9 +873,13 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
             
             <AllDayEventModal 
                 isOpen={isAllDayModalOpen}
-                onClose={() => { setIsAllDayModalOpen(false); setPendingAllDayDate(null); }}
+                onClose={handleCloseAllDayModal}
                 pendingDate={pendingAllDayDate}
                 onCreate={handleCreateAllDayEvent}
+                eventToEdit={allDayEventToEdit}
+                isEditMode={isAllDayEditMode}
+                onUpdate={handleUpdateAllDayEvent}
+                onDelete={handleDeleteAllDayEvent}
             />
 
             {/* Toast Notifications */}

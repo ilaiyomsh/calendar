@@ -101,6 +101,11 @@
   box-shadow: 0 4px 12px rgba(0,0,0,0.08);
 }
 
+.menuButton.selected {
+  border-right: 6px solid;
+  background-color: #f0f3ff;
+}
+
 .btnVacation:hover { border-right: 6px solid #00c875; }
 .btnSick:hover { border-right: 6px solid #e2445c; }
 .btnReserves:hover { border-right: 6px solid #579bfc; }
@@ -151,7 +156,7 @@
 }
 
 .searchBox {
-  width: 100%;
+  width: 90%;
   padding: 8px 12px;
   margin-bottom: 12px;
   border: 1px solid #d0d4e4;
@@ -196,44 +201,223 @@
 .mainForm {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden; /* מונע גלילה אופקית */
   padding-right: 4px;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  min-width: 0; /* מאפשר flex להתכווץ */
 }
 
 .reportRow {
   background: #fff;
-  border: 1px solid #e6e9ef;
-  padding: 16px;
-  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 16px 20px;
+  border-radius: 12px;
   position: relative;
-  transition: 0.2s;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  overflow: hidden; /* מונע גלילה אופקית */
+  min-width: 0; /* מאפשר flex items להתכווץ */
 }
 
 .reportRow:hover {
-  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-  border-color: #c5c7d0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  border-color: #e5e7eb;
 }
 
-.rowGrid {
-  display: grid;
-  /* grid-template-columns יוגדר inline לפי נוכחות שדה המוצר */
+/* Times Group - All Editable */
+.timesGroup {
+  display: flex;
+  align-items: flex-end;
   gap: 12px;
-  align-items: end;
+  flex-shrink: 0; /* מונע התכווצות */
 }
 
-.fieldGroup {
+.timeFieldWrapper {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  align-items: center;
 }
 
-.fieldGroup label {
-  font-size: 0.8rem;
-  color: #676879;
+.timeLabelSmall {
+  font-size: 10px;
+  color: #9ca3af;
+  margin-bottom: 2px;
   font-weight: 500;
 }
+
+.timeInputInline {
+  color: #374151;
+  font-weight: 500;
+  font-size: 1.125rem;
+  background-color: transparent;
+  border: none;
+  padding: 0;
+  width: 70px;
+  text-align: center;
+  cursor: text;
+  transition: background-color 0.2s;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.timeInputInline::-webkit-calendar-picker-indicator {
+  display: none;
+}
+
+.timeInputInline:hover {
+  background-color: #f3f4f6;
+  border-radius: 4px;
+}
+
+.timeInputInline:focus {
+  outline: none;
+  background-color: #f3f4f6;
+  border-radius: 4px;
+}
+
+.timeSeparatorInline {
+  color: #d1d5db;
+  font-weight: 300;
+  font-size: 1.25rem;
+  padding-bottom: 4px;
+}
+
+/* Visual Separator */
+.visualSeparator {
+  height: 40px;
+  width: 1px;
+  background-color: #f3f4f6;
+  margin: 0 4px;
+  flex-shrink: 0; /* מונע התכווצות */
+}
+
+/* Duration */
+.durationWrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 0;
+  flex-shrink: 0; /* מונע התכווצות */
+}
+
+.durationInputInline {
+  font-size: 1.125rem;
+  color: #1f2937;
+  font-family: 'Courier New', monospace;
+  letter-spacing: 0.05em;
+  width: 70px;
+  text-align: center;
+  background-color: transparent;
+  border: none;
+  padding: 0;
+  cursor: text;
+  transition: background-color 0.2s;
+}
+
+.durationInputInline:hover:not(:disabled) {
+  background-color: #f3f4f6;
+  border-radius: 4px;
+}
+
+.durationInputInline:focus:not(:disabled) {
+  outline: none;
+  background-color: #f3f4f6;
+  border-radius: 4px;
+}
+
+.durationInputInline:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Notes */
+.notesWrapper {
+  flex: 1;
+  min-width: 0; /* מאפשר התכווצות */
+  border-right: 1px solid #f3f4f6;
+  padding-right: 16px;
+  padding-top: 8px;
+  overflow: hidden; /* מונע גלילה */
+}
+
+.notesInput {
+  width: 100%;
+  background-color: transparent;
+  border: none;
+  font-size: 0.875rem;
+  color: #4b5563;
+  padding: 4px 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap; /* שורה אחת */
+}
+
+.notesInput::placeholder {
+  color: #d1d5db;
+}
+
+.notesInput:focus {
+  outline: none;
+}
+
+/* Delete Button - Top Left Corner */
+.deleteButtonTop {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  color: #9ca3af;
+  padding: 4px;
+  border-radius: 4px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  opacity: 0.6;
+}
+
+.reportRow:hover .deleteButtonTop {
+  opacity: 1;
+}
+
+.deleteButtonTop:hover {
+  color: #ef4444;
+  background-color: #fee2e2;
+}
+
+.customerProductGroup {
+  width: 192px; /* w-48 = 12rem = 192px */
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  border-left: 1px solid #f3f4f6;
+  padding-left: 16px;
+}
+
+.customerName {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #1f2937;
+  line-height: 1.2;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.productField {
+  width: 100%;
+}
+
 
 .input, .select {
   padding: 8px;
@@ -250,31 +434,43 @@
   outline: none;
 }
 
-.removeBtn {
-  background: none;
-  border: none;
-  color: #e2445c;
-  cursor: pointer;
-  font-size: 1.2rem;
-  padding: 6px;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background-color 0.2s;
-}
-
-.removeBtn:hover {
-  background-color: #ffe0e6;
-}
 
 .footer {
   padding: 20px;
   border-top: 1px solid #e6e9ef;
   display: flex;
   justify-content: flex-end;
+  align-items: center;
   gap: 12px;
   background-color: #f7f9fa;
+}
+
+.footer .deleteBtn {
+  margin-right: auto;
+}
+
+.totalHours {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  margin-right: auto;
+  margin-left: 20px;
+}
+
+.totalHoursLabel {
+  font-size: 0.75rem;
+  color: #676879;
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+
+.totalHoursValue {
+  font-size: 1.875rem;
+  font-weight: 700;
+  color: #323338;
+  font-family: 'Courier New', monospace;
+  letter-spacing: -0.025em;
+  line-height: 1;
 }
 
 .button {
@@ -304,6 +500,16 @@
 
 .saveBtn:hover {
   background-color: #0060b9;
+}
+
+.deleteBtn {
+  background-color: white;
+  border: 1px solid #e2445c;
+  color: #e2445c;
+}
+
+.deleteBtn:hover {
+  background-color: #fff0f2;
 }
 
 .emptyState {
