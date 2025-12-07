@@ -2,7 +2,7 @@
   "buildCommand": "npm run build",
   "outputDirectory": "build",
   "devCommand": "npm run server",
-  "installCommand": "npm install",
+  "installCommand": "npm install --legacy-peer-deps",
   "framework": "vite",
   "rewrites": [
     {
