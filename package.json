@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "start": "npm run stop && concurrently \"npm run server\" \"npm run expose\"",
+    "build": "vite build",
     "deploy:build": "vite build",
     "deploy:push": "mapps code:push --client-side -d \"build\"",
     "deploy": "npm run deploy:build && npm run deploy:push",
