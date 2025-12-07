@@ -12,7 +12,7 @@
     "server": "vite",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
-    "stop": "kill-port 8301 && kill-port 4049 && kill-port 4040",
+    "stop": "kill-port 8301 && kill-port 4049 && kill-port 4040"
   },
   "dependencies": {
     "@mondaycom/apps-sdk": "^2.1.2",
