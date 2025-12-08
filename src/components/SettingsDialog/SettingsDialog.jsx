@@ -25,16 +25,16 @@ export default function SettingsDialog({ monday, onClose, context }) {
   const [dateColumns, setDateColumns] = useState([]);
   const [durationColumns, setDurationColumns] = useState([]);
   const [projectColumns, setProjectColumns] = useState([]);
-  const [textColumns, setTextColumns] = useState([]);
   const [reporterColumns, setReporterColumns] = useState([]);
   const [statusColumns, setStatusColumns] = useState([]);
+  const [stageColumns, setStageColumns] = useState([]);
   const [dateColumnId, setDateColumnId] = useState('');
   const [durationColumnId, setDurationColumnId] = useState('');
   const [projectColumnId, setProjectColumnId] = useState('');
-  const [notesColumnId, setNotesColumnId] = useState('');
   const [reporterColumnId, setReporterColumnId] = useState('');
   const [statusColumnId, setStatusColumnId] = useState('');
   const [eventTypeStatusColumnId, setEventTypeStatusColumnId] = useState('');
+  const [stageColumnId, setStageColumnId] = useState('');
   const [loadingCurrentBoardColumns, setLoadingCurrentBoardColumns] = useState(false);
   
   // State - לוח מוצרים
@@ -57,10 +57,10 @@ export default function SettingsDialog({ monday, onClose, context }) {
     dateColumnId,
     durationColumnId,
     projectColumnId,
-    notesColumnId,
     reporterColumnId,
     statusColumnId,
     eventTypeStatusColumnId,
+    stageColumnId,
     productsBoardId,
     productsCustomerColumnId,
     productColumnId,
@@ -110,9 +110,6 @@ export default function SettingsDialog({ monday, onClose, context }) {
     if (customSettings.projectColumnId) {
       setProjectColumnId(customSettings.projectColumnId);
     }
-    if (customSettings.notesColumnId) {
-      setNotesColumnId(customSettings.notesColumnId);
-    }
     if (customSettings.reporterColumnId) {
       setReporterColumnId(customSettings.reporterColumnId);
     }
@@ -126,6 +123,11 @@ export default function SettingsDialog({ monday, onClose, context }) {
       setEventTypeStatusColumnId(customSettings.eventTypeStatusColumnId);
     } else {
       setEventTypeStatusColumnId('');
+    }
+    if (customSettings.stageColumnId) {
+      setStageColumnId(customSettings.stageColumnId);
+    } else {
+      setStageColumnId('');
     }
     
     // טעינת הגדרות מוצרים
@@ -317,12 +319,6 @@ export default function SettingsDialog({ monday, onClose, context }) {
           .map(col => ({ id: col.id, name: col.title }));
         setCurrentBoardProductColumns(productCols);
         
-        // עמודות Text (להערות חופשיות)
-        const textCols = columns
-          .filter(col => col.type === 'text')
-          .map(col => ({ id: col.id, name: col.title }));
-        setTextColumns(textCols);
-        
         // עמודות People (למדווח)
         const peopleCols = columns
           .filter(col => col.type === 'people')
@@ -338,6 +334,12 @@ export default function SettingsDialog({ monday, onClose, context }) {
           { id: '', name: 'ללא עמודת סטטוס' },
           ...statusCols
         ]);
+        
+        // עמודות Status ו-Dropdown (לשלב)
+        const stageCols = columns
+          .filter(col => col.type === 'status' || col.type === 'dropdown')
+          .map(col => ({ id: col.id, name: col.title }));
+        setStageColumns(stageCols);
       }
     } catch (err) {
       // לוג שגיאה קריטי - נשאר פעיל גם בפרודקשן
@@ -417,16 +419,16 @@ export default function SettingsDialog({ monday, onClose, context }) {
     setProjectColumnId(newColumnId);
   };
 
-  const handleNotesColumnChange = (newColumnId) => {
-    setNotesColumnId(newColumnId);
-  };
-
   const handleReporterColumnChange = (newColumnId) => {
     setReporterColumnId(newColumnId);
   };
 
   const handleStatusColumnChange = (newColumnId) => {
     setStatusColumnId(newColumnId);
+  };
+
+  const handleStageColumnChange = (newColumnId) => {
+    setStageColumnId(newColumnId);
   };
 
   const handleEventTypeStatusColumnChange = async (newColumnId) => {
@@ -501,10 +503,10 @@ export default function SettingsDialog({ monday, onClose, context }) {
       dateColumnId: dateColumnId || null,
       durationColumnId: durationColumnId || null,
       projectColumnId: projectColumnId || null,
-      notesColumnId: notesColumnId || null,
       reporterColumnId: reporterColumnId || null,
       statusColumnId: statusColumnId || null,
       eventTypeStatusColumnId: eventTypeStatusColumnId || null,
+      stageColumnId: stageColumnId || null,
       productsBoardId: productsBoardId || null,
       productsCustomerColumnId: productsCustomerColumnId || null,
       productColumnId: productColumnId || null,
@@ -754,28 +756,6 @@ export default function SettingsDialog({ monday, onClose, context }) {
             </FieldWrapper>
 
             <FieldWrapper
-              label="עמודת הערות"
-              description="עמודת Text להערות חופשיות על האירוע"
-            >
-              <div className={context?.boardId ? '' : styles.disabled}>
-                <SearchableSelect 
-                  options={textColumns}
-                  value={notesColumnId}
-                  onChange={handleNotesColumnChange}
-                  placeholder="בחר עמודת הערות..."
-                  isLoading={loadingCurrentBoardColumns}
-                  disabled={!context?.boardId}
-                  showSearch={false}
-                />
-                {context?.boardId && !loadingCurrentBoardColumns && textColumns.length === 0 && (
-                  <p className={styles.warning}>
-                    ⚠️ לא נמצאו עמודות מסוג "text" בלוח זה
-                  </p>
-                )}
-              </div>
-            </FieldWrapper>
-
-            <FieldWrapper
               label="עמודת מדווח"
               required
               description="עמודת People למשתמש שיצר את הדיווח (מדווח)"
@@ -840,6 +820,30 @@ export default function SettingsDialog({ monday, onClose, context }) {
                 {context?.boardId && !loadingCurrentBoardColumns && statusColumns.filter(col => col.id !== '').length === 0 && (
                   <p className={styles.warning}>
                     ⚠️ לא נמצאו עמודות מסוג "status" בלוח זה
+                  </p>
+                )}
+              </div>
+            </FieldWrapper>
+
+            <FieldWrapper
+              label="עמודת שלב"
+              required={productColumnId ? true : false}
+              description="עמודת Status או Dropdown לשלב. חובה אם יש הגדרת מוצר"
+              error={getFieldError('stageColumnId')}
+            >
+              <div className={context?.boardId ? '' : styles.disabled}>
+                <SearchableSelect 
+                  options={stageColumns}
+                  value={stageColumnId}
+                  onChange={handleStageColumnChange}
+                  placeholder="בחר עמודת שלב..."
+                  isLoading={loadingCurrentBoardColumns}
+                  disabled={!context?.boardId}
+                  showSearch={false}
+                />
+                {context?.boardId && !loadingCurrentBoardColumns && stageColumns.length === 0 && (
+                  <p className={styles.warning}>
+                    ⚠️ לא נמצאו עמודות מסוג "status" או "dropdown" בלוח זה
                   </p>
                 )}
               </div>

@@ -9,7 +9,7 @@ import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
 import './calendar-custom.css';
 
 // קבועים והגדרות
-import { localizer, hebrewMessages, formats } from './constants/calendarConfig';
+import { localizer, hebrewMessages, formats, roundToNearest30Minutes } from './constants/calendarConfig';
 
 // פונקציות עזר
 import { fetchColumnSettings, fetchAllBoardItems as fetchBoardItems, createBoardItem, fetchEventsFromBoard, deleteItem, fetchItemById, fetchCustomerById, fetchCurrentUser } from './utils/mondayApi';
@@ -291,6 +291,32 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
                 }
                 }
                 
+                // חילוץ שלב
+                if (customSettings.stageColumnId) {
+                    const stageColumn = item.column_values.find(col => col.id === customSettings.stageColumnId);
+                    if (stageColumn) {
+                        if (stageColumn.label) {
+                            updatedEvent.stageId = stageColumn.label;
+                        } else if (stageColumn.value) {
+                            try {
+                                const parsed = typeof stageColumn.value === 'string' 
+                                    ? JSON.parse(stageColumn.value) 
+                                    : stageColumn.value;
+                                if (parsed?.label) {
+                                    updatedEvent.stageId = parsed.label;
+                                } else if (typeof parsed === 'string') {
+                                    updatedEvent.stageId = parsed;
+                                }
+                            } catch (err) {
+                                // אם יש שגיאה בפענוח, ננסה את הערך הישיר
+                                if (typeof stageColumn.value === 'string') {
+                                    updatedEvent.stageId = stageColumn.value;
+                                }
+                            }
+                        }
+                    }
+                }
+                
             setEventToEdit(updatedEvent);
             logger.functionEnd('loadEventDataForEdit', { eventId: event.mondayItemId });
         } catch (error) {
@@ -349,9 +375,20 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
         }
         
         // קוד קיים לסלוט רגיל
+        // עיגול זמנים ל-30 דקות הקרוב
+        const roundedStart = roundToNearest30Minutes(start);
+        const roundedEnd = roundToNearest30Minutes(end);
+        
+        // וידוא שהמשך מינימלי הוא 30 דקות
+        const minDuration = 30 * 60 * 1000; // 30 דקות במילישניות
+        const duration = roundedEnd.getTime() - roundedStart.getTime();
+        const finalEnd = duration < minDuration 
+            ? new Date(roundedStart.getTime() + minDuration)
+            : roundedEnd;
+        
         setIsEditMode(false);
         setEventToEdit(null);
-        setPendingSlot({ start, end });
+        setPendingSlot({ start: roundedStart, end: finalEnd });
         setIsModalOpen(true);
         setNewEventTitle('');
         setSelectedItem(null);
@@ -511,14 +548,20 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
         
         const [hours, minutes] = option.value.split(':').map(Number);
         const newStart = new Date(pendingSlot.start);
-        newStart.setHours(hours, minutes);
+        newStart.setHours(hours, minutes, 0, 0);
         
+        // עיגול ל-30 דקות
+        const roundedStart = roundToNearest30Minutes(newStart);
+        
+        // וידוא שהמשך מינימלי הוא 30 דקות
+        const minDuration = 30 * 60 * 1000; // 30 דקות במילישניות
         let newEnd = new Date(pendingSlot.end);
-        if (newStart >= newEnd) {
-            newEnd = new Date(newStart.getTime() + 60 * 60 * 1000);
+        
+        if (roundedStart >= newEnd || (newEnd.getTime() - roundedStart.getTime()) < minDuration) {
+            newEnd = new Date(roundedStart.getTime() + minDuration);
         }
         
-        setPendingSlot({ ...pendingSlot, start: newStart, end: newEnd });
+        setPendingSlot({ ...pendingSlot, start: roundedStart, end: newEnd });
     };
 
     // עדכון שעת סיום
@@ -527,9 +570,19 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
         
         const [hours, minutes] = option.value.split(':').map(Number);
         const newEnd = new Date(pendingSlot.end);
-        newEnd.setHours(hours, minutes);
+        newEnd.setHours(hours, minutes, 0, 0);
         
-        setPendingSlot({ ...pendingSlot, end: newEnd });
+        // עיגול ל-30 דקות
+        const roundedEnd = roundToNearest30Minutes(newEnd);
+        
+        // וידוא שהמשך מינימלי הוא 30 דקות
+        const minDuration = 30 * 60 * 1000; // 30 דקות במילישניות
+        const duration = roundedEnd.getTime() - pendingSlot.start.getTime();
+        const finalEnd = duration < minDuration 
+            ? new Date(pendingSlot.start.getTime() + minDuration)
+            : roundedEnd;
+        
+        setPendingSlot({ ...pendingSlot, end: finalEnd });
     };
 
     // עדכון תאריך
@@ -674,6 +727,13 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
                     if (customSettings.eventTypeStatusColumnId) {
                         columnValues[customSettings.eventTypeStatusColumnId] = {
                             label: "שעתי"
+                        };
+                    }
+                    
+                    // הוספת שלב (אם יש מוצר ויש הגדרה לעמודה)
+                    if (report.stageId && customSettings.stageColumnId) {
+                        columnValues[customSettings.stageColumnId] = {
+                            label: report.stageId
                         };
                     }
                     
@@ -871,7 +931,8 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
                 onDelete={handleDeleteEvent}
             />
             
-            <AllDayEventModal 
+            <AllDayEventModal
+                monday={monday} 
                 isOpen={isAllDayModalOpen}
                 onClose={handleCloseAllDayModal}
                 pendingDate={pendingAllDayDate}

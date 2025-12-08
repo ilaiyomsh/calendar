@@ -3,8 +3,12 @@ import { Sun, Thermometer, Briefcase, FileText, Plus, Trash2, X, Clock } from 'l
 import { useSettings } from '../../contexts/SettingsContext';
 import { useCustomers } from '../../hooks/useCustomers';
 import { useProductsMultiple } from '../../hooks/useProductsMultiple';
+import { useStageOptions } from '../../hooks/useStageOptions';
 import ProductSelect from '../ProductSelect';
+import StageSelect from '../StageSelect';
+import TimeSelect from '../TimeSelect';
 import ConfirmDialog from '../ConfirmDialog';
+import { generateTimeOptions30Minutes, durationOptions30Minutes, roundToNearest30Minutes } from '../../constants/calendarConfig';
 import logger from '../../utils/logger';
 import styles from './AllDayEventModal.module.css';
 
@@ -16,11 +20,19 @@ export default function AllDayEventModal({
     eventToEdit = null,
     isEditMode = false,
     onUpdate = null,
-    onDelete = null
+    onDelete = null,
+    monday
 }) {
     const { customSettings } = useSettings();
     const { customers, loading: loadingCustomers, refetch: refetchCustomers } = useCustomers();
     const { createProduct, fetchForCustomer, products: productsByCustomer } = useProductsMultiple();
+    
+    // יצירת רשימת זמנים לפי טווח שעות העבודה
+    const timeOptions = React.useMemo(() => {
+        const minTime = customSettings.workDayStart || "00:00";
+        const maxTime = customSettings.workDayEnd || "23:30";
+        return generateTimeOptions30Minutes(minTime, maxTime);
+    }, [customSettings.workDayStart, customSettings.workDayEnd]);
     
     // State - בחירת סוג אירוע
     const [selectedType, setSelectedType] = useState(null); // 'sick' | 'vacation' | 'reserves' | 'reports'
@@ -34,6 +46,8 @@ export default function AllDayEventModal({
     
     // State - מוצרים נבחרים
     const [selectedProducts, setSelectedProducts] = useState({});
+    // State - שלבים נבחרים
+    const [selectedStages, setSelectedStages] = useState({});
     // State - יצירת מוצר לכל פרויקט
     const [isCreatingProduct, setIsCreatingProduct] = useState({});
     
@@ -41,6 +55,23 @@ export default function AllDayEventModal({
     const [showCloseConfirm, setShowCloseConfirm] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [editingDuration, setEditingDuration] = useState({}); // state מקומי לעריכת שדה המשך
+    
+    // State - boardId
+    const [boardId, setBoardId] = useState(null);
+    useEffect(() => {
+        if (monday) {
+            monday.get('context').then(context => {
+                setBoardId(context.data?.boardId);
+            });
+        }
+    }, [monday]);
+    
+    // טעינת ערכי שלב
+    const { stageOptions, loading: loadingStages } = useStageOptions(
+        monday,
+        customSettings.stageColumnId && boardId ? boardId : null,
+        customSettings.stageColumnId
+    );
     
     // --- פונקציות עזר לחישובי זמן (בהתאם לדוגמה) ---
     const parseTime = (timeStr) => {
@@ -86,6 +117,7 @@ export default function AllDayEventModal({
                 setAddedReports([]);
                 setSearchTerm('');
                 setSelectedProducts({});
+                setSelectedStages({});
                 setIsCreatingProduct({});
                 setEditingDuration({}); // איפוס state של עריכת משך
                 
@@ -102,6 +134,7 @@ export default function AllDayEventModal({
             setAddedReports([]);
             setSearchTerm('');
             setSelectedProducts({});
+            setSelectedStages({});
             setIsCreatingProduct({});
             setEditingDuration({}); // איפוס state של עריכת משך
         }
@@ -155,7 +188,8 @@ export default function AllDayEventModal({
             startTime: startTime,
             endTime: endTime,
             notes: '',
-            productId: ''
+            productId: '',
+            stageId: ''
         }]);
     };
     
@@ -167,6 +201,12 @@ export default function AllDayEventModal({
             setSelectedProducts(prev => {
                 const newSelected = { ...prev };
                 delete newSelected[id];  // שימוש ב-id (reportId) במקום projectId
+                return newSelected;
+            });
+            // הסרת השלב הנבחר
+            setSelectedStages(prev => {
+                const newSelected = { ...prev };
+                delete newSelected[id];
                 return newSelected;
             });
         }
@@ -193,7 +233,11 @@ export default function AllDayEventModal({
         const diffMinutes = endTotalMinutes - startTotalMinutes;
         const diffHours = diffMinutes / 60;
         
-        return diffHours.toFixed(2);
+        // וידוא שהמשך מינימלי הוא 30 דקות (0.5 שעות)
+        const minHours = 0.5;
+        const finalHours = Math.max(diffHours, minHours);
+        
+        return finalHours.toFixed(2);
     };
     
     // פונקציה לחישוב משך זמן בפורמט HH:mm
@@ -263,7 +307,9 @@ export default function AllDayEventModal({
             const calculatedHours = hasTimeRange ? calculateHoursFromTimeRange(r.startTime, r.endTime) : null;
             const hasHours = hasDirectHours || (calculatedHours && parseFloat(calculatedHours) > 0);
             const hasProduct = !customSettings.productColumnId || r.productId;
-            return hasHours && hasProduct;
+            // שלב חובה רק אם יש מוצר
+            const hasStage = !customSettings.productColumnId || !r.productId || (customSettings.stageColumnId && r.productId ? r.stageId : true);
+            return hasHours && hasProduct && hasStage;
         });
         
         return validReports.length > 0;
@@ -303,11 +349,18 @@ export default function AllDayEventModal({
                     originalDuration = formatTime(parseFloat(entry.hours) * 60);
                 }
                 
+                // וידוא שהמשך מינימלי הוא 30 דקות
+                const originalDurationMinutes = parseTime(originalDuration);
+                const minDurationMinutes = 30;
+                const finalDuration = originalDurationMinutes < minDurationMinutes 
+                    ? formatTime(minDurationMinutes)
+                    : originalDuration;
+                
                 // עדכון ההתחלה
                 entry.startTime = value;
                 
-                // עדכון הסיום לפי המשך המקורי
-                entry.endTime = addTime(value, originalDuration);
+                // עדכון הסיום לפי המשך המקורי (לפחות 30 דקות)
+                entry.endTime = addTime(value, finalDuration);
                 
                 // עדכון המשך בפורמט שעות עשרוניות
                 if (entry.startTime && entry.endTime) {
@@ -321,13 +374,27 @@ export default function AllDayEventModal({
                 if (entry.startTime) {
                     const calculatedHours = calculateHoursFromTimeRange(entry.startTime, value);
                     if (calculatedHours) {
-                        entry.hours = calculatedHours;
+                        // וידוא שהמשך מינימלי הוא 30 דקות (0.5 שעות)
+                        const minHours = 0.5;
+                        entry.hours = Math.max(parseFloat(calculatedHours), minHours).toFixed(2);
+                        
+                        // עדכון endTime אם היה צריך להגדיל
+                        if (parseFloat(calculatedHours) < minHours) {
+                            const startTotalMins = parseTime(entry.startTime);
+                            const endTotalMins = startTotalMins + (minHours * 60);
+                            entry.endTime = formatTime(endTotalMins);
+                        }
                     }
                 }
             } else if (field === 'hours') {
                 // שינוי משך -> מזיזים סיום
                 if (entry.startTime && value) {
-                    const hoursInMinutes = parseFloat(value) * 60;
+                    // וידוא שהמשך מינימלי הוא 0.5 שעות (30 דקות)
+                    const minHours = 0.5;
+                    const finalHours = Math.max(parseFloat(value), minHours);
+                    entry.hours = finalHours.toFixed(2);
+                    
+                    const hoursInMinutes = finalHours * 60;
                     const startTotalMins = parseTime(entry.startTime);
                     const endTotalMins = startTotalMins + hoursInMinutes;
                     entry.endTime = formatTime(endTotalMins);
@@ -356,6 +423,27 @@ export default function AllDayEventModal({
                 [reportId]: productId  // שימוש ב-reportId כמפתח ייחודי לכל דיווח
             }));
             updateReport(reportId, 'productId', productId);
+            // איפוס שלב רק אם המוצר הוסר לגמרי (לא אם רק השתנה)
+            if (!productId) {
+                setSelectedStages(prev => {
+                    const newSelected = { ...prev };
+                    delete newSelected[reportId];
+                    return newSelected;
+                });
+                updateReport(reportId, 'stageId', '');
+            }
+        }
+    };
+    
+    // עדכון שלב שנבחר
+    const updateSelectedStage = (reportId, stageId) => {
+        const report = addedReports.find(r => r.id === reportId);
+        if (report) {
+            setSelectedStages(prev => ({
+                ...prev,
+                [reportId]: stageId
+            }));
+            updateReport(reportId, 'stageId', stageId);
         }
     };
     
@@ -448,6 +536,15 @@ export default function AllDayEventModal({
                 }
             }
             
+            // בדיקת בחירת שלבים אם יש מוצר
+            if (customSettings.productColumnId && customSettings.stageColumnId) {
+                const missingStages = validReports.filter(r => r.productId && !r.stageId);
+                if (missingStages.length > 0) {
+                    alert('יש לבחור שלב לכל דיווח שעות עם מוצר');
+                    return;
+                }
+            }
+            
             // המרה לפורמט המקורי (ללא id הפנימי)
             const formattedReports = validReports.map(r => {
                 // אם יש שעות התחלה וסיום, מחשבים את המשך
@@ -471,6 +568,7 @@ export default function AllDayEventModal({
                     notes: r.notes,
                     productId: r.productId,
                     productName: productName,  // הוספת שם המוצר
+                    stageId: r.stageId || null,
                     startTime: r.startTime || null,
                     endTime: r.endTime || null
                 };
@@ -494,6 +592,7 @@ export default function AllDayEventModal({
         setAddedReports([]);
         setSearchTerm('');
         setSelectedProducts({});
+        setSelectedStages({});
         
         onClose();
     };
@@ -594,8 +693,8 @@ export default function AllDayEventModal({
     
     // רינדור תצוגה מפוצלת
     const renderSplitForm = () => {
-        // מבנה Grid: לקוח+מוצר (200px) | הערות (1fr) | התחלה (auto) | - (auto) | סיום (auto) | משך (100px) | מחיקה (50px)
-        const gridColumns = '200px 1fr auto auto auto 100px 50px';
+        // מבנה Grid: לקוח+מוצר (40%) | התחלה (20%) | - (auto) | סיום (20%) | משך (20%) | מחיקה (50px)
+        const gridColumns = '40% 20% auto 20% 20% 50px';
         
         return (
             <div className={styles.splitView}>
@@ -637,6 +736,17 @@ export default function AllDayEventModal({
                                         />
                                     </div>
                                 )}
+                                {customSettings.stageColumnId && (
+                                    <div className={styles.productField} style={{ marginTop: '8px' }}>
+                                        <StageSelect 
+                                            stages={stageOptions}
+                                            selectedStage={selectedStages[report.id] || ''}
+                                            onSelectStage={(stageId) => updateSelectedStage(report.id, stageId)}
+                                            isLoading={loadingStages}
+                                            disabled={false}
+                                        />
+                                    </div>
+                                )}
                             </div>
 
                             {/* 2. Times - All Editable */}
@@ -644,12 +754,13 @@ export default function AllDayEventModal({
                                 {/* Start Time */}
                                 <div className={styles.timeFieldWrapper}>
                                     <span className={styles.timeLabelSmall}>התחלה</span>
-                                    <input 
-                                        type="time" 
-                                        value={report.startTime || ''}
-                                        onChange={(e) => updateReport(report.id, 'startTime', e.target.value)}
-                                        className={styles.timeInputInline}
-                                        title="שעת התחלה (ניתן לעריכה ידנית)"
+                                    <TimeSelect
+                                        times={timeOptions}
+                                        selectedTime={report.startTime || ''}
+                                        onSelectTime={(time) => updateReport(report.id, 'startTime', time)}
+                                        isLoading={false}
+                                        disabled={false}
+                                        placeholder="בחר שעה"
                                     />
                                 </div>
                                 
@@ -658,12 +769,13 @@ export default function AllDayEventModal({
                                 {/* End Time */}
                                 <div className={styles.timeFieldWrapper}>
                                     <span className={styles.timeLabelSmall}>סיום</span>
-                                    <input 
-                                        type="time" 
-                                        value={report.endTime || ''}
-                                        onChange={(e) => updateReport(report.id, 'endTime', e.target.value)}
-                                        className={styles.timeInputInline}
-                                        title="שעת סיום"
+                                    <TimeSelect
+                                        times={timeOptions}
+                                        selectedTime={report.endTime || ''}
+                                        onSelectTime={(time) => updateReport(report.id, 'endTime', time)}
+                                        isLoading={false}
+                                        disabled={false}
+                                        placeholder="בחר שעה"
                                     />
                                 </div>
                             </div>
@@ -674,66 +786,28 @@ export default function AllDayEventModal({
                             {/* 3. Duration */}
                             <div className={styles.durationWrapper}>
                                 <span className={styles.timeLabelSmall}>משך</span>
-                                <input
-                                    type="text"
-                                    value={editingDuration[report.id] !== undefined 
-                                        ? editingDuration[report.id] // אם המשתמש עורך, השתמש בערך הזמני
-                                        : (report.startTime && report.endTime 
+                                <TimeSelect
+                                    times={durationOptions30Minutes}
+                                    selectedTime={
+                                        report.startTime && report.endTime 
                                             ? calculateDurationStr(report.startTime, report.endTime)
                                             : (report.hours 
                                                 ? (report.hours.includes(':') 
                                                     ? report.hours 
                                                     : formatTime(parseFloat(report.hours) * 60))
-                                                : ''))
+                                                : '')
                                     }
-                                    onFocus={(e) => {
-                                        // כשהשדה מקבל פוקוס, שמור את הערך הנוכחי
-                                        setEditingDuration(prev => ({
-                                            ...prev,
-                                            [report.id]: e.target.value
-                                        }));
+                                    onSelectTime={(duration) => {
+                                        const minutes = parseTime(duration);
+                                        const hours = (minutes / 60).toFixed(2);
+                                        updateReport(report.id, 'hours', hours);
                                     }}
-                                    onChange={(e) => {
-                                        const value = e.target.value;
-                                        // שמירת הערך הזמני ב-state
-                                        setEditingDuration(prev => ({ ...prev, [report.id]: value }));
-                                        
-                                        if (value.length === 5 && value.includes(':')) {
-                                            const minutes = parseTime(value);
-                                            const hours = (minutes / 60).toFixed(2);
-                                            updateReport(report.id, 'hours', hours);
-                                        } else if (value === '') {
-                                            updateReport(report.id, 'hours', '');
-                                        } else {
-                                            const numValue = parseFloat(value);
-                                            if (!isNaN(numValue)) {
-                                                updateReport(report.id, 'hours', value);
-                                            }
-                                        }
-                                    }}
-                                    onBlur={() => {
-                                        // כשהשדה מאבד פוקוס, מנקים את הערך הזמני
-                                        setEditingDuration(prev => {
-                                            const newState = { ...prev };
-                                            delete newState[report.id];
-                                            return newState;
-                                        });
-                                    }}
-                                    placeholder="00:00"
-                                    className={styles.durationInputInline}
+                                    isLoading={false}
+                                    disabled={false}
+                                    placeholder="בחר משך"
                                 />
                             </div>
 
-                            {/* 4. Notes */}
-                            <div className={styles.notesWrapper}>
-                                <input 
-                                    type="text" 
-                                    value={report.notes}
-                                    onChange={(e) => updateReport(report.id, 'notes', e.target.value)}
-                                    placeholder="הוסף הערה..." 
-                                    className={styles.notesInput}
-                                />
-                            </div>
 
                         </div>
                     ))}

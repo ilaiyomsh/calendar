@@ -20,6 +20,7 @@ const DEFAULT_SETTINGS = {
   reporterColumnId: null,      // עמודת People למדווח
   statusColumnId: null,        // עמודת Status לצביעת אירועים לפי צבע הסטטוס
   eventTypeStatusColumnId: null, // עמודת Status להגדרת סוג האירוע (חופשה/מחלה/מילואים/שעתי)
+  stageColumnId: null,         // עמודת Status או Dropdown לשלב
   
   // הגדרות מוצרים - רמת היררכיה נוספת
   productsBoardId: null,       // מזהה לוח המוצרים

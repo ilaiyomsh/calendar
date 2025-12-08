@@ -1,0 +1,106 @@
+.container {
+    position: relative;
+    width: 100%;
+}
+
+.trigger {
+    width: 100%;
+    background-color: white;
+    border: 1px solid #d0d4e4;
+    border-radius: 4px;
+    padding: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-sizing: border-box;
+}
+
+.trigger:hover {
+    border-color: #0073ea;
+}
+
+.trigger:focus-within {
+    border-color: #0073ea;
+    outline: none;
+}
+
+.trigger:disabled,
+.trigger.disabled {
+    background-color: #f6f7fb;
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.triggerText {
+    font-size: 0.9rem;
+    color: #323338;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+    min-width: 0;
+    text-align: right;
+}
+
+.triggerIcon {
+    color: #676879;
+    font-size: 12px;
+    margin-right: 4px;
+}
+
+.dropdown {
+    position: fixed;
+    z-index: 10020;
+    margin-top: 4px;
+    background-color: #ffffff;
+    border: 1px solid #d0d4e4;
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    max-height: 240px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.stagesList {
+    overflow-y: auto;
+    flex: 1;
+    padding: 8px;
+}
+
+.stageItem {
+    padding: 10px 12px;
+    font-size: 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background-color 0.15s;
+    background-color: transparent;
+    color: #323338;
+    font-weight: normal;
+}
+
+.stageItem:hover {
+    background-color: #f6f7fb;
+    color: #323338;
+}
+
+.stageItem.selected {
+    background-color: #e3f2fd;
+    color: #0073e6;
+    font-weight: 500;
+}
+
+.stageItem.selected:hover {
+    background-color: #e3f2fd;
+    color: #0073e6;
+}
+
+.emptyState {
+    padding: 16px;
+    text-align: center;
+    font-size: 12px;
+    color: #676879;
+}
+

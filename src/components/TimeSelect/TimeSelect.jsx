@@ -1,0 +1,254 @@
+import React, { useEffect, useRef, useState } from 'react';
+import styles from './TimeSelect.module.css';
+
+/**
+ * רכיב Dropdown לזמנים
+ */
+const TimeSelect = ({ 
+    times, 
+    selectedTime, 
+    onSelectTime, 
+    isLoading, 
+    disabled,
+    placeholder = "בחר שעה ..."
+}) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const [dropdownPosition, setDropdownPosition] = useState({ top: 'auto', bottom: 'auto', left: 'auto', width: 'auto' });
+    const [inputValue, setInputValue] = useState(selectedTime || '');
+    const containerRef = useRef(null);
+    const dropdownRef = useRef(null);
+    const timesListRef = useRef(null);
+    const inputRef = useRef(null);
+
+    // חישוב מיקום ה-dropdown
+    const calculateDropdownPosition = () => {
+        if (!containerRef.current) return;
+        
+        const rect = containerRef.current.getBoundingClientRect();
+        const viewportHeight = window.innerHeight;
+        const spaceBelow = viewportHeight - rect.bottom;
+        const spaceAbove = rect.top;
+        const dropdownHeight = 240; // max-height של ה-dropdown
+        
+        // חישוב מיקום אופקי
+        const left = rect.left;
+        const width = 100; // רוחב קבוע של 100px
+        
+        // אם אין מספיק מקום למטה אבל יש למעלה, נציג למעלה
+        if (spaceBelow < dropdownHeight && spaceAbove > spaceBelow) {
+            setDropdownPosition({ 
+                bottom: `${viewportHeight - rect.top + 4}px`,
+                top: 'auto',
+                left: `${left}px`,
+                width: `${width}px`
+            });
+        } else {
+            setDropdownPosition({ 
+                top: `${rect.bottom + 4}px`,
+                bottom: 'auto',
+                left: `${left}px`,
+                width: `${width}px`
+            });
+        }
+    };
+
+    useEffect(() => {
+        if (isOpen) {
+            calculateDropdownPosition();
+            
+            // גלילה אוטומטית לפריט שנבחר
+            if (timesListRef.current && selectedTime) {
+                const selectedIndex = times.findIndex(t => t.value === selectedTime || t.label === selectedTime);
+                if (selectedIndex !== -1) {
+                    // נחכה קצת כדי שה-dropdown יוצג קודם
+                    setTimeout(() => {
+                        const selectedElement = timesListRef.current.children[selectedIndex];
+                        if (selectedElement) {
+                            selectedElement.scrollIntoView({ block: 'start', behavior: 'auto' });
+                        }
+                    }, 0);
+                }
+            }
+            
+            // עדכון מיקום בעת גלילה או שינוי גודל
+            const handleScroll = () => {
+                calculateDropdownPosition();
+            };
+            
+            const handleResize = () => {
+                calculateDropdownPosition();
+            };
+            
+            window.addEventListener('scroll', handleScroll, true);
+            window.addEventListener('resize', handleResize);
+            
+            return () => {
+                window.removeEventListener('scroll', handleScroll, true);
+                window.removeEventListener('resize', handleResize);
+            };
+        }
+    }, [isOpen, selectedTime, times]);
+
+    // עדכון inputValue כש-selectedTime משתנה מבחוץ
+    useEffect(() => {
+        setInputValue(selectedTime || '');
+    }, [selectedTime]);
+
+    // סגירת הדרופדאון בלחיצה מחוץ לרכיב
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (containerRef.current && !containerRef.current.contains(event.target)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    // פונקציה לבדיקת תקינות ועגול ל-30 דקות
+    const validateAndRoundTime = (value) => {
+        if (!value || value.trim() === '') return null;
+        
+        // בדיקה שהפורמט תקין (HH:mm או H:mm)
+        const timeRegex = /^([0-1]?[0-9]|2[0-3]):([0-5][0-9])$/;
+        if (!timeRegex.test(value)) return null;
+        
+        const [hours, minutes] = value.split(':').map(Number);
+        
+        // עיגול ל-30 דקות הקרוב
+        const roundedMinutes = minutes < 30 ? 0 : 30;
+        const roundedTime = `${hours.toString().padStart(2, '0')}:${roundedMinutes.toString().padStart(2, '0')}`;
+        
+        // בדיקה שהזמן נמצא ברשימת הזמנים הזמינים
+        const isValidTime = times.some(t => t.value === roundedTime || t.label === roundedTime);
+        return isValidTime ? roundedTime : null;
+    };
+
+    const selectedOption = times.find(t => t.value === selectedTime || t.label === selectedTime);
+
+    const handleSelect = (timeValue) => {
+        onSelectTime(timeValue);
+        setInputValue(timeValue);
+        setIsOpen(false);
+    };
+
+    const handleInputChange = (e) => {
+        const value = e.target.value;
+        let newValue = value;
+        
+        // אם המשתמש הקליד 2 ספרות ללא נקודתיים, מוסיפים נקודתיים ומעבירים פוקוס
+        if (value.length === 2 && !value.includes(':')) {
+            newValue = value + ':';
+            setInputValue(newValue);
+            // מעבר אוטומטי לחלק הדקות (לאחר ה-:)
+            setTimeout(() => {
+                if (inputRef.current) {
+                    const cursorPosition = 3; // מיקום אחרי ה-:
+                    inputRef.current.setSelectionRange(cursorPosition, cursorPosition);
+                }
+            }, 0);
+        } else {
+            setInputValue(newValue);
+        }
+        
+        // אם הערך תקין, מעדכן מיד
+        const validated = validateAndRoundTime(newValue);
+        if (validated) {
+            onSelectTime(validated);
+        }
+    };
+
+    const handleInputBlur = (e) => {
+        // בעת איבוד פוקוס, מאמת ומעגל
+        const validated = validateAndRoundTime(e.target.value);
+        if (validated) {
+            setInputValue(validated);
+            onSelectTime(validated);
+        } else if (e.target.value) {
+            // אם הערך לא תקין, מחזיר לערך הקודם
+            setInputValue(selectedTime || '');
+        }
+        setIsOpen(false);
+    };
+
+    const handleInputFocus = () => {
+        if (!disabled && !isLoading) {
+            setIsOpen(true);
+        }
+    };
+
+    const handleIconClick = (e) => {
+        e.stopPropagation();
+        if (!disabled && !isLoading) {
+            if (inputRef.current) {
+                inputRef.current.focus();
+            }
+            setIsOpen(!isOpen);
+        }
+    };
+
+    return (
+        <div className={styles.container} ref={containerRef}>
+            {/* הטריגר - Input עם Dropdown */}
+            <div className={`${styles.trigger} ${disabled ? styles.disabled : ''}`}>
+                <input
+                    ref={inputRef}
+                    type="text"
+                    value={inputValue}
+                    onChange={handleInputChange}
+                    onBlur={handleInputBlur}
+                    onFocus={handleInputFocus}
+                    placeholder={isLoading ? "טוען..." : placeholder}
+                    disabled={disabled || isLoading}
+                    className={styles.input}
+                    maxLength={5}
+                />
+                <div 
+                    className={styles.triggerIcon}
+                    onClick={handleIconClick}
+                >
+                    {isLoading ? "⏳" : (isOpen ? "▲" : "▼")}
+                </div>
+            </div>
+
+            {/* הרשימה הנפתחת */}
+            {isOpen && !disabled && (
+                <div 
+                    ref={dropdownRef}
+                    className={styles.dropdown}
+                    style={{
+                        top: dropdownPosition.top,
+                        bottom: dropdownPosition.bottom,
+                        left: dropdownPosition.left,
+                        width: dropdownPosition.width
+                    }}
+                >
+                    {/* רשימת זמנים */}
+                    <div className={styles.timesList} ref={timesListRef}>
+                        {times.length > 0 ? (
+                            times.map((time) => {
+                                const isSelected = selectedTime === time.value || selectedTime === time.label;
+                                return (
+                                    <div
+                                        key={time.value || time.label}
+                                        className={`${styles.timeItem} ${isSelected ? styles.selected : ''}`}
+                                        onClick={() => handleSelect(time.value || time.label)}
+                                    >
+                                        {time.label || time.value}
+                                    </div>
+                                );
+                            })
+                        ) : (
+                            <div className={styles.emptyState}>
+                                אין זמנים זמינים
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+export default TimeSelect;
+

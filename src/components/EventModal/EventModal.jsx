@@ -2,8 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useCustomers } from '../../hooks/useCustomers';
 import { useProducts } from '../../hooks/useProducts';
+import { useStageOptions } from '../../hooks/useStageOptions';
 import { fetchCurrentUser } from '../../utils/mondayApi';
 import ProductSelect from '../ProductSelect';
+import StageSelect from '../StageSelect';
 import ConfirmDialog from '../ConfirmDialog';
 import styles from './EventModal.module.css';
 
@@ -42,12 +44,29 @@ export default function EventModal({
     // State - צריך להיות מוגדר לפני useEffect שמשתמש בו
     const [notes, setNotes] = useState("");
     const [selectedProduct, setSelectedProduct] = useState(null);
+    const [selectedStage, setSelectedStage] = useState(null);
     const [isCreatingProduct, setIsCreatingProduct] = useState(false);
     // State נפרד למוצרים של הלקוח הנבחר - כמו ב-AllDayEventModal
     const [selectedItemProducts, setSelectedItemProducts] = useState([]);
     
     // State - תיבת אישור למחיקה
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    
+    // טעינת ערכי שלב
+    const [boardId, setBoardId] = useState(null);
+    useEffect(() => {
+        if (monday) {
+            monday.get('context').then(context => {
+                setBoardId(context.data?.boardId);
+            });
+        }
+    }, [monday]);
+    
+    const { stageOptions, loading: loadingStages } = useStageOptions(
+        monday,
+        customSettings.stageColumnId && boardId ? boardId : null,
+        customSettings.stageColumnId
+    );
     
     // עדכון selectedItem כש-localCustomers משתנה (אם יש propSelectedItem)
     // אבל לא בעת יצירת מוצר חדש כדי למנוע race conditions
@@ -65,6 +84,7 @@ export default function EventModal({
                 // מצב עריכה - טעינת נתונים קיימים
                 setNotes(eventToEdit.notes || "");
                 setSelectedProduct(eventToEdit.productId || null);
+                setSelectedStage(eventToEdit.stageId || null);
                 // מציאת הלקוח מהרשימה
                 if (eventToEdit.customerId && localCustomers.length > 0) {
                     const customer = localCustomers.find(c => c.id === eventToEdit.customerId);
@@ -89,6 +109,7 @@ export default function EventModal({
                 setSelectedItemProducts([]);
                 setNotes("");
                 setSelectedProduct(null);
+                setSelectedStage(null);
                 setIsCreatingProduct(false);
             }
         }
@@ -101,6 +122,8 @@ export default function EventModal({
             if (!isEditMode) {
                 setSelectedItemProducts([]);
                 setSelectedProduct(null);
+                // איפוס שלב כשהמוצר מוסר
+                setSelectedStage(null);
                 fetchForCustomer(selectedItem.id);
             }
             // במצב עריכה - לא עושים כלום כאן (כי כבר טענו ב-useEffect הקודם)
@@ -108,6 +131,13 @@ export default function EventModal({
             setSelectedItemProducts([]);
         }
     }, [selectedItem, isCreatingProduct, customSettings.productsCustomerColumnId, fetchForCustomer, isEditMode]);
+    
+    // איפוס שלב כשהמוצר מוסר (אבל לא כשהמוצר משתנה)
+    useEffect(() => {
+        if (!selectedProduct && customSettings.stageColumnId) {
+            setSelectedStage(null);
+        }
+    }, [selectedProduct, customSettings.stageColumnId]);
     
     // עדכון selectedItemProducts כשהמוצרים נטענים (במצב עריכה - עדכון הרשימה אחרי שהתיבה כבר נפתחה)
     useEffect(() => {
@@ -161,6 +191,12 @@ export default function EventModal({
             alert('יש לבחור מוצר');
             return;
         }
+        
+        // בדיקת בחירת שלב אם יש מוצר
+        if (customSettings.productColumnId && selectedProduct && customSettings.stageColumnId && !selectedStage) {
+            alert('יש לבחור שלב');
+            return;
+        }
 
         // שליפת שם המשתמש ושם המוצר
         const currentUser = await fetchCurrentUser(monday);
@@ -172,7 +208,8 @@ export default function EventModal({
             title: `${productName} - ${reporterName}`,  // במקום selectedItem.name
             itemId: selectedItem?.id,
             notes: notes,
-            productId: selectedProduct
+            productId: selectedProduct,
+            stageId: selectedStage
         };
 
         if (isEditMode && onUpdate) {
@@ -198,6 +235,7 @@ export default function EventModal({
     const isFormValid = () => {
         if (!selectedItem) return false;
         if (customSettings.productColumnId && !selectedProduct) return false;
+        if (customSettings.productColumnId && selectedProduct && customSettings.stageColumnId && !selectedStage) return false;
         return true;
     };
 
@@ -289,18 +327,21 @@ export default function EventModal({
                         </div>
                     )}
 
-                    {/* הערות נוספות */}
-                    <div className={styles.formGroup}>
-                        <label className={styles.label}>הערות נוספות</label>
-                        <input
-                            type="text"
-                            className={styles.input}
-                            placeholder="פרטים נוספים על העבודה..."
-                            value={notes}
-                            onChange={(e) => setNotes(e.target.value)}
-                            onKeyDown={handleKeyDown}
-                        />
-                    </div>
+                    {/* סעיף בחירת שלב */}
+                    {customSettings.stageColumnId && selectedItem && (
+                        <div className={styles.formGroup}>
+                            <label className={styles.label}>שלב {customSettings.productColumnId && selectedProduct && <span className={styles.required}></span>}</label>
+                            <div className={styles.productSection}>
+                                <StageSelect 
+                                    stages={stageOptions}
+                                    selectedStage={selectedStage}
+                                    onSelectStage={setSelectedStage}
+                                    isLoading={loadingStages}
+                                    disabled={false}
+                                />
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* Footer */}

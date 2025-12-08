@@ -49,6 +49,11 @@ export const useSettingsValidation = (settings, context) => {
       }
     }
 
+    // בדיקת שלב - חובה אם יש מוצר
+    if (settings.productColumnId && !settings.stageColumnId) {
+      errs.stageColumnId = 'יש לבחור עמודת שלב (חובה אם יש הגדרת מוצר)';
+    }
+
     // בדיקת שעות עבודה
     if (settings.workDayStart && settings.workDayEnd) {
       const [startHours, startMinutes] = settings.workDayStart.split(':').map(Number);

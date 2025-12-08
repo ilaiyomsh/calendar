@@ -233,14 +233,17 @@
 .timesGroup {
   display: flex;
   align-items: flex-end;
-  gap: 12px;
+  gap: 8px;
   flex-shrink: 0; /* מונע התכווצות */
+  min-width: auto;
 }
 
 .timeFieldWrapper {
   display: flex;
   flex-direction: column;
   align-items: center;
+  min-width: 100px;
+  width: 100px;
 }
 
 .timeLabelSmall {
@@ -253,11 +256,11 @@
 .timeInputInline {
   color: #374151;
   font-weight: 500;
-  font-size: 1.125rem;
+  font-size: 1rem;
   background-color: transparent;
   border: none;
   padding: 0;
-  width: 70px;
+  width: 60px;
   text-align: center;
   cursor: text;
   transition: background-color 0.2s;
@@ -303,14 +306,16 @@
   align-items: center;
   padding-top: 0;
   flex-shrink: 0; /* מונע התכווצות */
+  min-width: 100px;
+  width: 100px;
 }
 
 .durationInputInline {
-  font-size: 1.125rem;
+  font-size: 1rem;
   color: #1f2937;
   font-family: 'Courier New', monospace;
   letter-spacing: 0.05em;
-  width: 70px;
+  width: 60px;
   text-align: center;
   background-color: transparent;
   border: none;
@@ -394,7 +399,7 @@
 }
 
 .customerProductGroup {
-  width: 192px; /* w-48 = 12rem = 192px */
+  width: 250px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;

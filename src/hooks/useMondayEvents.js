@@ -198,6 +198,9 @@ export const useMondayEvents = (monday, context) => {
                 const statusColumn = customSettings.statusColumnId 
                     ? item.column_values.find(col => col.id === customSettings.statusColumnId)
                     : null;
+                const stageColumn = customSettings.stageColumnId 
+                    ? item.column_values.find(col => col.id === customSettings.stageColumnId)
+                    : null;
 
                 // חילוץ התחלה
                 let start = null;
@@ -270,6 +273,30 @@ export const useMondayEvents = (monday, context) => {
                     statusColor = statusColumn.label_style.color;
                 }
 
+                // חילוץ שלב (רק אם יש ערך, לא להציג ביומן)
+                let stageId = null;
+                if (stageColumn) {
+                    if (stageColumn.label) {
+                        stageId = stageColumn.label;
+                    } else if (stageColumn.value) {
+                        try {
+                            const parsed = typeof stageColumn.value === 'string' 
+                                ? JSON.parse(stageColumn.value) 
+                                : stageColumn.value;
+                            if (parsed?.label) {
+                                stageId = parsed.label;
+                            } else if (typeof parsed === 'string') {
+                                stageId = parsed;
+                            }
+                        } catch (e) {
+                            // אם יש שגיאה בפענוח, ננסה את הערך הישיר
+                            if (typeof stageColumn.value === 'string') {
+                                stageId = stageColumn.value;
+                            }
+                        }
+                    }
+                }
+
                 // חישוב סיום
                 let end;
                 let isAllDay = false;
@@ -289,7 +316,8 @@ export const useMondayEvents = (monday, context) => {
                     allDay: isAllDay,
                     mondayItemId: item.id,
                     notes: notes,
-                    statusColor: statusColor
+                    statusColor: statusColor,
+                    stageId: stageId
                 };
             }).filter(Boolean);
 
@@ -377,6 +405,13 @@ export const useMondayEvents = (monday, context) => {
         if (customSettings.eventTypeStatusColumnId) {
             columnValues[customSettings.eventTypeStatusColumnId] = {
                 label: "שעתי"
+            };
+        }
+        
+        // הוספת שלב (אם יש מוצר ויש הגדרה לעמודה)
+        if (eventData.stageId && customSettings.stageColumnId) {
+            columnValues[customSettings.stageColumnId] = {
+                label: eventData.stageId
             };
         }
 
