@@ -39,7 +39,11 @@ export const useSettingsValidation = (settings, context) => {
       }
     }
 
-    // בדיקת מוצרים (אופציונלי אבל אם יש עמודת מוצרים, צריך את כל השדות)
+    // בדיקת מוצרים - חובה במערכת
+    if (!settings.productsCustomerColumnId) {
+      errs.productsCustomerColumnId = 'יש לבחור עמודת מוצרים בלוח לקוחות';
+    }
+    
     if (settings.productsCustomerColumnId) {
       if (!settings.productsBoardId) {
         errs.productsBoardId = 'יש לבחור לוח מוצרים';

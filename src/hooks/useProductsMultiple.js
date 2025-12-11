@@ -1,7 +1,6 @@
 import { useState, useCallback } from 'react';
 import mondaySdk from 'monday-sdk-js';
 import { useSettings } from '../contexts/SettingsContext';
-import { createProduct } from '../utils/mondayApi';
 import logger from '../utils/logger';
 
 const monday = mondaySdk();
@@ -80,31 +79,93 @@ export const useProductsMultiple = () => {
             return null;
         }
 
+        // בדיקה שיש productsCustomerColumnId
+        if (!customSettings.productsCustomerColumnId) {
+            logger.warn('useProductsMultiple', 'productsCustomerColumnId is required but not set');
+            return null;
+        }
+
         logger.functionStart('useProductsMultiple.createProductForCustomer', { customerId, productName });
 
         try {
-            const newProduct = await createProduct(
-                monday,
-                customSettings.productsBoardId,
-                customSettings.connectedBoardId,
-                customerId,
-                productName
-            );
+            // שלב 1: יצירת המוצר בלי קישור
+            const createMutation = `mutation {
+                create_item(
+                    board_id: ${customSettings.productsBoardId},
+                    item_name: "${productName}"
+                ) {
+                    id
+                    name
+                }
+            }`;
 
-            if (newProduct) {
-                setProducts(prev => ({
-                    ...prev,
-                    [customerId]: [...(prev[customerId] || []), newProduct]
-                }));
-                logger.functionEnd('useProductsMultiple.createProductForCustomer', { product: newProduct });
-                return newProduct;
+            logger.api('useProductsMultiple.createProductForCustomer - create item', createMutation);
+
+            const createStartTime = Date.now();
+            const createRes = await monday.api(createMutation);
+            const createDuration = Date.now() - createStartTime;
+
+            logger.apiResponse('useProductsMultiple.createProductForCustomer - create item', createRes, createDuration);
+
+            if (!createRes.data?.create_item) {
+                logger.warn('useProductsMultiple', 'No product created in response');
+                return null;
             }
-            return null;
+
+            const newProduct = createRes.data.create_item;
+            logger.debug('useProductsMultiple', 'Product created successfully', { productId: newProduct.id });
+
+            // שלב 2: שימוש במוצרים הקיימים מה-state של הלקוח הספציפי
+            const existingProducts = products[customerId] || [];
+            const existingProductIds = existingProducts.map(product => product.id);
+            const allProductIds = [...existingProductIds, newProduct.id];
+
+            logger.debug('useProductsMultiple', 'Updating customer with products', { 
+                customerId,
+                existingCount: existingProductIds.length, 
+                newProductId: newProduct.id,
+                totalCount: allProductIds.length 
+            });
+
+            // שלב 3: עדכון הלקוח עם כל המוצרים (קיימים + חדש)
+            const columnValues = {
+                [customSettings.productsCustomerColumnId]: {
+                    item_ids: allProductIds.map(id => parseInt(id))
+                }
+            };
+
+            const updateMutation = `mutation {
+                change_multiple_column_values(
+                    item_id: ${customerId},
+                    board_id: ${customSettings.connectedBoardId},
+                    column_values: ${JSON.stringify(JSON.stringify(columnValues))}
+                ) {
+                    id
+                }
+            }`;
+
+            logger.api('useProductsMultiple.createProductForCustomer - update customer', updateMutation);
+
+            const updateStartTime = Date.now();
+            const updateRes = await monday.api(updateMutation);
+            const updateDuration = Date.now() - updateStartTime;
+
+            logger.apiResponse('useProductsMultiple.createProductForCustomer - update customer', updateRes, updateDuration);
+
+            // עדכון state עם המוצר החדש
+            setProducts(prev => ({
+                ...prev,
+                [customerId]: [...(prev[customerId] || []), newProduct]
+            }));
+            logger.functionEnd('useProductsMultiple.createProductForCustomer', { product: newProduct });
+            return newProduct;
+
         } catch (err) {
+            logger.apiError('useProductsMultiple.createProductForCustomer', err);
             logger.error('useProductsMultiple', 'Error creating product', err);
             return null;
         }
-    }, [customSettings.productsBoardId, customSettings.connectedBoardId]);
+    }, [customSettings.productsBoardId, customSettings.connectedBoardId, customSettings.productsCustomerColumnId, products]);
 
     return {
         products,

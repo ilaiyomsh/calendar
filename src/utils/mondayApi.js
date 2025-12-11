@@ -126,90 +126,66 @@ export const fetchAllBoardItems = async (monday, boardId) => {
     }
 };
 
-// יצירת אייטם חדש בלוח עם ערכי עמודות
+// יצירת אייטם חדש בלוח עם ערכי עמודות - גרסה מתוקנת ובטוחה
 export const createBoardItem = async (monday, boardId, itemName, columnValues = null) => {
+    // לוג התחלה
     logger.functionStart('createBoardItem', { boardId, itemName, hasColumnValues: !!columnValues });
 
+    // 1. הגדרת ה-Mutation עם משתנים (Variables)
+    // שים לב לשימוש ב-$ לפני שמות המשתנים
+    // הסוג JSON! ב-Monday מצפה לקבל *מחרוזת* שמכילה JSON
+    const query = `mutation create_item($boardId: ID!, $itemName: String!, $columnValues: JSON) {
+        create_item (
+            board_id: $boardId,
+            item_name: $itemName,
+            column_values: $columnValues
+        ) {
+            id
+            name
+        }
+    }`;
+
+    // 2. הכנת אובייקט המשתנים
+    // תיקון: בדיקה אם columnValues הוא כבר מחרוזת כדי למנוע stringify כפול
+    let formattedColumnValues = null;
     if (columnValues) {
-        // המרת columnValues ל-JSON string פעם אחת
-        const columnValuesJson = (columnValues);
-        
-        // GraphQL מצפה ל-string literal, אז אנחנו צריכים escape של הגרשיים הפנימיים
-        // אבל לא לעשות JSON.stringify נוסף - רק להשתמש ב-columnValuesJson ישירות
-        // Template string יעשה את ה-escape הנדרש
-        const mutation = `mutation {
-            create_item (
-                board_id: ${boardId},
-                item_name: ${JSON.stringify(itemName)},
-                column_values: "${columnValuesJson.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"
-            ) {
-                id
-                name
-            }
-        }`;
-
-        // לוגים להערה - ניתן להפעיל לצורך דיבוג
-        // console.log('[createBoardItem] Mutation:', mutation);
-        // console.log('[createBoardItem] Column Values (raw):', columnValues);
-        // console.log('[createBoardItem] Column Values (JSON):', columnValuesJson);
-        
-        logger.api('createBoardItem', mutation);
-
-        try {
-            const startTime = Date.now();
-            const response = await monday.api(mutation);
-            const duration = Date.now() - startTime;
-
-            logger.apiResponse('createBoardItem', response, duration);
-            
-            // בדיקה אם ה-API החזיר שגיאות
-            if (response.errors) {
-                throw new Error(JSON.stringify(response.errors));
-            }
-            
-            logger.functionEnd('createBoardItem', { item: response.data?.create_item });
-        
-            return response.data?.create_item;
-        } catch (error) {
-            // לוג שגיאה קריטי - נשאר פעיל גם בפרודקשן
-            logger.apiError('createBoardItem', error);
-            throw error;
+        if (typeof columnValues === 'string') {
+            formattedColumnValues = columnValues; // כבר מחרוזת, לא צריך המרה
+        } else {
+            formattedColumnValues = JSON.stringify(columnValues); // אובייקט, צריך המרה
         }
-    } else {
-        const mutation = `mutation {
-            create_item (
-                board_id: ${boardId},
-                item_name: ${JSON.stringify(itemName)}
-            ) {
-                id
-                name
-            }
-        }`;
+    }
 
-        // לוג להערה - ניתן להפעיל לצורך דיבוג
-        // console.log('[createBoardItem] Mutation (no column values):', mutation);
-        logger.api('createBoardItem', mutation);
+    const variables = {
+        boardId: parseInt(boardId),
+        itemName: itemName,
+        columnValues: formattedColumnValues
+    };
 
-        try {
-            const startTime = Date.now();
-            const response = await monday.api(mutation);
-            const duration = Date.now() - startTime;
+    // עדכון הלוג שיראה גם את המשתנים (עוזר לדיבוג)
+    logger.api('createBoardItem', query, variables);
 
-            logger.apiResponse('createBoardItem', response, duration);
-            
-            // בדיקה אם ה-API החזיר שגיאות
-            if (response.errors) {
-                throw new Error(JSON.stringify(response.errors));
-            }
-            
-            logger.functionEnd('createBoardItem', { item: response.data?.create_item });
+    try {
+        const startTime = Date.now();
         
-            return response.data?.create_item;
-        } catch (error) {
-            // לוג שגיאה קריטי - נשאר פעיל גם בפרודקשן
-            logger.apiError('createBoardItem', error);
-            throw error;
+        // 3. שליחת השאילתה יחד עם המשתנים
+        const response = await monday.api(query, { variables });
+        
+        const duration = Date.now() - startTime;
+        logger.apiResponse('createBoardItem', response, duration);
+        
+        // בדיקת שגיאות ברמת ה-GraphQL
+        if (response.errors) {
+            throw new Error(JSON.stringify(response.errors));
         }
+        
+        logger.functionEnd('createBoardItem', { item: response.data?.create_item });
+    
+        return response.data?.create_item;
+    } catch (error) {
+        // לוג שגיאה קריטי - נשאר פעיל גם בפרודקשן
+        logger.apiError('createBoardItem', error);
+        throw error;
     }
 };
 

@@ -142,60 +142,88 @@ export const useProducts = () => {
             return null;
         }
 
+        // בדיקה שיש productsCustomerColumnId
+        if (!customSettings.productsCustomerColumnId) {
+            logger.warn('useProducts', 'productsCustomerColumnId is required but not set');
+            return null;
+        }
+
         logger.functionStart('useProducts.createProduct', { customerId, productName });
 
         try {
-            // מציאת העמודה בלוח המוצרים שמקשרת ללקוח
-            const customerLinkColumnId = await findCustomerLinkColumn(
-                customSettings.productsBoardId,
-                customSettings.connectedBoardId
-            );
-
-            if (!customerLinkColumnId) {
-                logger.warn('useProducts', 'Could not find customer link column in products board');
-                return null;
-            }
-
-            const columnValues = JSON.stringify({
-                [customerLinkColumnId]: {
-                    item_ids: [parseInt(customerId)]
-                }
-            });
-
-            const mutation = `mutation {
+            // שלב 1: יצירת המוצר בלי קישור
+            const createMutation = `mutation {
                 create_item(
                     board_id: ${customSettings.productsBoardId},
-                    item_name: "${productName}",
-                    column_values: ${JSON.stringify(columnValues)}
+                    item_name: "${productName}"
                 ) {
                     id
                     name
                 }
             }`;
 
-            logger.api('createProduct', mutation);
+            logger.api('createProduct - create item', createMutation);
 
-            const startTime = Date.now();
-            const res = await monday.api(mutation);
-            const duration = Date.now() - startTime;
+            const createStartTime = Date.now();
+            const createRes = await monday.api(createMutation);
+            const createDuration = Date.now() - createStartTime;
 
-            logger.apiResponse('createProduct', res, duration);
+            logger.apiResponse('createProduct - create item', createRes, createDuration);
 
-            if (res.data?.create_item) {
-                const newProduct = res.data.create_item;
-                setProducts(prev => [...prev, newProduct]);
-                logger.functionEnd('useProducts.createProduct', { product: newProduct });
-                return newProduct;
-            } else {
+            if (!createRes.data?.create_item) {
                 logger.warn('useProducts', 'No product created in response');
                 return null;
             }
+
+            const newProduct = createRes.data.create_item;
+            logger.debug('useProducts', 'Product created successfully', { productId: newProduct.id });
+
+            // שלב 2: שימוש במוצרים הקיימים מה-state (שנשלפו ב-fetchForCustomer)
+            const existingProductIds = products.map(product => product.id);
+            const allProductIds = [...existingProductIds, newProduct.id];
+
+            logger.debug('useProducts', 'Updating customer with products', { 
+                existingCount: existingProductIds.length, 
+                newProductId: newProduct.id,
+                totalCount: allProductIds.length 
+            });
+
+            // שלב 3: עדכון הלקוח עם כל המוצרים (קיימים + חדש)
+            const columnValues = {
+                [customSettings.productsCustomerColumnId]: {
+                    item_ids: allProductIds.map(id => parseInt(id))
+                }
+            };
+
+            const updateMutation = `mutation {
+                change_multiple_column_values(
+                    item_id: ${customerId},
+                    board_id: ${customSettings.connectedBoardId},
+                    column_values: ${JSON.stringify(JSON.stringify(columnValues))}
+                ) {
+                    id
+                }
+            }`;
+
+            logger.api('createProduct - update customer', updateMutation);
+
+            const updateStartTime = Date.now();
+            const updateRes = await monday.api(updateMutation);
+            const updateDuration = Date.now() - updateStartTime;
+
+            logger.apiResponse('createProduct - update customer', updateRes, updateDuration);
+
+            // עדכון state עם המוצר החדש
+            setProducts(prev => [...prev, newProduct]);
+            logger.functionEnd('useProducts.createProduct', { product: newProduct });
+            return newProduct;
+
         } catch (err) {
             logger.apiError('createProduct', err);
             logger.error('useProducts', 'Error creating product', err);
             return null;
         }
-    }, [customSettings.productsBoardId, customSettings.connectedBoardId, findCustomerLinkColumn]);
+    }, [customSettings.productsBoardId, customSettings.connectedBoardId, customSettings.productsCustomerColumnId, products]);
 
     return {
         products,

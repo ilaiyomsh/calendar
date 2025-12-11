@@ -73,7 +73,7 @@ export default function SettingsDialog({ monday, onClose, context }) {
   // בדיקה אם קטגוריה הוגדרה במלואה
   const isExternalBoardComplete = connectedBoardId && peopleColumnIds.length > 0;
   const isCurrentBoardComplete = context?.boardId && dateColumnId && durationColumnId && projectColumnId && reporterColumnId && eventTypeStatusColumnId;
-  const isProductsComplete = productsCustomerColumnId ? (productsBoardId && productColumnId) : true;
+  const isProductsComplete = productsCustomerColumnId && productsBoardId && productColumnId;
   const isWorkHoursComplete = workDayStart && workDayEnd;
 
   // טעינת הגדרות שמורות בעלייה
@@ -593,7 +593,7 @@ export default function SettingsDialog({ monday, onClose, context }) {
                 id="products"
                 title="הגדרות לוח מוצרים"
                 isComplete={isProductsComplete}
-                description="הגדרת לוח המוצרים ועמודות הקישור (אופציונלי)"
+                description="הגדרת לוח המוצרים ועמודות הקישור (חובה)"
               >
                 <FieldWrapper
                   label="עמודת מוצרים בלוח לקוחות"
