@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import mondaySdk from 'monday-sdk-js';
 import { useSettings } from '../contexts/SettingsContext';
-import { fetchProductsForCustomer, createProduct } from '../utils/mondayApi';
+import { createProduct } from '../utils/mondayApi';
 import logger from '../utils/logger';
 
 const monday = mondaySdk();
@@ -17,10 +17,12 @@ export const useProductsMultiple = () => {
 
     /**
      * אחזור מוצרים לפי לקוח
+     * משתמש ב-productsCustomerColumnId ישירות מההגדרות
      */
     const fetchForCustomer = useCallback(async (customerId) => {
-        if (!customSettings.productsBoardId || !customSettings.connectedBoardId || !customerId) {
-            logger.warn('useProductsMultiple', 'Missing settings or customerId for fetching products');
+        if (!customSettings.productsCustomerColumnId || !customerId) {
+            logger.warn('useProductsMultiple', 'Missing productsCustomerColumnId or customerId for fetching products');
+            setProducts(prev => ({ ...prev, [customerId]: [] }));
             return;
         }
 
@@ -29,22 +31,45 @@ export const useProductsMultiple = () => {
         setLoadingProducts(prev => ({ ...prev, [customerId]: true }));
 
         try {
-            const items = await fetchProductsForCustomer(
-                monday,
-                customSettings.productsBoardId,
-                customSettings.connectedBoardId,
-                customerId
-            );
+            // שאילתה ישירה - לוקחים את הלקוח ובודקים מה יש לו בעמודת המוצרים
+            const query = `query {
+                items(ids: [${customerId}]) {
+                    name
+                    column_values(ids: ["${customSettings.productsCustomerColumnId}"]) {
+                        ...on BoardRelationValue {
+                            linked_items {
+                                id
+                                name
+                            }
+                        }
+                    }
+                }
+            }`;
 
-            setProducts(prev => ({ ...prev, [customerId]: items }));
-            logger.functionEnd('useProductsMultiple.fetchForCustomer', { customerId, count: items.length });
+            logger.api('useProductsMultiple.fetchForCustomer', query);
+
+            const startTime = Date.now();
+            const res = await monday.api(query);
+            const duration = Date.now() - startTime;
+
+            logger.apiResponse('useProductsMultiple.fetchForCustomer', res, duration);
+
+            if (res.data?.items?.[0]?.column_values?.[0]?.linked_items) {
+                const items = res.data.items[0].column_values[0].linked_items;
+                setProducts(prev => ({ ...prev, [customerId]: items }));
+                logger.functionEnd('useProductsMultiple.fetchForCustomer', { customerId, count: items.length });
+            } else {
+                setProducts(prev => ({ ...prev, [customerId]: [] }));
+                logger.debug('useProductsMultiple', 'No products found for customer', customerId);
+            }
         } catch (err) {
+            logger.apiError('useProductsMultiple.fetchForCustomer', err);
             logger.error('useProductsMultiple', 'Error fetching products for customer', err);
             setProducts(prev => ({ ...prev, [customerId]: [] }));
         } finally {
             setLoadingProducts(prev => ({ ...prev, [customerId]: false }));
         }
-    }, [customSettings.productsBoardId, customSettings.connectedBoardId]);
+    }, [customSettings.productsCustomerColumnId]);
 
     /**
      * יצירת מוצר חדש

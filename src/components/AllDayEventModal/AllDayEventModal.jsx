@@ -799,8 +799,8 @@ export default function AllDayEventModal({
                                     }
                                     onSelectTime={(duration) => {
                                         const minutes = parseTime(duration);
-                                        const hours = (minutes / 60).toFixed(2);
-                                        updateReport(report.id, 'hours', hours);
+                                            const hours = (minutes / 60).toFixed(2);
+                                            updateReport(report.id, 'hours', hours);
                                     }}
                                     isLoading={false}
                                     disabled={false}

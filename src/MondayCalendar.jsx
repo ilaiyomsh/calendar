@@ -314,7 +314,7 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
                                 }
                             }
                         }
-                    }
+                }
                 }
                 
             setEventToEdit(updatedEvent);
@@ -931,7 +931,7 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
                 onDelete={handleDeleteEvent}
             />
             
-            <AllDayEventModal
+            <AllDayEventModal 
                 monday={monday} 
                 isOpen={isAllDayModalOpen}
                 onClose={handleCloseAllDayModal}

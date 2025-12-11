@@ -343,58 +343,6 @@ export const findCustomerLinkColumn = async (monday, productsBoardId, customerBo
     }
 };
 
-// אחזור מוצרים לפי לקוח
-export const fetchProductsForCustomer = async (monday, productsBoardId, customerBoardId, customerId) => {
-    logger.functionStart('fetchProductsForCustomer', { productsBoardId, customerBoardId, customerId });
-
-    try {
-        // מציאת העמודה בלוח המוצרים שמקשרת ללקוח
-        const customerLinkColumnId = await findCustomerLinkColumn(monday, productsBoardId, customerBoardId);
-
-        if (!customerLinkColumnId) {
-            logger.warn('fetchProductsForCustomer', 'Could not find customer link column in products board');
-            return [];
-        }
-
-        const query = `query {
-            boards(ids: [${productsBoardId}]) {
-                items_page(
-                    limit: 100,
-                    query_params: {
-                        rules: [
-                            {
-                                column_id: "${customerLinkColumnId}",
-                                compare_value: [${customerId}]
-                            }
-                        ]
-                    }
-                ) {
-                    items {
-                        id
-                        name
-                    }
-                }
-            }
-        }`;
-
-        logger.api('fetchProductsForCustomer', query);
-
-        const startTime = Date.now();
-        const response = await monday.api(query);
-        const duration = Date.now() - startTime;
-
-        logger.apiResponse('fetchProductsForCustomer', response, duration);
-
-        const items = response.data?.boards?.[0]?.items_page?.items || [];
-        logger.functionEnd('fetchProductsForCustomer', { count: items.length });
-        
-        return items;
-    } catch (error) {
-        logger.apiError('fetchProductsForCustomer', error);
-        throw error;
-    }
-};
-
 // יצירת מוצר חדש
 export const createProduct = async (monday, productsBoardId, customerBoardId, customerId, productName) => {
     logger.functionStart('createProduct', { productsBoardId, customerBoardId, customerId, productName });

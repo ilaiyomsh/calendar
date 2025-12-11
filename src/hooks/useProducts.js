@@ -14,11 +14,12 @@ export const useProducts = () => {
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(false);
     
-    // Cache ל-customerLinkColumnId כדי לא לחפש אותו כל פעם
+    // Cache ל-customerLinkColumnId כדי לא לחפש אותו כל פעם (רק ל-createProduct)
     const customerLinkColumnCacheRef = useRef(null);
 
     /**
      * מציאת עמודת Connected Board בלוח המוצרים שמקשרת ללוח הלקוחות
+     * נדרש רק ל-createProduct
      */
     const findCustomerLinkColumn = useCallback(async (productsBoardId, customerBoardId) => {
         if (!productsBoardId || !customerBoardId) return null;
@@ -72,10 +73,12 @@ export const useProducts = () => {
 
     /**
      * אחזור מוצרים לפי לקוח
+     * משתמש ב-productsCustomerColumnId ישירות מההגדרות
      */
     const fetchForCustomer = useCallback(async (customerId) => {
-        if (!customSettings.productsBoardId || !customSettings.connectedBoardId || !customerId) {
-            logger.warn('useProducts', 'Missing settings or customerId for fetching products');
+        if (!customSettings.productsCustomerColumnId || !customerId) {
+            logger.warn('useProducts', 'Missing productsCustomerColumnId or customerId for fetching products');
+            setProducts([]);
             return;
         }
         
@@ -90,63 +93,45 @@ export const useProducts = () => {
         setLoading(true);
 
         try {
-            // מציאת העמודה בלוח המוצרים שמקשרת ללקוח
-            const customerLinkColumnId = await findCustomerLinkColumn(
-                customSettings.productsBoardId,
-                customSettings.connectedBoardId
-            );
-
-            if (!customerLinkColumnId) {
-                logger.warn('useProducts', 'Could not find customer link column in products board');
-                setProducts([]);
-                return;
-            }
-
+            // שאילתה ישירה - לוקחים את הלקוח ובודקים מה יש לו בעמודת המוצרים
             const query = `query {
-                boards(ids: [${customSettings.productsBoardId}]) {
-                    items_page(
-                        limit: 100,
-                        query_params: {
-                            rules: [
-                                {
-                                    column_id: "${customerLinkColumnId}",
-                                    compare_value: [${customerId}]
-                                }
-                            ]
-                        }
-                    ) {
-                        items {
-                            id
-                            name
+                items(ids: [${customerId}]) {
+                    name
+                    column_values(ids: ["${customSettings.productsCustomerColumnId}"]) {
+                        ...on BoardRelationValue {
+                            linked_items {
+                                id
+                                name
+                            }
                         }
                     }
                 }
             }`;
 
-            logger.api('fetchProductsForCustomer', query);
+            logger.api('fetchProductsForCustomer (direct)', query);
 
             const startTime = Date.now();
             const res = await monday.api(query);
             const duration = Date.now() - startTime;
 
-            logger.apiResponse('fetchProductsForCustomer', res, duration);
+            logger.apiResponse('fetchProductsForCustomer (direct)', res, duration);
 
-            if (res.data?.boards?.[0]?.items_page?.items) {
-                const items = res.data.boards[0].items_page.items;
+            if (res.data?.items?.[0]?.column_values?.[0]?.linked_items) {
+                const items = res.data.items[0].column_values[0].linked_items;
                 setProducts(items);
                 logger.functionEnd('useProducts.fetchForCustomer', { count: items.length });
             } else {
                 setProducts([]);
-                logger.warn('useProducts', 'No products found in response');
+                logger.debug('useProducts', 'No products found for customer');
             }
         } catch (err) {
-            logger.apiError('fetchProductsForCustomer', err);
+            logger.apiError('fetchProductsForCustomer (direct)', err);
             logger.error('useProducts', 'Error fetching products', err);
             setProducts([]);
         } finally {
             setLoading(false);
         }
-    }, [customSettings.productsBoardId, customSettings.connectedBoardId, findCustomerLinkColumn]);
+    }, [customSettings.productsCustomerColumnId]);
 
     /**
      * יצירת מוצר חדש

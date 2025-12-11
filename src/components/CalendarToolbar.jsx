@@ -1,7 +1,7 @@
 import React from 'react';
 import { Navigate } from 'react-big-calendar';
 import { IconButton } from '@vibe/core';
-import { Settings, Bug } from '@vibe/icons';
+import { Settings } from '@vibe/icons';
 import { useSettings } from '../contexts/SettingsContext';
 
 const CalendarToolbar = ({ 
@@ -19,27 +19,6 @@ const CalendarToolbar = ({
   events,
   isOwner = false
 }) => {
-  
-  // פונקציית דיבאג - מוצגת רק בפיתוח
-  const handleDebug = async () => {
-    const ctx = await monday.get("context");
-    const stg = await monday.get("settings");
-    const filter = await monday.get("filter");
-    const itemIds = await monday.get("itemIds");
-
-    // לוגים להערה - ניתן להפעיל לצורך דיבוג
-    // console.log("🐛 Debug Info:");
-    // console.log("Context:", ctx);
-    // console.log("Settings:", stg);
-    // console.log("Filter:", filter);
-    // console.log("Item IDs:", itemIds);
-    // console.log("================================================");
-    // console.log("Custom Settings:", customSettings);
-    // console.log("Column IDs:", columnIds);
-    // console.log("Current Events:", events);
-    
-  };
-
   return (
     <div className="rbc-toolbar">
       {/* צד ימין - כפתורי תצוגה + פעולות מותאמות */}
@@ -55,16 +34,6 @@ const CalendarToolbar = ({
             <Settings size={20} />
           </button>
         )}
-
-        {/* כפתור דיבאג */}
-        <button
-          type="button"
-          onClick={handleDebug}
-          title="Debug"
-          style={{ padding: '6px', background: 'transparent', border: 'none', cursor: 'pointer' }}
-        >
-          <Bug size={20} />
-        </button>
 
         {/* כפתורי תצוגה (חודש/שבוע/יום) */}
         {views.map(viewName => (
