@@ -3,6 +3,45 @@
  */
 
 import logger from './logger';
+import { extractOperationName } from './errorHandler';
+
+/**
+ * MondayApiError - שגיאה מותאמת עם פרטי Monday API
+ */
+export class MondayApiError extends Error {
+    constructor(message, { response = null, apiRequest = null, errorCode = null, functionName = null, duration = null } = {}) {
+        super(message);
+        this.name = 'MondayApiError';
+        this.response = response;
+        this.apiRequest = apiRequest;
+        this.errorCode = errorCode;
+        this.functionName = functionName;
+        this.duration = duration;
+        this.timestamp = Date.now();
+        
+        // שמירת stack trace
+        if (Error.captureStackTrace) {
+            Error.captureStackTrace(this, MondayApiError);
+        }
+    }
+    
+    /**
+     * המרה לאובייקט JSON מלא
+     */
+    toJSON() {
+        return {
+            name: this.name,
+            message: this.message,
+            errorCode: this.errorCode,
+            response: this.response,
+            apiRequest: this.apiRequest,
+            functionName: this.functionName,
+            duration: this.duration,
+            timestamp: this.timestamp,
+            stack: this.stack
+        };
+    }
+}
 
 // פונקציה להמרת מחרוזת שעה (HH:MM) לאובייקט Date
 export const parseTimeString = (timeString) => {
@@ -23,22 +62,54 @@ export const fetchColumnSettings = async (monday, boardId, columnId) => {
         }
     }`;
 
+    const apiRequest = {
+        query,
+        variables: null,
+        operationName: extractOperationName(query)
+    };
+
     logger.api('fetchColumnSettings', query);
 
     try {
         const startTime = Date.now();
-    const response = await monday.api(query);
+        const response = await monday.api(query);
         const duration = Date.now() - startTime;
 
         logger.apiResponse('fetchColumnSettings', response, duration);
     
-    const columnSettings = response.data?.boards?.[0]?.columns?.[0]?.settings;
+        // בדיקת שגיאות ברמת ה-GraphQL
+        if (response.errors && response.errors.length > 0) {
+            const firstError = response.errors[0];
+            const errorCode = firstError.extensions?.code || null;
+            throw new MondayApiError(
+                firstError.message || 'Unknown error',
+                { response, apiRequest, errorCode, functionName: 'fetchColumnSettings', duration }
+            );
+        }
+    
+        const columnSettings = response.data?.boards?.[0]?.columns?.[0]?.settings;
         logger.functionEnd('fetchColumnSettings', { hasSettings: !!columnSettings });
     
-    return columnSettings;
+        return columnSettings;
     } catch (error) {
         logger.apiError('fetchColumnSettings', error);
-        throw error;
+        
+        // אם זו כבר MondayApiError, פשוט נזרוק אותה
+        if (error instanceof MondayApiError) {
+            throw error;
+        }
+        
+        // אחרת, נעטוף אותה ב-MondayApiError
+        throw new MondayApiError(
+            error.message || 'Unknown error',
+            { 
+                response: error.response || null, 
+                apiRequest, 
+                errorCode: error.errorCode || null,
+                functionName: 'fetchColumnSettings',
+                duration: Date.now() - (error.startTime || Date.now())
+            }
+        );
     }
 };
 
@@ -63,14 +134,30 @@ export const fetchAllBoardItems = async (monday, boardId) => {
         }
     }`;
 
+    const firstApiRequest = {
+        query: firstQuery,
+        variables: null,
+        operationName: extractOperationName(firstQuery)
+    };
+
     logger.api('fetchAllBoardItems (first page)', firstQuery);
 
     try {
         const startTime = Date.now();
-    const firstResponse = await monday.api(firstQuery);
+        const firstResponse = await monday.api(firstQuery);
         const duration = Date.now() - startTime;
 
         logger.apiResponse('fetchAllBoardItems (first page)', firstResponse, duration);
+        
+        // בדיקת שגיאות ברמת ה-GraphQL
+        if (firstResponse.errors && firstResponse.errors.length > 0) {
+            const firstError = firstResponse.errors[0];
+            const errorCode = firstError.extensions?.code || null;
+            throw new MondayApiError(
+                firstError.message || 'Unknown error',
+                { response: firstResponse, apiRequest: firstApiRequest, errorCode, functionName: 'fetchAllBoardItems', duration }
+            );
+        }
 
     const itemsPage = firstResponse.data?.boards?.[0]?.items_page;
     
@@ -93,13 +180,29 @@ export const fetchAllBoardItems = async (monday, boardId) => {
             }
         }`;
 
-            logger.api(`fetchAllBoardItems (page ${pageCount + 1})`, nextQuery);
+        const nextApiRequest = {
+            query: nextQuery,
+            variables: null,
+            operationName: extractOperationName(nextQuery)
+        };
 
-            const pageStartTime = Date.now();
+        logger.api(`fetchAllBoardItems (page ${pageCount + 1})`, nextQuery);
+
+        const pageStartTime = Date.now();
         const nextResponse = await monday.api(nextQuery);
-            const pageDuration = Date.now() - pageStartTime;
+        const pageDuration = Date.now() - pageStartTime;
 
-            logger.apiResponse(`fetchAllBoardItems (page ${pageCount + 1})`, nextResponse, pageDuration);
+        logger.apiResponse(`fetchAllBoardItems (page ${pageCount + 1})`, nextResponse, pageDuration);
+        
+        // בדיקת שגיאות ברמת ה-GraphQL
+        if (nextResponse.errors && nextResponse.errors.length > 0) {
+            const firstError = nextResponse.errors[0];
+            const errorCode = firstError.extensions?.code || null;
+            throw new MondayApiError(
+                firstError.message || 'Unknown error',
+                { response: nextResponse, apiRequest: nextApiRequest, errorCode, functionName: 'fetchAllBoardItems', duration: pageDuration }
+            );
+        }
 
         const nextPage = nextResponse.data?.next_items_page;
         
@@ -115,14 +218,30 @@ export const fetchAllBoardItems = async (monday, boardId) => {
 
         logger.functionEnd('fetchAllBoardItems', { totalItems: allItems.length, pages: pageCount });
     
-    // המרה לפורמט Combobox
-    return allItems.map(item => ({
-        value: item.id,
-        label: item.name
-    }));
+        // המרה לפורמט Combobox
+        return allItems.map(item => ({
+            value: item.id,
+            label: item.name
+        }));
     } catch (error) {
         logger.apiError('fetchAllBoardItems', error);
-        throw error;
+        
+        // אם זו כבר MondayApiError, פשוט נזרוק אותה
+        if (error instanceof MondayApiError) {
+            throw error;
+        }
+        
+        // אחרת, נעטוף אותה ב-MondayApiError (נשתמש ב-firstApiRequest)
+        throw new MondayApiError(
+            error.message || 'Unknown error',
+            { 
+                response: error.response || null, 
+                apiRequest: firstApiRequest, 
+                errorCode: error.errorCode || null,
+                functionName: 'fetchAllBoardItems',
+                duration: null
+            }
+        );
     }
 };
 
@@ -162,6 +281,12 @@ export const createBoardItem = async (monday, boardId, itemName, columnValues = 
         columnValues: formattedColumnValues
     };
 
+    const apiRequest = {
+        query,
+        variables,
+        operationName: extractOperationName(query)
+    };
+
     // עדכון הלוג שיראה גם את המשתנים (עוזר לדיבוג)
     logger.api('createBoardItem', query, variables);
 
@@ -175,8 +300,13 @@ export const createBoardItem = async (monday, boardId, itemName, columnValues = 
         logger.apiResponse('createBoardItem', response, duration);
         
         // בדיקת שגיאות ברמת ה-GraphQL
-        if (response.errors) {
-            throw new Error(JSON.stringify(response.errors));
+        if (response.errors && response.errors.length > 0) {
+            const firstError = response.errors[0];
+            const errorCode = firstError.extensions?.code || null;
+            throw new MondayApiError(
+                firstError.message || 'Unknown error',
+                { response, apiRequest, errorCode, functionName: 'createBoardItem', duration }
+            );
         }
         
         logger.functionEnd('createBoardItem', { item: response.data?.create_item });
@@ -185,13 +315,36 @@ export const createBoardItem = async (monday, boardId, itemName, columnValues = 
     } catch (error) {
         // לוג שגיאה קריטי - נשאר פעיל גם בפרודקשן
         logger.apiError('createBoardItem', error);
-        throw error;
+        
+        // אם זו כבר MondayApiError, פשוט נזרוק אותה
+        if (error instanceof MondayApiError) {
+            throw error;
+        }
+        
+        // אחרת, נעטוף אותה ב-MondayApiError
+        throw new MondayApiError(
+            error.message || 'Unknown error',
+            { 
+                response: error.response || null, 
+                apiRequest, 
+                errorCode: error.errorCode || null,
+                functionName: 'createBoardItem',
+                duration: Date.now() - (error.startTime || Date.now())
+            }
+        );
     }
 };
 
 // שליפת אירועים מהלוח בטווח תאריכים
 export const fetchEventsFromBoard = async (monday, query) => {
     logger.functionStart('fetchEventsFromBoard');
+    
+    const apiRequest = {
+        query,
+        variables: null,
+        operationName: extractOperationName(query)
+    };
+    
     logger.api('fetchEventsFromBoard', query);
     
     try {
@@ -200,6 +353,16 @@ export const fetchEventsFromBoard = async (monday, query) => {
         const duration = Date.now() - startTime;
 
         logger.apiResponse('fetchEventsFromBoard', response, duration);
+        
+        // בדיקת שגיאות ברמת ה-GraphQL
+        if (response.errors && response.errors.length > 0) {
+            const firstError = response.errors[0];
+            const errorCode = firstError.extensions?.code || null;
+            throw new MondayApiError(
+                firstError.message || 'Unknown error',
+                { response, apiRequest, errorCode, functionName: 'fetchEventsFromBoard', duration }
+            );
+        }
 
         const items = response.data?.boards?.[0]?.items_page?.items || [];
         
@@ -207,7 +370,23 @@ export const fetchEventsFromBoard = async (monday, query) => {
         return items;
     } catch (error) {
         logger.apiError('fetchEventsFromBoard', error);
-        throw error;
+        
+        // אם זו כבר MondayApiError, פשוט נזרוק אותה
+        if (error instanceof MondayApiError) {
+            throw error;
+        }
+        
+        // אחרת, נעטוף אותה ב-MondayApiError
+        throw new MondayApiError(
+            error.message || 'Unknown error',
+            { 
+                response: error.response || null, 
+                apiRequest, 
+                errorCode: error.errorCode || null,
+                functionName: 'fetchEventsFromBoard',
+                duration: Date.now() - (error.startTime || Date.now())
+            }
+        );
     }
 };
 
@@ -257,6 +436,12 @@ export const fetchCustomersForUser = async (monday, boardId, peopleColumnIds) =>
         }
     }`;
 
+    const apiRequest = {
+        query,
+        variables: null,
+        operationName: extractOperationName(query)
+    };
+
     logger.api('fetchCustomersForUser', query);
 
     try {
@@ -265,6 +450,16 @@ export const fetchCustomersForUser = async (monday, boardId, peopleColumnIds) =>
         const duration = Date.now() - startTime;
 
         logger.apiResponse('fetchCustomersForUser', response, duration);
+        
+        // בדיקת שגיאות ברמת ה-GraphQL
+        if (response.errors && response.errors.length > 0) {
+            const firstError = response.errors[0];
+            const errorCode = firstError.extensions?.code || null;
+            throw new MondayApiError(
+                firstError.message || 'Unknown error',
+                { response, apiRequest, errorCode, functionName: 'fetchCustomersForUser', duration }
+            );
+        }
 
         const items = response.data?.boards?.[0]?.items_page?.items || [];
         logger.functionEnd('fetchCustomersForUser', { count: items.length });
@@ -272,7 +467,23 @@ export const fetchCustomersForUser = async (monday, boardId, peopleColumnIds) =>
         return items;
     } catch (error) {
         logger.apiError('fetchCustomersForUser', error);
-        throw error;
+        
+        // אם זו כבר MondayApiError, פשוט נזרוק אותה
+        if (error instanceof MondayApiError) {
+            throw error;
+        }
+        
+        // אחרת, נעטוף אותה ב-MondayApiError
+        throw new MondayApiError(
+            error.message || 'Unknown error',
+            { 
+                response: error.response || null, 
+                apiRequest, 
+                errorCode: error.errorCode || null,
+                functionName: 'fetchCustomersForUser',
+                duration: Date.now() - (error.startTime || Date.now())
+            }
+        );
     }
 };
 
@@ -293,8 +504,25 @@ export const findCustomerLinkColumn = async (monday, productsBoardId, customerBo
             }
         }`;
 
+        const apiRequest = {
+            query,
+            variables: null,
+            operationName: extractOperationName(query)
+        };
+
         logger.api('findCustomerLinkColumn', query);
         const res = await monday.api(query);
+        
+        // בדיקת שגיאות ברמת ה-GraphQL
+        if (res.errors && res.errors.length > 0) {
+            const firstError = res.errors[0];
+            const errorCode = firstError.extensions?.code || null;
+            throw new MondayApiError(
+                firstError.message || 'Unknown error',
+                { response: res, apiRequest, errorCode, functionName: 'findCustomerLinkColumn', duration: null }
+            );
+        }
+        
         const columns = res.data?.boards?.[0]?.columns || [];
 
         // מציאת עמודת board_relation שמקשרת ללוח הלקוחות
@@ -315,7 +543,23 @@ export const findCustomerLinkColumn = async (monday, productsBoardId, customerBo
         return null;
     } catch (error) {
         logger.apiError('findCustomerLinkColumn', error);
-        throw error;
+        
+        // אם זו כבר MondayApiError, פשוט נזרוק אותה
+        if (error instanceof MondayApiError) {
+            throw error;
+        }
+        
+        // אחרת, נעטוף אותה ב-MondayApiError (אבל אין לנו apiRequest כאן)
+        throw new MondayApiError(
+            error.message || 'Unknown error',
+            { 
+                response: error.response || null, 
+                apiRequest: null, 
+                errorCode: error.errorCode || null,
+                functionName: 'findCustomerLinkColumn',
+                duration: null
+            }
+        );
     }
 };
 
@@ -349,6 +593,12 @@ export const createProduct = async (monday, productsBoardId, customerBoardId, cu
             }
         }`;
 
+        const apiRequest = {
+            query: mutation,
+            variables: null,
+            operationName: extractOperationName(mutation)
+        };
+
         logger.api('createProduct', mutation);
 
         const startTime = Date.now();
@@ -356,12 +606,39 @@ export const createProduct = async (monday, productsBoardId, customerBoardId, cu
         const duration = Date.now() - startTime;
 
         logger.apiResponse('createProduct', response, duration);
+        
+        // בדיקת שגיאות ברמת ה-GraphQL
+        if (response.errors && response.errors.length > 0) {
+            const firstError = response.errors[0];
+            const errorCode = firstError.extensions?.code || null;
+            throw new MondayApiError(
+                firstError.message || 'Unknown error',
+                { response, apiRequest, errorCode, functionName: 'createProduct', duration }
+            );
+        }
+        
         logger.functionEnd('createProduct', { product: response.data?.create_item });
         
         return response.data?.create_item;
     } catch (error) {
         logger.apiError('createProduct', error);
-        throw error;
+        
+        // אם זו כבר MondayApiError, פשוט נזרוק אותה
+        if (error instanceof MondayApiError) {
+            throw error;
+        }
+        
+        // אחרת, נעטוף אותה ב-MondayApiError
+        throw new MondayApiError(
+            error.message || 'Unknown error',
+            { 
+                response: error.response || null, 
+                apiRequest: error.apiRequest || null, 
+                errorCode: error.errorCode || null,
+                functionName: 'createProduct',
+                duration: Date.now() - (error.startTime || Date.now())
+            }
+        );
     }
 };
 
@@ -379,6 +656,12 @@ export const updateItemColumnValues = async (monday, boardId, itemId, columnValu
         }
     }`;
 
+    const apiRequest = {
+        query: mutation,
+        variables: null,
+        operationName: extractOperationName(mutation)
+    };
+
     logger.api('updateItemColumnValues', mutation);
 
     try {
@@ -387,12 +670,39 @@ export const updateItemColumnValues = async (monday, boardId, itemId, columnValu
         const duration = Date.now() - startTime;
 
         logger.apiResponse('updateItemColumnValues', response, duration);
+        
+        // בדיקת שגיאות ברמת ה-GraphQL
+        if (response.errors && response.errors.length > 0) {
+            const firstError = response.errors[0];
+            const errorCode = firstError.extensions?.code || null;
+            throw new MondayApiError(
+                firstError.message || 'Unknown error',
+                { response, apiRequest, errorCode, functionName: 'updateItemColumnValues', duration }
+            );
+        }
+        
         logger.functionEnd('updateItemColumnValues', { success: !!response.data });
         
         return response.data;
     } catch (error) {
         logger.apiError('updateItemColumnValues', error);
-        throw error;
+        
+        // אם זו כבר MondayApiError, פשוט נזרוק אותה
+        if (error instanceof MondayApiError) {
+            throw error;
+        }
+        
+        // אחרת, נעטוף אותה ב-MondayApiError
+        throw new MondayApiError(
+            error.message || 'Unknown error',
+            { 
+                response: error.response || null, 
+                apiRequest, 
+                errorCode: error.errorCode || null,
+                functionName: 'updateItemColumnValues',
+                duration: Date.now() - (error.startTime || Date.now())
+            }
+        );
     }
 };
 
@@ -407,6 +717,12 @@ export const fetchCurrentUser = async (monday) => {
         }
     }`;
 
+    const apiRequest = {
+        query,
+        variables: null,
+        operationName: extractOperationName(query)
+    };
+
     logger.api('fetchCurrentUser', query);
 
     try {
@@ -416,13 +732,39 @@ export const fetchCurrentUser = async (monday) => {
 
         logger.apiResponse('fetchCurrentUser', response, duration);
         
+        // בדיקת שגיאות ברמת ה-GraphQL
+        if (response.errors && response.errors.length > 0) {
+            const firstError = response.errors[0];
+            const errorCode = firstError.extensions?.code || null;
+            throw new MondayApiError(
+                firstError.message || 'Unknown error',
+                { response, apiRequest, errorCode, functionName: 'fetchCurrentUser', duration }
+            );
+        }
+        
         const user = response.data?.me;
         logger.functionEnd('fetchCurrentUser', { hasUser: !!user });
         
         return user;
     } catch (error) {
         logger.apiError('fetchCurrentUser', error);
-        throw error;
+        
+        // אם זו כבר MondayApiError, פשוט נזרוק אותה
+        if (error instanceof MondayApiError) {
+            throw error;
+        }
+        
+        // אחרת, נעטוף אותה ב-MondayApiError
+        throw new MondayApiError(
+            error.message || 'Unknown error',
+            { 
+                response: error.response || null, 
+                apiRequest, 
+                errorCode: error.errorCode || null,
+                functionName: 'fetchCurrentUser',
+                duration: Date.now() - (error.startTime || Date.now())
+            }
+        );
     }
 };
 
@@ -457,6 +799,12 @@ export const fetchItemById = async (monday, boardId, itemId) => {
         }
     }`;
 
+    const apiRequest = {
+        query,
+        variables: null,
+        operationName: extractOperationName(query)
+    };
+
     logger.api('fetchItemById', query);
 
     try {
@@ -465,6 +813,16 @@ export const fetchItemById = async (monday, boardId, itemId) => {
         const duration = Date.now() - startTime;
 
         logger.apiResponse('fetchItemById', response, duration);
+        
+        // בדיקת שגיאות ברמת ה-GraphQL
+        if (response.errors && response.errors.length > 0) {
+            const firstError = response.errors[0];
+            const errorCode = firstError.extensions?.code || null;
+            throw new MondayApiError(
+                firstError.message || 'Unknown error',
+                { response, apiRequest, errorCode, functionName: 'fetchItemById', duration }
+            );
+        }
 
         const items = response.data?.items || [];
         const item = items.length > 0 ? items[0] : null;
@@ -473,7 +831,23 @@ export const fetchItemById = async (monday, boardId, itemId) => {
         return item;
     } catch (error) {
         logger.apiError('fetchItemById', error);
-        throw error;
+        
+        // אם זו כבר MondayApiError, פשוט נזרוק אותה
+        if (error instanceof MondayApiError) {
+            throw error;
+        }
+        
+        // אחרת, נעטוף אותה ב-MondayApiError
+        throw new MondayApiError(
+            error.message || 'Unknown error',
+            { 
+                response: error.response || null, 
+                apiRequest, 
+                errorCode: error.errorCode || null,
+                functionName: 'fetchItemById',
+                duration: Date.now() - (error.startTime || Date.now())
+            }
+        );
     }
 };
 
@@ -488,6 +862,12 @@ export const fetchCustomerById = async (monday, boardId, customerId) => {
         }
     }`;
 
+    const apiRequest = {
+        query,
+        variables: null,
+        operationName: extractOperationName(query)
+    };
+
     logger.api('fetchCustomerById', query);
 
     try {
@@ -496,6 +876,16 @@ export const fetchCustomerById = async (monday, boardId, customerId) => {
         const duration = Date.now() - startTime;
 
         logger.apiResponse('fetchCustomerById', response, duration);
+        
+        // בדיקת שגיאות ברמת ה-GraphQL
+        if (response.errors && response.errors.length > 0) {
+            const firstError = response.errors[0];
+            const errorCode = firstError.extensions?.code || null;
+            throw new MondayApiError(
+                firstError.message || 'Unknown error',
+                { response, apiRequest, errorCode, functionName: 'fetchCustomerById', duration }
+            );
+        }
 
         const items = response.data?.items || [];
         const customer = items.length > 0 ? { id: items[0].id, name: items[0].name } : null;
@@ -504,7 +894,23 @@ export const fetchCustomerById = async (monday, boardId, customerId) => {
         return customer;
     } catch (error) {
         logger.apiError('fetchCustomerById', error);
-        throw error;
+        
+        // אם זו כבר MondayApiError, פשוט נזרוק אותה
+        if (error instanceof MondayApiError) {
+            throw error;
+        }
+        
+        // אחרת, נעטוף אותה ב-MondayApiError
+        throw new MondayApiError(
+            error.message || 'Unknown error',
+            { 
+                response: error.response || null, 
+                apiRequest, 
+                errorCode: error.errorCode || null,
+                functionName: 'fetchCustomerById',
+                duration: Date.now() - (error.startTime || Date.now())
+            }
+        );
     }
 };
 
@@ -517,6 +923,12 @@ export const deleteItem = async (monday, itemId) => {
         }
     }`;
 
+    const apiRequest = {
+        query: mutation,
+        variables: null,
+        operationName: extractOperationName(mutation)
+    };
+
     logger.api('deleteItem', mutation);
 
     try {
@@ -525,12 +937,39 @@ export const deleteItem = async (monday, itemId) => {
         const duration = Date.now() - startTime;
 
         logger.apiResponse('deleteItem', response, duration);
+        
+        // בדיקת שגיאות ברמת ה-GraphQL
+        if (response.errors && response.errors.length > 0) {
+            const firstError = response.errors[0];
+            const errorCode = firstError.extensions?.code || null;
+            throw new MondayApiError(
+                firstError.message || 'Unknown error',
+                { response, apiRequest, errorCode, functionName: 'deleteItem', duration }
+            );
+        }
+        
         logger.functionEnd('deleteItem', { success: !!response.data });
         
         return response.data;
     } catch (error) {
         logger.apiError('deleteItem', error);
-        throw error;
+        
+        // אם זו כבר MondayApiError, פשוט נזרוק אותה
+        if (error instanceof MondayApiError) {
+            throw error;
+        }
+        
+        // אחרת, נעטוף אותה ב-MondayApiError
+        throw new MondayApiError(
+            error.message || 'Unknown error',
+            { 
+                response: error.response || null, 
+                apiRequest, 
+                errorCode: error.errorCode || null,
+                functionName: 'deleteItem',
+                duration: Date.now() - (error.startTime || Date.now())
+            }
+        );
     }
 };
 

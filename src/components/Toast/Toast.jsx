@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import styles from './Toast.module.css';
+import ErrorToast from '../ErrorToast/ErrorToast';
 
 /**
  * Toast notification component
  * מציג הודעות למשתמש (הצלחה, שגיאה, אזהרה, מידע)
  */
-const Toast = ({ message, type = 'info', duration = 5000, onClose }) => {
+const Toast = ({ message, type = 'info', duration = 5000, errorDetails = null, onClose, onShowDetails }) => {
     const [isVisible, setIsVisible] = useState(true);
 
     useEffect(() => {
@@ -23,6 +24,25 @@ const Toast = ({ message, type = 'info', duration = 5000, onClose }) => {
 
     if (!isVisible) return null;
 
+    // אם זו שגיאה עם errorDetails, נציג ErrorToast
+    if (type === 'error' && errorDetails) {
+        return (
+            <ErrorToast
+                message={message}
+                errorDetails={errorDetails}
+                onShowDetails={onShowDetails}
+                duration={duration}
+                onClose={() => {
+                    setIsVisible(false);
+                    setTimeout(() => {
+                        onClose?.();
+                    }, 300);
+                }}
+            />
+        );
+    }
+
+    // אחרת, נציג Toast רגיל
     const icons = {
         success: '✓',
         error: '✕',
@@ -53,7 +73,7 @@ const Toast = ({ message, type = 'info', duration = 5000, onClose }) => {
 /**
  * Toast Container - מנהל רשימת הודעות
  */
-export const ToastContainer = ({ toasts, onRemove }) => {
+export const ToastContainer = ({ toasts, onRemove, onShowErrorDetails }) => {
     return (
         <div className={styles.toastContainer}>
             {toasts.map((toast) => (
@@ -62,7 +82,9 @@ export const ToastContainer = ({ toasts, onRemove }) => {
                     message={toast.message}
                     type={toast.type}
                     duration={toast.duration}
+                    errorDetails={toast.errorDetails || null}
                     onClose={() => onRemove(toast.id)}
+                    onShowDetails={toast.errorDetails && onShowErrorDetails ? () => onShowErrorDetails(toast.errorDetails) : null}
                 />
             ))}
         </div>

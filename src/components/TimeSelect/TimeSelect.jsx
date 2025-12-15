@@ -159,6 +159,12 @@ const TimeSelect = ({
     };
 
     const handleInputBlur = (e) => {
+        // בדיקה אם הלחיצה הייתה על פריט ב-dropdown
+        // אם כן, לא נסגור את ה-dropdown (ה-blur יתבצע אבל הבחירה כבר תתבצע)
+        if (dropdownRef.current && dropdownRef.current.contains(e.relatedTarget)) {
+            return;
+        }
+        
         // בעת איבוד פוקוס, מאמת ומעגל
         const validated = validateAndRoundTime(e.target.value);
         if (validated) {
@@ -168,7 +174,11 @@ const TimeSelect = ({
             // אם הערך לא תקין, מחזיר לערך הקודם
             setInputValue(selectedTime || '');
         }
-        setIsOpen(false);
+        
+        // נשתמש ב-setTimeout כדי לאפשר ל-click event להתבצע קודם
+        setTimeout(() => {
+            setIsOpen(false);
+        }, 200);
     };
 
     const handleInputFocus = () => {
@@ -232,7 +242,10 @@ const TimeSelect = ({
                                     <div
                                         key={time.value || time.label}
                                         className={`${styles.timeItem} ${isSelected ? styles.selected : ''}`}
-                                        onClick={() => handleSelect(time.value || time.label)}
+                                        onMouseDown={(e) => {
+                                            e.preventDefault(); // מונע את ה-blur event של ה-input
+                                            handleSelect(time.value || time.label);
+                                        }}
                                     >
                                         {time.label || time.value}
                                     </div>

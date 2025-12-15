@@ -22,6 +22,7 @@ import AllDayEventModal from './components/AllDayEventModal/AllDayEventModal';
 import CalendarToolbar from './components/CalendarToolbar';
 import CustomEvent from './components/CustomEvent';
 import { ToastContainer } from './components/Toast';
+import ErrorDetailsModal from './components/ErrorDetailsModal/ErrorDetailsModal';
 
 // Context
 import { useSettings } from './contexts/SettingsContext';
@@ -87,7 +88,17 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
     const [columnIds, setColumnIds] = useState(null); // מזהי העמודות
 
     // Hook לניהול Toast
-    const { toasts, showSuccess, showError, showWarning, removeToast } = useToast();
+    const { 
+        toasts, 
+        showSuccess, 
+        showError, 
+        showWarning, 
+        removeToast,
+        showErrorWithDetails,
+        errorDetailsModal,
+        openErrorDetailsModal,
+        closeErrorDetailsModal
+    } = useToast();
 
     // Hook לניהול אירועים
     const { 
@@ -165,7 +176,7 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
             await updateEventPosition(event, start, end);
             showSuccess('האירוע עודכן בהצלחה');
         } catch (error) {
-            showError('שגיאה בעדכון מיקום האירוע. השינויים בוטלו.');
+            showErrorWithDetails(error, { functionName: 'onEventDrop' });
             logger.error('MondayCalendar', 'Error in onEventDrop', error);
         }
     }, [updateEventPosition, showSuccess, showError]);
@@ -176,7 +187,7 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
             await updateEventPosition(event, start, end);
             showSuccess('האירוע עודכן בהצלחה');
         } catch (error) {
-            showError('שגיאה בעדכון אורך האירוע. השינויים בוטלו.');
+            showErrorWithDetails(error, { functionName: 'onEventResize' });
             logger.error('MondayCalendar', 'Error in onEventResize', error);
         }
     }, [updateEventPosition, showSuccess, showError]);
@@ -429,7 +440,7 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
             showSuccess('האירוע נוצר בהצלחה');
             handleCloseModal();
         } catch (error) {
-            showError('שגיאה ביצירת האירוע. נסה שוב.');
+            showErrorWithDetails(error, { functionName: 'handleCreateEvent' });
             logger.error('MondayCalendar', 'Error in handleCreateEvent', error);
         }
     };
@@ -447,7 +458,7 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
             showSuccess('האירוע עודכן בהצלחה');
             handleCloseModal();
         } catch (error) {
-            showError('שגיאה בעדכון האירוע. השינויים בוטלו.');
+            showErrorWithDetails(error, { functionName: 'handleUpdateEvent' });
             logger.error('MondayCalendar', 'Error in handleUpdateEvent', error);
         }
     };
@@ -465,7 +476,7 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
             showSuccess('האירוע נמחק בהצלחה');
                 handleCloseModal();
         } catch (error) {
-            showError('שגיאה במחיקת האירוע. האירוע לא נמחק.');
+            showErrorWithDetails(error, { functionName: 'handleDeleteEvent' });
             logger.error('MondayCalendar', 'Error in handleDeleteEvent', error);
         }
     };
@@ -519,7 +530,7 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
             showSuccess('האירוע עודכן בהצלחה');
             handleCloseAllDayModal();
         } catch (error) {
-            showError('שגיאה בעדכון האירוע. השינויים בוטלו.');
+            showErrorWithDetails(error, { functionName: 'handleUpdateAllDayEvent' });
             logger.error('MondayCalendar', 'Error in handleUpdateAllDayEvent', error);
         }
     };
@@ -537,7 +548,7 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
             showSuccess('האירוע נמחק בהצלחה');
             handleCloseAllDayModal();
         } catch (error) {
-            showError('שגיאה במחיקת האירוע. האירוע לא נמחק.');
+            showErrorWithDetails(error, { functionName: 'handleDeleteAllDayEvent' });
             logger.error('MondayCalendar', 'Error in handleDeleteAllDayEvent', error);
         }
     };
@@ -944,7 +955,18 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
             />
 
             {/* Toast Notifications */}
-            <ToastContainer toasts={toasts} onRemove={removeToast} />
+            <ToastContainer 
+                toasts={toasts} 
+                onRemove={removeToast}
+                onShowErrorDetails={openErrorDetailsModal}
+            />
+            
+            {/* Error Details Modal */}
+            <ErrorDetailsModal
+                isOpen={!!errorDetailsModal}
+                onClose={closeErrorDetailsModal}
+                errorDetails={errorDetailsModal}
+            />
         </div>
     );
 }

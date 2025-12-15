@@ -1,0 +1,236 @@
+.overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10030;
+    direction: rtl;
+    font-family: 'Figtree', 'Roboto', 'Rubik', 'Noto Kufi Arabic', sans-serif;
+    padding: 20px;
+}
+
+.modal {
+    background-color: white;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 800px;
+    max-height: 90vh;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.header {
+    padding: 20px;
+    border-bottom: 1px solid #e6e9ef;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: #f7f9fa;
+    flex-shrink: 0;
+}
+
+.header h3 {
+    margin: 0;
+    font-size: 1.2rem;
+    color: #323338;
+    font-weight: 600;
+}
+
+.closeButton {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #676879;
+    transition: color 0.2s;
+    font-size: 24px;
+    width: 32px;
+    height: 32px;
+    border-radius: 4px;
+}
+
+.closeButton:hover {
+    color: #323338;
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+.tabs {
+    display: flex;
+    border-bottom: 1px solid #e6e9ef;
+    background-color: #f7f9fa;
+    flex-shrink: 0;
+}
+
+.tab {
+    flex: 1;
+    padding: 12px 20px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    color: #676879;
+    transition: all 0.2s;
+    border-bottom: 2px solid transparent;
+}
+
+.tab:hover {
+    color: #323338;
+    background-color: rgba(0, 0, 0, 0.02);
+}
+
+.tab.active {
+    color: #0073ea;
+    border-bottom-color: #0073ea;
+    background-color: white;
+}
+
+.content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px;
+    color: #323338;
+}
+
+.section {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.field label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #676879;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.field .value {
+    font-size: 14px;
+    color: #323338;
+    line-height: 1.5;
+    padding: 8px 12px;
+    background-color: #f7f9fa;
+    border-radius: 4px;
+    border: 1px solid #e6e9ef;
+}
+
+.queryValue,
+.jsonValue,
+.fullJson {
+    font-size: 12px;
+    font-family: 'Courier New', 'Monaco', 'Consolas', monospace;
+    background-color: #f7f9fa;
+    border: 1px solid #e6e9ef;
+    border-radius: 4px;
+    padding: 12px;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    color: #323338;
+    line-height: 1.6;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.stackTrace {
+    font-size: 11px;
+    font-family: 'Courier New', 'Monaco', 'Consolas', monospace;
+    background-color: #f7f9fa;
+    border: 1px solid #e6e9ef;
+    border-radius: 4px;
+    padding: 12px;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    color: #dc3545;
+    line-height: 1.6;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.fullJson {
+    max-height: 500px;
+}
+
+.emptyState {
+    text-align: center;
+    color: #676879;
+    padding: 40px 20px;
+    font-size: 14px;
+}
+
+.actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 12px;
+}
+
+.copyButton,
+.copyAllButton {
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    border: 1px solid #d0d4e4;
+    background-color: white;
+    color: #323338;
+    transition: all 0.2s;
+}
+
+.copyButton:hover,
+.copyAllButton:hover {
+    background-color: #f7f9fa;
+    border-color: #0073ea;
+    color: #0073ea;
+}
+
+.footer {
+    padding: 16px 20px;
+    border-top: 1px solid #e6e9ef;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: #f7f9fa;
+    flex-shrink: 0;
+}
+
+.closeButtonFooter {
+    padding: 8px 24px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    border: 1px solid #d0d4e4;
+    background-color: white;
+    color: #323338;
+    transition: all 0.2s;
+}
+
+.closeButtonFooter:hover {
+    background-color: #dcdfec;
+}
+
+/* RTL Support */
+[dir="rtl"] .modal {
+    direction: rtl;
+}
+

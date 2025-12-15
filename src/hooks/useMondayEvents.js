@@ -507,16 +507,7 @@ export const useMondayEvents = (monday, context) => {
             const event = events.find(e => e.id === eventId);
             if (event && itemName !== event.title) {
                 const columnValues = { name: itemName };
-                const updateNameMutation = `mutation {
-                    change_multiple_column_values(
-                        item_id: ${eventId},
-                        board_id: ${context.boardId},
-                        column_values: ${JSON.stringify(JSON.stringify(columnValues))}
-                    ) {
-                        id
-                    }
-                }`;
-                await monday.api(updateNameMutation);
+                await updateItemColumnValues(monday, context.boardId, eventId, columnValues);
             }
 
             logger.functionEnd('useMondayEvents.updateEvent', { eventId });
