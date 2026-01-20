@@ -1,0 +1,233 @@
+/* Header Styling - Day headers and labels */
+
+/* Day headers container */
+.rbc-header {
+    padding: 4px 0 0 0 !important; /* צמצום פאדינג וביטול פאדינג תחתון */
+    background: white !important;
+    border: none !important;
+    pointer-events: none !important; /* ביטול לחיצות על התאריך והיום - לא יפתח תצוגת יום */
+    min-height: 85px !important; /* גובה מינימלי למעגל */
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    overflow: visible !important;
+}
+
+.rbc-header a {
+    pointer-events: none !important;
+    cursor: default !important;
+    text-decoration: none !important;
+}
+
+.rbc-custom-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0px; /* ביטול הרווח בין שם היום לתאריך */
+    padding: 0;
+    position: relative;
+    z-index: 5;
+    margin-bottom: 0px !important; /* צמצום הרווח כדי להצמיד את האירועים היומיים לתאריך */
+}
+
+.rbc-header-day {
+    font-size: 16px;
+    color: #676879;
+    font-weight: 400;
+}
+
+.rbc-header-date {
+    font-size: 28px;
+    color: #323338;
+    font-weight: 400;
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: all 0.2s;
+}
+
+/* Today indicator */
+.rbc-today .rbc-header-day {
+    color: #0073ea;
+    font-weight: 500;
+}
+
+.rbc-today .rbc-header-date {
+    background-color: #0073ea;
+    color: white;
+    font-weight: 500;
+}
+
+/* Time gutter header (top-left corner) */
+.rbc-time-gutter .rbc-header {
+    background: white;
+    border-right: none !important;
+    padding: 12px 4px;
+    min-height: 160px !important; /* השוואת גובה לעמודות היום למניעת קפיצה ויזואלית */
+}
+
+/* Month view date cells */
+.rbc-date-cell {
+    padding: 8px;
+    text-align: center;
+}
+
+.rbc-date-cell > a {
+    color: #323338;
+    font-weight: 400;
+    text-decoration: none;
+    display: inline-block;
+    width: 32px;
+    height: 32px;
+    line-height: 32px;
+    border-radius: 50%;
+    transition: all 0.2s;
+    font-size: 14px;
+}
+
+.rbc-date-cell > a:hover {
+    background-color: #f5f6f8;
+}
+
+.rbc-today.rbc-date-cell > a {
+    background-color: #0073ea;
+    color: white;
+    font-weight: 600;
+}
+
+/* Week/Day header content styling */
+.rbc-time-header {
+    border-top: 1px solid #e6e9ef !important; /* גבול עליון מוחלט */
+    overflow: visible !important; /* שונה מ-hidden כדי לאפשר לאירועים להראות */
+    height: auto !important; /* גובה דינמי לפי תוכן */
+    min-height: auto !important; /* גובה דינמי - לא קבוע */
+}
+
+.rbc-time-header-content {
+    border-left: none !important;
+    overflow: visible !important; /* שונה מ-hidden כדי לאפשר לאירועים להראות */
+    display: flex;
+    flex-direction: column;
+    gap: 0 !important; /* הוסר הרווח - היום/תאריך והאזור all-day צמודים */
+}
+
+.rbc-row.rbc-time-header-cell {
+    height: 72px !important;
+}
+
+.rbc-time-header-content .rbc-header {
+    border: none !important;
+    margin-bottom: 0 !important; /* איפוס מרג'ין תחתון - הרווח נשלט על ידי gap ב-rbc-time-header-content */
+}
+
+/* טיפול באלמנט הרקע שמסתיר/מזיז את התאריך */
+.rbc-time-header-content .rbc-day-bg {
+    border: none !important;
+    height: 0 !important; /* "צמצום" האלמנט כדי שלא יתפוס נפח ויזואלי בתוך ה-header */
+    overflow: visible !important;
+}
+
+/* All-day cell styling */
+.rbc-allday-cell {
+    background: white;
+    padding: 0 !important;
+    border-left: 1px solid #e6e9ef !important; /* גבול אנכי בין עמודות */
+    border-bottom: 1px solid #e6e9ef !important; /* גבול תחתון מוחלט */
+    margin: 0 !important;
+    position: relative;
+    z-index: 1;
+    pointer-events: auto !important; /* הפעלת לחיצות על אזור all-day */
+    cursor: pointer;
+    /* הגובה נקבע דינמית דרך JS לפי מספר השורות */
+    min-height: 25px; /* מינימום 25px - שורה ריקה */
+}
+
+/* תא all-day ראשון - ללא גבול שמאלי */
+.rbc-allday-cell:first-child {
+    border-left: none !important;
+}
+
+.rbc-allday-row {
+    border: none !important; /* הסרת כל הגבולות - הגבול המוחלט על allday-cell */
+    pointer-events: auto !important; /* הפעלת לחיצות על שורת all-day */
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+/* טיפול ברכיבי הרקע - מיקום אבסולוטי כדי למלא את כל האזור */
+.rbc-allday-cell .rbc-row-bg {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    min-height: 25px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    pointer-events: auto !important; /* הפעלת לחיצות - פותח תיבת אירועים יומיים */
+    cursor: pointer;
+    z-index: 1 !important;
+}
+
+.rbc-allday-cell .rbc-row-bg .rbc-day-bg {
+    pointer-events: auto !important;
+    cursor: pointer;
+    height: 100% !important; /* גובה מלא לפי ה-container */
+    border-left: 1px solid #e6e9ef !important; /* גבול אנכי בין ימים */
+}
+
+/* יום ראשון (האחרון ב-RTL) - ללא גבול שמאלי */
+.rbc-allday-cell .rbc-row-bg .rbc-day-bg:last-child {
+    border-left: none !important;
+}
+
+.rbc-allday-cell .rbc-row-content {
+    position: relative !important;
+    z-index: 2; /* מעל ה-row-bg */
+    margin: 0 !important;
+    padding: 0 !important;
+    pointer-events: auto !important; /* הפעלת drag/resize */
+    min-height: 25px !important; /* שורה ריקה בסיסית */
+    /* הספרייה משתמשת ב-absolute positioning - לא להשתמש ב-flex */
+}
+
+/* שורות אירועים יומיים */
+.rbc-allday-cell .rbc-row-content .rbc-row {
+    position: relative;
+}
+
+/* סדר שכבות - שורה ראשונה למעלה (z-index גבוה יותר) */
+.rbc-allday-cell .rbc-row-content .rbc-row:nth-child(1) { z-index: 10; }
+.rbc-allday-cell .rbc-row-content .rbc-row:nth-child(2) { z-index: 9; }
+.rbc-allday-cell .rbc-row-content .rbc-row:nth-child(3) { z-index: 8; }
+.rbc-allday-cell .rbc-row-content .rbc-row:nth-child(4) { z-index: 7; }
+.rbc-allday-cell .rbc-row-content .rbc-row:nth-child(5) { z-index: 6; }
+.rbc-allday-cell .rbc-row-content .rbc-row:nth-child(6) { z-index: 5; }
+.rbc-allday-cell .rbc-row-content .rbc-row:nth-child(7) { z-index: 4; }
+.rbc-allday-cell .rbc-row-content .rbc-row:nth-child(8) { z-index: 3; }
+
+/* אירועים קיימים באזור all-day - לחיצה פעילה */
+.rbc-allday-cell .rbc-row-content .rbc-event {
+    pointer-events: auto !important;
+    cursor: pointer;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .rbc-header-day {
+        font-size: 16px;
+    }
+    
+    .rbc-header-date {
+        font-size: 20px;
+        width: 36px;
+        height: 36px;
+    }
+    
+    .rbc-allday-cell {
+        min-height: 40px !important;
+    }
+}

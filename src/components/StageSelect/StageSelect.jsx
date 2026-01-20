@@ -9,7 +9,8 @@ const StageSelect = ({
     selectedStage, 
     onSelectStage, 
     isLoading, 
-    disabled
+    disabled,
+    placeholder = "בחר ..."
 }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [dropdownPosition, setDropdownPosition] = useState({ top: 'auto', bottom: 'auto', left: 'auto', width: 'auto' });
@@ -100,7 +101,7 @@ const StageSelect = ({
                 <span className={styles.triggerText}>
                     {selectedOption 
                         ? selectedOption.label || selectedOption.name
-                        : (isLoading ? "טוען..." : "בחר שלב ...")
+                        : (isLoading ? "טוען..." : placeholder)
                     }
                 </span>
                 <div className={styles.triggerIcon}>

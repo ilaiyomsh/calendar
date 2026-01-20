@@ -1,0 +1,147 @@
+/* Grid Structure - Clean lines, gaps, and layout */
+
+/* Month view grid lines */
+.rbc-month-view {
+  border-top: 1px solid var(--gc-border);
+}
+
+.rbc-month-row {
+  border-bottom: 1px solid var(--gc-border);
+}
+
+/* Day cells in month view */
+.rbc-day-bg {
+  border-left: 1px solid var(--gc-border);
+  background: white;
+}
+
+/* Remove border from first day cell */
+.rbc-month-row .rbc-day-bg:first-child {
+  border-left: none;
+}
+
+/* Time view structures */
+.rbc-time-view {
+  border-top: 1px solid var(--gc-border);
+  background: white;
+  display: flex;
+  flex-direction: column;
+}
+
+.rbc-time-content {
+  display: flex;
+  flex: 1 0 0%;
+  align-items: flex-start;
+  width: 100%;
+  /* border-top מוגדר במקום אחר - הוסר כדי למנוע כפילות */
+}
+
+.rbc-time-header {
+  border-bottom: none !important;
+  /* min-height מוגדר דינמית דרך JS - הוסר קונפליקט */
+}
+
+.rbc-time-header-gutter {
+  border-bottom: none !important;
+  min-height: 0 !important;
+}
+
+/* Time slots (individual time periods) */
+.rbc-time-slot {
+  border-top: none !important;
+  height: 100%;
+}
+
+/* First time slot doesn't need top border */
+.rbc-time-content .rbc-time-slot:first-child {
+  border-top: none;
+}
+
+/* Day columns */
+.rbc-day-slot .rbc-time-slot {
+  background: white;
+}
+
+/* All-day row */
+.rbc-allday-cell {
+  background: white;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  padding-bottom: 0 !important;
+  /* padding-top מוגדר ב-header.css */
+  margin: 0 !important;
+  /* min-height מוגדר ב-header.css - הוסר קונפליקט */
+}
+
+.rbc-allday-row {
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.rbc-time-header-content {
+  /* min-height מוגדר ב-header.css - הוסר קונפליקט */
+  border-left: none !important;
+}
+
+.rbc-time-header-gutter {
+  min-height: 0 !important;
+}
+
+/* Event gap - space between overlapping events */
+.rbc-event {
+  margin: 0 !important;
+}
+
+/* Gutter (time labels column) */
+.rbc-time-gutter {
+  background: white;
+  border-right: none !important;
+  width: var(--gc-gutter-width) !important;
+}
+
+.rbc-time-gutter .rbc-timeslot-group {
+  border-bottom: none !important;
+  position: relative;
+}
+
+.rbc-time-gutter .rbc-timeslot-group::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 5px;
+  border-bottom: 1px solid var(--gc-border);
+}
+
+.rbc-time-gutter .rbc-label {
+  position: relative !important;
+  top: -10px !important;
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--gc-text-secondary);
+  text-align: left;
+  padding-left: 8px !important;
+}
+
+.rbc-timeslot-group {
+  border-bottom: 1px solid var(--gc-border);
+  height: var(--gc-slot-height) !important;
+  min-height: var(--gc-slot-height) !important;
+}
+
+/* Responsive adjustments for mobile */
+@media (max-width: 768px) {
+  /* Increase slot height for touch targets */
+  .rbc-time-slot {
+    height: 60px;
+  }
+
+  /* Larger all-day cell for mobile - מוגדר ב-header.css */
+
+  /* Reduce gutter width on mobile */
+  .rbc-time-gutter {
+    width: 50px;
+  }
+}
+

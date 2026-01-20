@@ -4,32 +4,48 @@ import logger from '../utils/logger';
 // יצירת Context
 const SettingsContext = createContext(null);
 
+// מצבי מבנה הדיווח
+export const STRUCTURE_MODES = {
+  PROJECT_ONLY: 'PROJECT_ONLY',                           // רמה 1 בלבד - פרויקט
+  PROJECT_WITH_STAGE: 'PROJECT_WITH_STAGE',               // רמה 1 + סיווג (סטטוס)
+  PROJECT_WITH_TASKS: 'PROJECT_WITH_TASKS'                // רמה 1 + משימות (Items)
+};
+
 // ברירות מחדל להגדרות
 const DEFAULT_SETTINGS = {
-  // לוח חיצוני לשיוך אייטמים (לקוחות)
-  connectedBoardId: null,
+  // --- הגדרות מבנה (Structure) ---
+  structureMode: STRUCTURE_MODES.PROJECT_WITH_STAGE,  // ברירת מחדל: פרויקט + סיווג
+  enableNotes: true,                                   // אפשר הוספת מלל חופשי
+  showHolidays: true,                                  // הצג חגים ישראליים בלוח
   
-  // עמודות people בלוח החיצוני (לסינון לפי משתמש) - array של עמודות
-  peopleColumnIds: [],
+  // --- לוח פרויקטים (רמה 1) ---
+  connectedBoardId: null,           // לוח הפרויקטים
+  peopleColumnIds: [],              // עמודות people לסינון לפי משתמש
   
-  // עמודות בלוח הנוכחי (context.boardId)
-  dateColumnId: null,          // עמודת Date למועד התחלה
-  durationColumnId: null,      // עמודת Numbers למשך זמן בשעות (עשרוני)
-  projectColumnId: null,       // עמודת Connected Board לקישור ללוח החיצוני (לקוח)
-  notesColumnId: null,         // עמודת Text להערות חופשיות
-  reporterColumnId: null,      // עמודת People למדווח
-  statusColumnId: null,        // עמודת Status לצביעת אירועים לפי צבע הסטטוס
-  eventTypeStatusColumnId: null, // עמודת Status להגדרת סוג האירוע (חופשה/מחלה/מילואים/שעתי)
-  stageColumnId: null,         // עמודת Status או Dropdown לשלב
+  // פילטר סטטוס לפרויקטים
+  projectStatusFilterEnabled: false,
+  projectStatusColumnId: null,
+  projectActiveStatusValues: [],
   
-  // הגדרות מוצרים - רמת היררכיה נוספת
-  productsBoardId: null,       // מזהה לוח המוצרים
-  productsCustomerColumnId: null, // עמודת Connected Board בלוח המוצרים (קישור ללקוח)
-  productColumnId: null,       // עמודת Connected Board בלוח הנוכחי (קישור למוצר)
+  // --- לוח משימות (רמה 2 - רק במצבי TASKS) ---
+  tasksBoardId: null,               // לוח המשימות
+  tasksProjectColumnId: null,       // עמודת Connect Boards בלוח פרויקטים שמקשרת למשימות
   
-  // הגדרות שעות עבודה
-  workDayStart: "06:00",       // שעת תחילת יום עבודה (HH:mm)
-  workDayEnd: "20:00"          // שעת סיום יום עבודה (HH:mm)
+  // פילטר סטטוס למשימות
+  taskStatusFilterEnabled: false,
+  taskStatusColumnId: null,
+  taskActiveStatusValues: [],
+  
+  // --- לוח דיווחי שעות (נוכחי) ---
+  dateColumnId: null,               // עמודת Date למועד התחלה
+  durationColumnId: null,           // עמודת Numbers למשך זמן בשעות
+  projectColumnId: null,            // עמודת Connected Board לקישור לפרויקט
+  taskColumnId: null,               // עמודת Connected Board לקישור למשימה (רק במצבי TASKS)
+  reporterColumnId: null,           // עמודת People למדווח
+  eventTypeStatusColumnId: null,    // עמודת Status לסוג האירוע (לחיוב/לא לחיוב)
+  nonBillableStatusColumnId: null,  // עמודת Status לסוגי "לא לחיוב"
+  stageColumnId: null,              // עמודת Status/Dropdown לסיווג (רק במצבי STAGE)
+  notesColumnId: null               // עמודת Text להערות חופשיות (רק אם enableNotes)
 };
 
 // Provider Component
@@ -45,18 +61,69 @@ export function SettingsProvider({ monday, children }) {
   const loadSettings = async () => {
     try {
       const result = await monday.storage.instance.getItem('customSettings');
-      // לוג להערה - ניתן להפעיל לצורך דיבוג
-      // logger.debug('SettingsContext', 'Loaded settings from storage', result);
       
       if (result.data && result.data.value) {
         const savedSettings = JSON.parse(result.data.value);
-        setCustomSettings(prev => ({ ...DEFAULT_SETTINGS, ...savedSettings }));
+        
+        // מיגרציה של מפתחות ישנים לחדשים (תאימות לאחור)
+        const migratedSettings = { ...savedSettings };
+        
+        // מיגרציה של שמות ישנים (products -> tasks)
+        if (savedSettings.productsBoardId && !savedSettings.tasksBoardId) {
+          migratedSettings.tasksBoardId = savedSettings.productsBoardId;
+        }
+        if (savedSettings.productsCustomerColumnId && !savedSettings.tasksProjectColumnId) {
+          migratedSettings.tasksProjectColumnId = savedSettings.productsCustomerColumnId;
+        }
+        if (savedSettings.productColumnId && !savedSettings.taskColumnId) {
+          migratedSettings.taskColumnId = savedSettings.productColumnId;
+        }
+        
+        // זיהוי אוטומטי של structureMode אם לא קיים
+        if (!savedSettings.structureMode) {
+          migratedSettings.structureMode = detectStructureMode(migratedSettings);
+          logger.info('SettingsContext', 'Auto-detected structureMode', { mode: migratedSettings.structureMode });
+        }
+        
+        // מיגרציה של useStageField ל-structureMode
+        if (savedSettings.useStageField !== undefined && !savedSettings.structureMode) {
+          // אם יש משימות, זה PROJECT_WITH_TASKS
+          // אם אין משימות ויש stage, זה PROJECT_WITH_STAGE
+          // אם אין משימות ואין stage, זה PROJECT_ONLY
+        }
+        
+        // הסרת שדות ישנים שכבר לא בשימוש
+        delete migratedSettings.useStageField;
+        delete migratedSettings.useEmployeeCost;
+        delete migratedSettings.employeesBoardId;
+        delete migratedSettings.employeesPersonColumnId;
+        delete migratedSettings.employeesHourlyRateColumnId;
+        delete migratedSettings.totalCostColumnId;
+        delete migratedSettings.productsBoardId;
+        delete migratedSettings.productsCustomerColumnId;
+        delete migratedSettings.productColumnId;
+        
+        setCustomSettings(prev => ({ ...DEFAULT_SETTINGS, ...migratedSettings }));
       }
     } catch (error) {
-      // לוג שגיאה קריטי - נשאר פעיל גם בפרודקשן
       logger.error('SettingsContext', 'Failed to load settings from storage', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+  
+  // זיהוי אוטומטי של structureMode לפי הגדרות קיימות
+  const detectStructureMode = (settings) => {
+    const hasTasks = settings.tasksBoardId || settings.taskColumnId || settings.tasksProjectColumnId;
+    const hasStage = settings.stageColumnId;
+    const useStageField = settings.useStageField !== false; // ברירת מחדל true
+    
+    if (hasTasks) {
+      return STRUCTURE_MODES.PROJECT_WITH_TASKS;
+    } else if (hasStage && useStageField) {
+      return STRUCTURE_MODES.PROJECT_WITH_STAGE;
+    } else {
+      return STRUCTURE_MODES.PROJECT_ONLY;
     }
   };
 
@@ -67,12 +134,8 @@ export function SettingsProvider({ monday, children }) {
       setCustomSettings(updatedSettings);
       
       await monday.storage.instance.setItem('customSettings', JSON.stringify(updatedSettings));
-      // לוג להערה - ניתן להפעיל לצורך דיבוג
-      // logger.debug('SettingsContext', 'Saved settings to storage', updatedSettings);
-      
       return true;
     } catch (error) {
-      // לוג שגיאה קריטי - נשאר פעיל גם בפרודקשן
       logger.error('SettingsContext', 'Failed to save settings', error);
       return false;
     }
@@ -83,11 +146,8 @@ export function SettingsProvider({ monday, children }) {
     try {
       setCustomSettings(DEFAULT_SETTINGS);
       await monday.storage.instance.setItem('customSettings', JSON.stringify(DEFAULT_SETTINGS));
-      // לוג להערה - ניתן להפעיל לצורך דיבוג
-      // logger.debug('SettingsContext', 'Reset settings to default');
       return true;
     } catch (error) {
-      // לוג שגיאה קריטי - נשאר פעיל גם בפרודקשן
       logger.error('SettingsContext', 'Failed to reset settings', error);
       return false;
     }
@@ -117,4 +177,3 @@ export function useSettings() {
 }
 
 export default SettingsContext;
-

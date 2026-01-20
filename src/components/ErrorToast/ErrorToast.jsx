@@ -35,7 +35,6 @@ const ErrorToast = ({
 
     return (
         <div className={styles.errorToast}>
-            <span className={styles.icon}>✕</span>
             <span className={styles.message}>{message}</span>
             <div className={styles.actions}>
                 <button

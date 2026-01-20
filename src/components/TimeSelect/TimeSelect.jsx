@@ -115,9 +115,17 @@ const TimeSelect = ({
         
         const [hours, minutes] = value.split(':').map(Number);
         
-        // עיגול ל-30 דקות הקרוב
-        const roundedMinutes = minutes < 30 ? 0 : 30;
-        const roundedTime = `${hours.toString().padStart(2, '0')}:${roundedMinutes.toString().padStart(2, '0')}`;
+        // עיגול ל-15 דקות הקרוב
+        const roundedMinutes = Math.round(minutes / 15) * 15;
+        let roundedHours = hours;
+        let finalMinutes = roundedMinutes;
+        
+        if (roundedMinutes === 60) {
+            roundedHours = (hours + 1) % 24;
+            finalMinutes = 0;
+        }
+        
+        const roundedTime = `${roundedHours.toString().padStart(2, '0')}:${finalMinutes.toString().padStart(2, '0')}`;
         
         // בדיקה שהזמן נמצא ברשימת הזמנים הזמינים
         const isValidTime = times.some(t => t.value === roundedTime || t.label === roundedTime);

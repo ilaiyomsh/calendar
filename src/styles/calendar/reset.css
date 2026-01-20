@@ -1,0 +1,103 @@
+/* RBC Reset - Remove default styling to create clean slate */
+
+/* Global RBC reset */
+.rbc-calendar {
+  font-family: var(--gc-font-family);
+  color: var(--gc-text-primary);
+}
+
+/* Remove RBC default box-sizing issues */
+.rbc-calendar * {
+  box-sizing: border-box;
+}
+
+/* Main calendar containers */
+.rbc-month-view,
+.rbc-time-view {
+  border: none;
+  background: white;
+}
+
+/* Remove header bottom border */
+.rbc-header {
+  border-bottom: none;
+  background: white;
+}
+
+/* Remove event default styling - aggressive override */
+.rbc-calendar .rbc-event,
+.rbc-time-view .rbc-event,
+.rbc-month-view .rbc-event,
+.rbc-day-slot .rbc-event,
+.rbc-event.rbc-event,
+.rbc-event {
+  border: none !important;
+  box-shadow: none !important;
+  margin: 0 !important;
+}
+
+/* Remove all-day event default styling */
+.rbc-event-allday {
+  border: none;
+}
+
+/* Remove toolbar button group spacing issues */
+.rbc-toolbar .rbc-btn-group {
+  display: flex;
+  gap: 4px;
+}
+
+.rbc-toolbar .rbc-btn-group button {
+  margin: 0;
+}
+
+/* Reset month row borders */
+.rbc-month-row {
+  border-top: none;
+}
+
+/* Reset day cell styling */
+.rbc-day-cell {
+  padding: 0;
+}
+
+/* Remove time gutter border */
+.rbc-time-header-content {
+  border-left: none;
+}
+
+/* Clean current time indicator */
+.rbc-current-time-indicator {
+  pointer-events: none;
+}
+
+/* Remove default slot styling */
+.rbc-time-slot {
+  background: white;
+ 
+}
+
+/* RTL Direction - preserved from original */
+.rbc-calendar {
+  direction: rtl;
+}
+
+.rbc-time-view {
+  direction: rtl;
+}
+
+.rbc-time-header {
+  direction: rtl;
+}
+
+.rbc-time-content {
+  direction: rtl;
+}
+
+.rbc-events-container {
+  direction: rtl;
+}
+
+.rbc-day-slot {
+  direction: rtl;
+}

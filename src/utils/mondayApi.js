@@ -1,9 +1,38 @@
 /**
  * פונקציות עזר לעבודה עם Monday API
+ * כל הקריאות עוטפות ב-wrapMondayApiCall לטיפול אחיד בשגיאות ולוגים
+ * 
+ * @module mondayApi
  */
 
 import logger from './logger';
 import { extractOperationName } from './errorHandler';
+
+/**
+ * @typedef {Object} MondayItem
+ * @property {string} id - מזהה האייטם
+ * @property {string} name - שם האייטם
+ * @property {Array} [column_values] - ערכי העמודות
+ */
+
+/**
+ * @typedef {Object} Project
+ * @property {string} id - מזהה הפרויקט
+ * @property {string} name - שם הפרויקט
+ */
+
+/**
+ * @typedef {Object} Task
+ * @property {string} id - מזהה המשימה
+ * @property {string} name - שם המשימה
+ */
+
+/**
+ * @typedef {Object} StatusLabel
+ * @property {string} id - מזהה הסטטוס
+ * @property {string} label - תווית הסטטוס
+ * @property {string} [color] - צבע הסטטוס
+ */
 
 /**
  * MondayApiError - שגיאה מותאמת עם פרטי Monday API
@@ -43,6 +72,44 @@ export class MondayApiError extends Error {
     }
 }
 
+/**
+ * Wrapper לקריאות API של Monday - מטפל בלוגים ושגיאות באופן אחיד
+ * @param {string} functionName - שם הפונקציה לצורך לוגים
+ * @param {object} apiRequest - פרטי הבקשה (query, variables)
+ * @param {Function} apiCall - הפונקציה שמבצעת את הקריאה ל-API
+ * @returns {Promise<{response: object, duration: number}>}
+ */
+const wrapMondayApiCall = async (functionName, apiRequest, apiCall) => {
+    const startTime = Date.now();
+    try {
+        const response = await apiCall();
+        const duration = Date.now() - startTime;
+        logger.apiResponse(functionName, response, duration);
+
+        if (response.errors?.length > 0) {
+            const firstError = response.errors[0];
+            throw new MondayApiError(firstError.message || 'Unknown error', {
+                response,
+                apiRequest,
+                errorCode: firstError.extensions?.code,
+                functionName,
+                duration
+            });
+        }
+        return { response, duration };
+    } catch (error) {
+        logger.apiError(functionName, error);
+        if (error instanceof MondayApiError) throw error;
+        throw new MondayApiError(error.message || 'Unknown error', {
+            response: error.response,
+            apiRequest,
+            errorCode: error.errorCode,
+            functionName,
+            duration: Date.now() - startTime
+        });
+    }
+};
+
 // פונקציה להמרת מחרוזת שעה (HH:MM) לאובייקט Date
 export const parseTimeString = (timeString) => {
     if (!timeString) return null;
@@ -62,55 +129,13 @@ export const fetchColumnSettings = async (monday, boardId, columnId) => {
         }
     }`;
 
-    const apiRequest = {
-        query,
-        variables: null,
-        operationName: extractOperationName(query)
-    };
-
+    const apiRequest = { query, variables: null, operationName: extractOperationName(query) };
     logger.api('fetchColumnSettings', query);
 
-    try {
-        const startTime = Date.now();
-        const response = await monday.api(query);
-        const duration = Date.now() - startTime;
-
-        logger.apiResponse('fetchColumnSettings', response, duration);
-    
-        // בדיקת שגיאות ברמת ה-GraphQL
-        if (response.errors && response.errors.length > 0) {
-            const firstError = response.errors[0];
-            const errorCode = firstError.extensions?.code || null;
-            throw new MondayApiError(
-                firstError.message || 'Unknown error',
-                { response, apiRequest, errorCode, functionName: 'fetchColumnSettings', duration }
-            );
-        }
-    
-        const columnSettings = response.data?.boards?.[0]?.columns?.[0]?.settings;
-        logger.functionEnd('fetchColumnSettings', { hasSettings: !!columnSettings });
-    
-        return columnSettings;
-    } catch (error) {
-        logger.apiError('fetchColumnSettings', error);
-        
-        // אם זו כבר MondayApiError, פשוט נזרוק אותה
-        if (error instanceof MondayApiError) {
-            throw error;
-        }
-        
-        // אחרת, נעטוף אותה ב-MondayApiError
-        throw new MondayApiError(
-            error.message || 'Unknown error',
-            { 
-                response: error.response || null, 
-                apiRequest, 
-                errorCode: error.errorCode || null,
-                functionName: 'fetchColumnSettings',
-                duration: Date.now() - (error.startTime || Date.now())
-            }
-        );
-    }
+    const { response } = await wrapMondayApiCall('fetchColumnSettings', apiRequest, () => monday.api(query));
+    const columnSettings = response.data?.boards?.[0]?.columns?.[0]?.settings;
+    logger.functionEnd('fetchColumnSettings', { hasSettings: !!columnSettings });
+    return columnSettings;
 };
 
 // אחזור כל האייטמים מלוח עם pagination
@@ -134,38 +159,17 @@ export const fetchAllBoardItems = async (monday, boardId) => {
         }
     }`;
 
-    const firstApiRequest = {
-        query: firstQuery,
-        variables: null,
-        operationName: extractOperationName(firstQuery)
-    };
-
+    const firstApiRequest = { query: firstQuery, variables: null, operationName: extractOperationName(firstQuery) };
     logger.api('fetchAllBoardItems (first page)', firstQuery);
 
-    try {
-        const startTime = Date.now();
-        const firstResponse = await monday.api(firstQuery);
-        const duration = Date.now() - startTime;
-
-        logger.apiResponse('fetchAllBoardItems (first page)', firstResponse, duration);
-        
-        // בדיקת שגיאות ברמת ה-GraphQL
-        if (firstResponse.errors && firstResponse.errors.length > 0) {
-            const firstError = firstResponse.errors[0];
-            const errorCode = firstError.extensions?.code || null;
-            throw new MondayApiError(
-                firstError.message || 'Unknown error',
-                { response: firstResponse, apiRequest: firstApiRequest, errorCode, functionName: 'fetchAllBoardItems', duration }
-            );
-        }
-
+    const { response: firstResponse } = await wrapMondayApiCall('fetchAllBoardItems', firstApiRequest, () => monday.api(firstQuery));
     const itemsPage = firstResponse.data?.boards?.[0]?.items_page;
     
     if (itemsPage) {
         allItems = allItems.concat(itemsPage.items);
         cursor = itemsPage.cursor;
         pageCount++;
-            logger.debug('fetchAllBoardItems', `Page ${pageCount}: Fetched ${itemsPage.items.length} items`);
+        logger.debug('fetchAllBoardItems', `Page ${pageCount}: Fetched ${itemsPage.items.length} items`);
     }
 
     // קריאות המשך
@@ -180,79 +184,35 @@ export const fetchAllBoardItems = async (monday, boardId) => {
             }
         }`;
 
-        const nextApiRequest = {
-            query: nextQuery,
-            variables: null,
-            operationName: extractOperationName(nextQuery)
-        };
-
+        const nextApiRequest = { query: nextQuery, variables: null, operationName: extractOperationName(nextQuery) };
         logger.api(`fetchAllBoardItems (page ${pageCount + 1})`, nextQuery);
 
-        const pageStartTime = Date.now();
-        const nextResponse = await monday.api(nextQuery);
-        const pageDuration = Date.now() - pageStartTime;
-
-        logger.apiResponse(`fetchAllBoardItems (page ${pageCount + 1})`, nextResponse, pageDuration);
-        
-        // בדיקת שגיאות ברמת ה-GraphQL
-        if (nextResponse.errors && nextResponse.errors.length > 0) {
-            const firstError = nextResponse.errors[0];
-            const errorCode = firstError.extensions?.code || null;
-            throw new MondayApiError(
-                firstError.message || 'Unknown error',
-                { response: nextResponse, apiRequest: nextApiRequest, errorCode, functionName: 'fetchAllBoardItems', duration: pageDuration }
-            );
-        }
-
+        const { response: nextResponse } = await wrapMondayApiCall('fetchAllBoardItems', nextApiRequest, () => monday.api(nextQuery));
         const nextPage = nextResponse.data?.next_items_page;
         
         if (nextPage && nextPage.items) {
             allItems = allItems.concat(nextPage.items);
             cursor = nextPage.cursor;
             pageCount++;
-                logger.debug('fetchAllBoardItems', `Page ${pageCount}: Fetched ${nextPage.items.length} items`);
+            logger.debug('fetchAllBoardItems', `Page ${pageCount}: Fetched ${nextPage.items.length} items`);
         } else {
             cursor = null;
         }
     }
 
-        logger.functionEnd('fetchAllBoardItems', { totalItems: allItems.length, pages: pageCount });
+    logger.functionEnd('fetchAllBoardItems', { totalItems: allItems.length, pages: pageCount });
     
-        // המרה לפורמט Combobox
-        return allItems.map(item => ({
-            value: item.id,
-            label: item.name
-        }));
-    } catch (error) {
-        logger.apiError('fetchAllBoardItems', error);
-        
-        // אם זו כבר MondayApiError, פשוט נזרוק אותה
-        if (error instanceof MondayApiError) {
-            throw error;
-        }
-        
-        // אחרת, נעטוף אותה ב-MondayApiError (נשתמש ב-firstApiRequest)
-        throw new MondayApiError(
-            error.message || 'Unknown error',
-            { 
-                response: error.response || null, 
-                apiRequest: firstApiRequest, 
-                errorCode: error.errorCode || null,
-                functionName: 'fetchAllBoardItems',
-                duration: null
-            }
-        );
-    }
+    // המרה לפורמט Combobox
+    return allItems.map(item => ({
+        value: item.id,
+        label: item.name
+    }));
 };
 
-// יצירת אייטם חדש בלוח עם ערכי עמודות - גרסה מתוקנת ובטוחה
+// יצירת אייטם חדש בלוח עם ערכי עמודות
 export const createBoardItem = async (monday, boardId, itemName, columnValues = null) => {
-    // לוג התחלה
     logger.functionStart('createBoardItem', { boardId, itemName, hasColumnValues: !!columnValues });
 
-    // 1. הגדרת ה-Mutation עם משתנים (Variables)
-    // שים לב לשימוש ב-$ לפני שמות המשתנים
-    // הסוג JSON! ב-Monday מצפה לקבל *מחרוזת* שמכילה JSON
     const query = `mutation create_item($boardId: ID!, $itemName: String!, $columnValues: JSON) {
         create_item (
             board_id: $boardId,
@@ -264,152 +224,48 @@ export const createBoardItem = async (monday, boardId, itemName, columnValues = 
         }
     }`;
 
-    // 2. הכנת אובייקט המשתנים
-    // תיקון: בדיקה אם columnValues הוא כבר מחרוזת כדי למנוע stringify כפול
     let formattedColumnValues = null;
     if (columnValues) {
-        if (typeof columnValues === 'string') {
-            formattedColumnValues = columnValues; // כבר מחרוזת, לא צריך המרה
-        } else {
-            formattedColumnValues = JSON.stringify(columnValues); // אובייקט, צריך המרה
-        }
+        formattedColumnValues = typeof columnValues === 'string' ? columnValues : JSON.stringify(columnValues);
     }
 
-    const variables = {
-        boardId: parseInt(boardId),
-        itemName: itemName,
-        columnValues: formattedColumnValues
-    };
-
-    const apiRequest = {
-        query,
-        variables,
-        operationName: extractOperationName(query)
-    };
-
-    // עדכון הלוג שיראה גם את המשתנים (עוזר לדיבוג)
+    const variables = { boardId: parseInt(boardId), itemName, columnValues: formattedColumnValues };
+    const apiRequest = { query, variables, operationName: extractOperationName(query) };
     logger.api('createBoardItem', query, variables);
 
-    try {
-        const startTime = Date.now();
-        
-        // 3. שליחת השאילתה יחד עם המשתנים
-        const response = await monday.api(query, { variables });
-        
-        const duration = Date.now() - startTime;
-        logger.apiResponse('createBoardItem', response, duration);
-        
-        // בדיקת שגיאות ברמת ה-GraphQL
-        if (response.errors && response.errors.length > 0) {
-            const firstError = response.errors[0];
-            const errorCode = firstError.extensions?.code || null;
-            throw new MondayApiError(
-                firstError.message || 'Unknown error',
-                { response, apiRequest, errorCode, functionName: 'createBoardItem', duration }
-            );
-        }
-        
-        logger.functionEnd('createBoardItem', { item: response.data?.create_item });
-    
-        return response.data?.create_item;
-    } catch (error) {
-        // לוג שגיאה קריטי - נשאר פעיל גם בפרודקשן
-        logger.apiError('createBoardItem', error);
-        
-        // אם זו כבר MondayApiError, פשוט נזרוק אותה
-        if (error instanceof MondayApiError) {
-            throw error;
-        }
-        
-        // אחרת, נעטוף אותה ב-MondayApiError
-        throw new MondayApiError(
-            error.message || 'Unknown error',
-            { 
-                response: error.response || null, 
-                apiRequest, 
-                errorCode: error.errorCode || null,
-                functionName: 'createBoardItem',
-                duration: Date.now() - (error.startTime || Date.now())
-            }
-        );
-    }
+    const { response } = await wrapMondayApiCall('createBoardItem', apiRequest, () => monday.api(query, { variables }));
+    logger.functionEnd('createBoardItem', { item: response.data?.create_item });
+    return response.data?.create_item;
 };
 
 // שליפת אירועים מהלוח בטווח תאריכים
 export const fetchEventsFromBoard = async (monday, query) => {
     logger.functionStart('fetchEventsFromBoard');
-    
-    const apiRequest = {
-        query,
-        variables: null,
-        operationName: extractOperationName(query)
-    };
-    
+    const apiRequest = { query, variables: null, operationName: extractOperationName(query) };
     logger.api('fetchEventsFromBoard', query);
-    
-    try {
-        const startTime = Date.now();
-        const response = await monday.api(query);
-        const duration = Date.now() - startTime;
 
-        logger.apiResponse('fetchEventsFromBoard', response, duration);
-        
-        // בדיקת שגיאות ברמת ה-GraphQL
-        if (response.errors && response.errors.length > 0) {
-            const firstError = response.errors[0];
-            const errorCode = firstError.extensions?.code || null;
-            throw new MondayApiError(
-                firstError.message || 'Unknown error',
-                { response, apiRequest, errorCode, functionName: 'fetchEventsFromBoard', duration }
-            );
-        }
-
-        const items = response.data?.boards?.[0]?.items_page?.items || [];
-        
-        logger.functionEnd('fetchEventsFromBoard', { count: items.length });
-        return items;
-    } catch (error) {
-        logger.apiError('fetchEventsFromBoard', error);
-        
-        // אם זו כבר MondayApiError, פשוט נזרוק אותה
-        if (error instanceof MondayApiError) {
-            throw error;
-        }
-        
-        // אחרת, נעטוף אותה ב-MondayApiError
-        throw new MondayApiError(
-            error.message || 'Unknown error',
-            { 
-                response: error.response || null, 
-                apiRequest, 
-                errorCode: error.errorCode || null,
-                functionName: 'fetchEventsFromBoard',
-                duration: Date.now() - (error.startTime || Date.now())
-            }
-        );
-    }
+    const { response } = await wrapMondayApiCall('fetchEventsFromBoard', apiRequest, () => monday.api(query));
+    const items = response.data?.boards?.[0]?.items_page?.items || [];
+    logger.functionEnd('fetchEventsFromBoard', { count: items.length });
+    return items;
 };
 
-// אחזור לקוחות המשויכים למשתמש
-export const fetchCustomersForUser = async (monday, boardId, peopleColumnIds) => {
-    // תמיכה ב-backward compatibility - אם זה string, להמיר ל-array
+// אחזור פרויקטים המשויכים למשתמש
+export const fetchProjectsForUser = async (monday, boardId, peopleColumnIds) => {
     const columnIds = Array.isArray(peopleColumnIds) ? peopleColumnIds : (peopleColumnIds ? [peopleColumnIds] : []);
-    
-    logger.functionStart('fetchCustomersForUser', { boardId, peopleColumnIds: columnIds });
+    logger.functionStart('fetchProjectsForUser', { boardId, peopleColumnIds: columnIds });
 
     if (columnIds.length === 0) {
-        logger.warn('fetchCustomersForUser', 'No people column IDs provided');
+        logger.warn('fetchProjectsForUser', 'No people column IDs provided');
         return [];
     }
 
-    // בניית rules לכל עמודת people
     const rules = columnIds.map(columnId => ({
         column_id: columnId,
         compare_value: ["assigned_to_me"],
         operator: "any_of"
     }));
 
-    // המרת rules ל-GraphQL format
     const rulesGraphQL = rules.map(rule => 
         `{
             column_id: "${rule.column_id}",
@@ -419,7 +275,6 @@ export const fetchCustomersForUser = async (monday, boardId, peopleColumnIds) =>
     ).join(',\n');
 
     const operator = columnIds.length > 1 ? 'or' : 'and';
-
     const query = `query {
         boards(ids: ${boardId}) {
             items_page(
@@ -436,210 +291,82 @@ export const fetchCustomersForUser = async (monday, boardId, peopleColumnIds) =>
         }
     }`;
 
-    const apiRequest = {
-        query,
-        variables: null,
-        operationName: extractOperationName(query)
-    };
+    const apiRequest = { query, variables: null, operationName: extractOperationName(query) };
+    logger.api('fetchProjectsForUser', query);
 
-    logger.api('fetchCustomersForUser', query);
-
-    try {
-        const startTime = Date.now();
-        const response = await monday.api(query);
-        const duration = Date.now() - startTime;
-
-        logger.apiResponse('fetchCustomersForUser', response, duration);
-        
-        // בדיקת שגיאות ברמת ה-GraphQL
-        if (response.errors && response.errors.length > 0) {
-            const firstError = response.errors[0];
-            const errorCode = firstError.extensions?.code || null;
-            throw new MondayApiError(
-                firstError.message || 'Unknown error',
-                { response, apiRequest, errorCode, functionName: 'fetchCustomersForUser', duration }
-            );
-        }
-
-        const items = response.data?.boards?.[0]?.items_page?.items || [];
-        logger.functionEnd('fetchCustomersForUser', { count: items.length });
-        
-        return items;
-    } catch (error) {
-        logger.apiError('fetchCustomersForUser', error);
-        
-        // אם זו כבר MondayApiError, פשוט נזרוק אותה
-        if (error instanceof MondayApiError) {
-            throw error;
-        }
-        
-        // אחרת, נעטוף אותה ב-MondayApiError
-        throw new MondayApiError(
-            error.message || 'Unknown error',
-            { 
-                response: error.response || null, 
-                apiRequest, 
-                errorCode: error.errorCode || null,
-                functionName: 'fetchCustomersForUser',
-                duration: Date.now() - (error.startTime || Date.now())
-            }
-        );
-    }
+    const { response } = await wrapMondayApiCall('fetchProjectsForUser', apiRequest, () => monday.api(query));
+    const items = response.data?.boards?.[0]?.items_page?.items || [];
+    logger.functionEnd('fetchProjectsForUser', { count: items.length });
+    return items;
 };
 
-// מציאת עמודת Connected Board בלוח המוצרים שמקשרת ללוח הלקוחות
-export const findCustomerLinkColumn = async (monday, productsBoardId, customerBoardId) => {
-    if (!productsBoardId || !customerBoardId) return null;
+// מציאת עמודת Connected Board בלוח המשימות שמקשרת ללוח הפרויקטים
+export const findProjectLinkColumn = async (monday, tasksBoardId, projectBoardId) => {
+    if (!tasksBoardId || !projectBoardId) return null;
+    logger.functionStart('findProjectLinkColumn', { tasksBoardId, projectBoardId });
 
-    logger.functionStart('findCustomerLinkColumn', { productsBoardId, customerBoardId });
-
-    try {
-        const query = `query {
-            boards(ids: [${productsBoardId}]) {
-                columns {
-                    id
-                    type
-                    settings_str
-                }
-            }
-        }`;
-
-        const apiRequest = {
-            query,
-            variables: null,
-            operationName: extractOperationName(query)
-        };
-
-        logger.api('findCustomerLinkColumn', query);
-        const res = await monday.api(query);
-        
-        // בדיקת שגיאות ברמת ה-GraphQL
-        if (res.errors && res.errors.length > 0) {
-            const firstError = res.errors[0];
-            const errorCode = firstError.extensions?.code || null;
-            throw new MondayApiError(
-                firstError.message || 'Unknown error',
-                { response: res, apiRequest, errorCode, functionName: 'findCustomerLinkColumn', duration: null }
-            );
-        }
-        
-        const columns = res.data?.boards?.[0]?.columns || [];
-
-        // מציאת עמודת board_relation שמקשרת ללוח הלקוחות
-        for (const col of columns) {
-            if (col.type === 'board_relation') {
-                try {
-                    const settings = JSON.parse(col.settings_str || '{}');
-                    if (settings.boardIds && settings.boardIds.includes(parseInt(customerBoardId))) {
-                        logger.functionEnd('findCustomerLinkColumn', { columnId: col.id });
-                        return col.id;
-                    }
-                } catch {
-                    continue;
-                }
-            }
-        }
-        logger.warn('findCustomerLinkColumn', 'Could not find customer link column in products board');
-        return null;
-    } catch (error) {
-        logger.apiError('findCustomerLinkColumn', error);
-        
-        // אם זו כבר MondayApiError, פשוט נזרוק אותה
-        if (error instanceof MondayApiError) {
-            throw error;
-        }
-        
-        // אחרת, נעטוף אותה ב-MondayApiError (אבל אין לנו apiRequest כאן)
-        throw new MondayApiError(
-            error.message || 'Unknown error',
-            { 
-                response: error.response || null, 
-                apiRequest: null, 
-                errorCode: error.errorCode || null,
-                functionName: 'findCustomerLinkColumn',
-                duration: null
-            }
-        );
-    }
-};
-
-// יצירת מוצר חדש
-export const createProduct = async (monday, productsBoardId, customerBoardId, customerId, productName) => {
-    logger.functionStart('createProduct', { productsBoardId, customerBoardId, customerId, productName });
-
-    try {
-        // מציאת העמודה בלוח המוצרים שמקשרת ללקוח
-        const customerLinkColumnId = await findCustomerLinkColumn(monday, productsBoardId, customerBoardId);
-
-        if (!customerLinkColumnId) {
-            logger.warn('createProduct', 'Could not find customer link column in products board');
-            return null;
-        }
-
-        const columnValues = JSON.stringify({
-            [customerLinkColumnId]: {
-                item_ids: [parseInt(customerId)]
-            }
-        });
-
-        const mutation = `mutation {
-            create_item(
-                board_id: ${productsBoardId},
-                item_name: "${productName}",
-                column_values: ${JSON.stringify(columnValues)}
-            ) {
+    const query = `query {
+        boards(ids: [${tasksBoardId}]) {
+            columns {
                 id
-                name
+                type
+                settings_str
             }
-        }`;
-
-        const apiRequest = {
-            query: mutation,
-            variables: null,
-            operationName: extractOperationName(mutation)
-        };
-
-        logger.api('createProduct', mutation);
-
-        const startTime = Date.now();
-        const response = await monday.api(mutation);
-        const duration = Date.now() - startTime;
-
-        logger.apiResponse('createProduct', response, duration);
-        
-        // בדיקת שגיאות ברמת ה-GraphQL
-        if (response.errors && response.errors.length > 0) {
-            const firstError = response.errors[0];
-            const errorCode = firstError.extensions?.code || null;
-            throw new MondayApiError(
-                firstError.message || 'Unknown error',
-                { response, apiRequest, errorCode, functionName: 'createProduct', duration }
-            );
         }
-        
-        logger.functionEnd('createProduct', { product: response.data?.create_item });
-        
-        return response.data?.create_item;
-    } catch (error) {
-        logger.apiError('createProduct', error);
-        
-        // אם זו כבר MondayApiError, פשוט נזרוק אותה
-        if (error instanceof MondayApiError) {
-            throw error;
+    }`;
+
+    const apiRequest = { query, variables: null, operationName: extractOperationName(query) };
+    logger.api('findProjectLinkColumn', query);
+    
+    const { response } = await wrapMondayApiCall('findProjectLinkColumn', apiRequest, () => monday.api(query));
+    const columns = response.data?.boards?.[0]?.columns || [];
+
+    for (const col of columns) {
+        if (col.type === 'board_relation') {
+            try {
+                const settings = JSON.parse(col.settings_str || '{}');
+                if (settings.boardIds && settings.boardIds.includes(parseInt(projectBoardId))) {
+                    logger.functionEnd('findProjectLinkColumn', { columnId: col.id });
+                    return col.id;
+                }
+            } catch { continue; }
         }
-        
-        // אחרת, נעטוף אותה ב-MondayApiError
-        throw new MondayApiError(
-            error.message || 'Unknown error',
-            { 
-                response: error.response || null, 
-                apiRequest: error.apiRequest || null, 
-                errorCode: error.errorCode || null,
-                functionName: 'createProduct',
-                duration: Date.now() - (error.startTime || Date.now())
-            }
-        );
     }
+    logger.warn('findProjectLinkColumn', 'Could not find project link column in tasks board');
+    return null;
+};
+
+// יצירת משימה חדשה
+export const createTask = async (monday, tasksBoardId, projectBoardId, projectId, taskName) => {
+    logger.functionStart('createTask', { tasksBoardId, projectBoardId, projectId, taskName });
+
+    const projectLinkColumnId = await findProjectLinkColumn(monday, tasksBoardId, projectBoardId);
+    if (!projectLinkColumnId) {
+        logger.warn('createTask', 'Could not find project link column in tasks board');
+        return null;
+    }
+
+    const columnValues = JSON.stringify({
+        [projectLinkColumnId]: { item_ids: [parseInt(projectId)] }
+    });
+
+    const mutation = `mutation {
+        create_item(
+            board_id: ${tasksBoardId},
+            item_name: "${taskName}",
+            column_values: ${JSON.stringify(columnValues)}
+        ) {
+            id
+            name
+        }
+    }`;
+
+    const apiRequest = { query: mutation, variables: null, operationName: extractOperationName(mutation) };
+    logger.api('createTask', mutation);
+
+    const { response } = await wrapMondayApiCall('createTask', apiRequest, () => monday.api(mutation));
+    logger.functionEnd('createTask', { task: response.data?.create_item });
+    return response.data?.create_item;
 };
 
 // עדכון ערכי עמודות באייטם
@@ -656,119 +383,27 @@ export const updateItemColumnValues = async (monday, boardId, itemId, columnValu
         }
     }`;
 
-    const apiRequest = {
-        query: mutation,
-        variables: null,
-        operationName: extractOperationName(mutation)
-    };
-
+    const apiRequest = { query: mutation, variables: null, operationName: extractOperationName(mutation) };
     logger.api('updateItemColumnValues', mutation);
 
-    try {
-        const startTime = Date.now();
-        const response = await monday.api(mutation);
-        const duration = Date.now() - startTime;
-
-        logger.apiResponse('updateItemColumnValues', response, duration);
-        
-        // בדיקת שגיאות ברמת ה-GraphQL
-        if (response.errors && response.errors.length > 0) {
-            const firstError = response.errors[0];
-            const errorCode = firstError.extensions?.code || null;
-            throw new MondayApiError(
-                firstError.message || 'Unknown error',
-                { response, apiRequest, errorCode, functionName: 'updateItemColumnValues', duration }
-            );
-        }
-        
-        logger.functionEnd('updateItemColumnValues', { success: !!response.data });
-        
-        return response.data;
-    } catch (error) {
-        logger.apiError('updateItemColumnValues', error);
-        
-        // אם זו כבר MondayApiError, פשוט נזרוק אותה
-        if (error instanceof MondayApiError) {
-            throw error;
-        }
-        
-        // אחרת, נעטוף אותה ב-MondayApiError
-        throw new MondayApiError(
-            error.message || 'Unknown error',
-            { 
-                response: error.response || null, 
-                apiRequest, 
-                errorCode: error.errorCode || null,
-                functionName: 'updateItemColumnValues',
-                duration: Date.now() - (error.startTime || Date.now())
-            }
-        );
-    }
+    const { response } = await wrapMondayApiCall('updateItemColumnValues', apiRequest, () => monday.api(mutation));
+    logger.functionEnd('updateItemColumnValues', { success: !!response.data });
+    return response.data;
 };
 
 // אחזור פרטי המשתמש הנוכחי
 export const fetchCurrentUser = async (monday) => {
     logger.functionStart('fetchCurrentUser');
-
-    const query = `query {
-        me {
-            name
-            id
-        }
-    }`;
-
-    const apiRequest = {
-        query,
-        variables: null,
-        operationName: extractOperationName(query)
-    };
-
+    const query = `query { me { name id } }`;
+    const apiRequest = { query, variables: null, operationName: extractOperationName(query) };
     logger.api('fetchCurrentUser', query);
 
-    try {
-        const startTime = Date.now();
-        const response = await monday.api(query);
-        const duration = Date.now() - startTime;
-
-        logger.apiResponse('fetchCurrentUser', response, duration);
-        
-        // בדיקת שגיאות ברמת ה-GraphQL
-        if (response.errors && response.errors.length > 0) {
-            const firstError = response.errors[0];
-            const errorCode = firstError.extensions?.code || null;
-            throw new MondayApiError(
-                firstError.message || 'Unknown error',
-                { response, apiRequest, errorCode, functionName: 'fetchCurrentUser', duration }
-            );
-        }
-        
-        const user = response.data?.me;
-        logger.functionEnd('fetchCurrentUser', { hasUser: !!user });
-        
-        return user;
-    } catch (error) {
-        logger.apiError('fetchCurrentUser', error);
-        
-        // אם זו כבר MondayApiError, פשוט נזרוק אותה
-        if (error instanceof MondayApiError) {
-            throw error;
-        }
-        
-        // אחרת, נעטוף אותה ב-MondayApiError
-        throw new MondayApiError(
-            error.message || 'Unknown error',
-            { 
-                response: error.response || null, 
-                apiRequest, 
-                errorCode: error.errorCode || null,
-                functionName: 'fetchCurrentUser',
-                duration: Date.now() - (error.startTime || Date.now())
-            }
-        );
-    }
+    const { response } = await wrapMondayApiCall('fetchCurrentUser', apiRequest, () => monday.api(query));
+    const user = response.data?.me;
+    logger.functionEnd('fetchCurrentUser', { hasUser: !!user });
+    return user;
 };
 
-// מחיקת אייטם
 // אחזור אייטם בודד לפי ID
 export const fetchItemById = async (monday, boardId, itemId) => {
     logger.functionStart('fetchItemById', { boardId, itemId });
@@ -799,177 +434,222 @@ export const fetchItemById = async (monday, boardId, itemId) => {
         }
     }`;
 
-    const apiRequest = {
-        query,
-        variables: null,
-        operationName: extractOperationName(query)
-    };
-
+    const apiRequest = { query, variables: null, operationName: extractOperationName(query) };
     logger.api('fetchItemById', query);
 
-    try {
-        const startTime = Date.now();
-        const response = await monday.api(query);
-        const duration = Date.now() - startTime;
-
-        logger.apiResponse('fetchItemById', response, duration);
-        
-        // בדיקת שגיאות ברמת ה-GraphQL
-        if (response.errors && response.errors.length > 0) {
-            const firstError = response.errors[0];
-            const errorCode = firstError.extensions?.code || null;
-            throw new MondayApiError(
-                firstError.message || 'Unknown error',
-                { response, apiRequest, errorCode, functionName: 'fetchItemById', duration }
-            );
-        }
-
-        const items = response.data?.items || [];
-        const item = items.length > 0 ? items[0] : null;
-        
-        logger.functionEnd('fetchItemById', { found: !!item });
-        return item;
-    } catch (error) {
-        logger.apiError('fetchItemById', error);
-        
-        // אם זו כבר MondayApiError, פשוט נזרוק אותה
-        if (error instanceof MondayApiError) {
-            throw error;
-        }
-        
-        // אחרת, נעטוף אותה ב-MondayApiError
-        throw new MondayApiError(
-            error.message || 'Unknown error',
-            { 
-                response: error.response || null, 
-                apiRequest, 
-                errorCode: error.errorCode || null,
-                functionName: 'fetchItemById',
-                duration: Date.now() - (error.startTime || Date.now())
-            }
-        );
-    }
+    const { response } = await wrapMondayApiCall('fetchItemById', apiRequest, () => monday.api(query));
+    const items = response.data?.items || [];
+    const item = items.length > 0 ? items[0] : null;
+    logger.functionEnd('fetchItemById', { found: !!item });
+    return item;
 };
 
-// אחזור לקוח בודד לפי ID
-export const fetchCustomerById = async (monday, boardId, customerId) => {
-    logger.functionStart('fetchCustomerById', { boardId, customerId });
+// אחזור פרויקט בודד לפי ID
+export const fetchProjectById = async (monday, boardId, projectId) => {
+    logger.functionStart('fetchProjectById', { boardId, projectId });
 
     const query = `query {
-        items(ids: [${customerId}]) {
+        items(ids: [${projectId}]) {
             id
             name
         }
     }`;
 
-    const apiRequest = {
-        query,
-        variables: null,
-        operationName: extractOperationName(query)
-    };
+    const apiRequest = { query, variables: null, operationName: extractOperationName(query) };
+    logger.api('fetchProjectById', query);
 
-    logger.api('fetchCustomerById', query);
-
-    try {
-        const startTime = Date.now();
-        const response = await monday.api(query);
-        const duration = Date.now() - startTime;
-
-        logger.apiResponse('fetchCustomerById', response, duration);
-        
-        // בדיקת שגיאות ברמת ה-GraphQL
-        if (response.errors && response.errors.length > 0) {
-            const firstError = response.errors[0];
-            const errorCode = firstError.extensions?.code || null;
-            throw new MondayApiError(
-                firstError.message || 'Unknown error',
-                { response, apiRequest, errorCode, functionName: 'fetchCustomerById', duration }
-            );
-        }
-
-        const items = response.data?.items || [];
-        const customer = items.length > 0 ? { id: items[0].id, name: items[0].name } : null;
-        
-        logger.functionEnd('fetchCustomerById', { found: !!customer });
-        return customer;
-    } catch (error) {
-        logger.apiError('fetchCustomerById', error);
-        
-        // אם זו כבר MondayApiError, פשוט נזרוק אותה
-        if (error instanceof MondayApiError) {
-            throw error;
-        }
-        
-        // אחרת, נעטוף אותה ב-MondayApiError
-        throw new MondayApiError(
-            error.message || 'Unknown error',
-            { 
-                response: error.response || null, 
-                apiRequest, 
-                errorCode: error.errorCode || null,
-                functionName: 'fetchCustomerById',
-                duration: Date.now() - (error.startTime || Date.now())
-            }
-        );
-    }
+    const { response } = await wrapMondayApiCall('fetchProjectById', apiRequest, () => monday.api(query));
+    const items = response.data?.items || [];
+    const project = items.length > 0 ? { id: items[0].id, name: items[0].name } : null;
+    logger.functionEnd('fetchProjectById', { found: !!project });
+    return project;
 };
 
 export const deleteItem = async (monday, itemId) => {
     logger.functionStart('deleteItem', { itemId });
+    const mutation = `mutation { delete_item(item_id: ${itemId}) { id } }`;
+    const apiRequest = { query: mutation, variables: null, operationName: extractOperationName(mutation) };
+    logger.api('deleteItem', mutation);
 
+    const { response } = await wrapMondayApiCall('deleteItem', apiRequest, () => monday.api(mutation));
+    logger.functionEnd('deleteItem', { success: !!response.data });
+    return response.data;
+};
+
+// יצירת עמודת Status חדשה לסוג אירוע עם הלייבלים הנדרשים
+export const createEventTypeStatusColumn = async (monday, boardId, columnTitle = 'סוג דיווח') => {
+    logger.functionStart('createEventTypeStatusColumn', { boardId, columnTitle });
+
+    // הגדרת הלייבלים בפורמט של Monday API
+    // צבעים: working_orange, stuck_red, grass_green, dark_blue, sunset
     const mutation = `mutation {
-        delete_item(item_id: ${itemId}) {
+        create_status_column(
+            board_id: ${boardId}
+            title: "${columnTitle}"
+            defaults: {
+                labels: [
+                    { color: working_orange, label: "חופשה", index: 0 }
+                    { color: stuck_red, label: "מחלה", index: 1 }
+                    { color: grass_green, label: "מילואים", index: 2 }
+                    { color: dark_blue, label: "שעתי", index: 3 }
+                    { color: sunset, label: "לא לחיוב", index: 4 }
+                ]
+            }
+        ) {
             id
         }
     }`;
 
-    const apiRequest = {
-        query: mutation,
-        variables: null,
-        operationName: extractOperationName(mutation)
-    };
+    const apiRequest = { query: mutation, variables: null, operationName: 'create_status_column' };
+    logger.api('createEventTypeStatusColumn', mutation);
 
-    logger.api('deleteItem', mutation);
-
-    try {
-        const startTime = Date.now();
-        const response = await monday.api(mutation);
-        const duration = Date.now() - startTime;
-
-        logger.apiResponse('deleteItem', response, duration);
-        
-        // בדיקת שגיאות ברמת ה-GraphQL
-        if (response.errors && response.errors.length > 0) {
-            const firstError = response.errors[0];
-            const errorCode = firstError.extensions?.code || null;
-            throw new MondayApiError(
-                firstError.message || 'Unknown error',
-                { response, apiRequest, errorCode, functionName: 'deleteItem', duration }
-            );
-        }
-        
-        logger.functionEnd('deleteItem', { success: !!response.data });
-        
-        return response.data;
-    } catch (error) {
-        logger.apiError('deleteItem', error);
-        
-        // אם זו כבר MondayApiError, פשוט נזרוק אותה
-        if (error instanceof MondayApiError) {
-            throw error;
-        }
-        
-        // אחרת, נעטוף אותה ב-MondayApiError
-        throw new MondayApiError(
-            error.message || 'Unknown error',
-            { 
-                response: error.response || null, 
-                apiRequest, 
-                errorCode: error.errorCode || null,
-                functionName: 'deleteItem',
-                duration: Date.now() - (error.startTime || Date.now())
-            }
-        );
-    }
+    const { response } = await wrapMondayApiCall('createEventTypeStatusColumn', apiRequest, () => monday.api(mutation));
+    const columnId = response.data?.create_status_column?.id;
+    logger.functionEnd('createEventTypeStatusColumn', { columnId });
+    return columnId;
 };
 
+// שליפת הגדרות עמודה (settings) לפי ID
+export const fetchStatusColumnSettings = async (monday, boardId, columnId) => {
+    logger.functionStart('fetchStatusColumnSettings', { boardId, columnId });
+
+    const query = `query {
+        boards(ids: [${boardId}]) {
+            columns(ids: ["${columnId}"]) {
+                type
+                id
+                title
+                settings
+            }
+        }
+    }`;
+
+    const apiRequest = { query, variables: null, operationName: extractOperationName(query) };
+    logger.api('fetchStatusColumnSettings', query);
+
+    const { response } = await wrapMondayApiCall('fetchStatusColumnSettings', apiRequest, () => monday.api(query));
+    const column = response.data?.boards?.[0]?.columns?.[0];
+    logger.functionEnd('fetchStatusColumnSettings', { hasColumn: !!column });
+    return column;
+};
+
+// שליפת כל עמודות הסטטוס מלוח
+export const fetchStatusColumnsFromBoard = async (monday, boardId) => {
+    if (!boardId) return [];
+    logger.functionStart('fetchStatusColumnsFromBoard', { boardId });
+
+    const query = `query {
+        boards(ids: [${boardId}]) {
+            columns {
+                id
+                title
+                type
+                settings_str
+            }
+        }
+    }`;
+
+    const apiRequest = { query, variables: null, operationName: extractOperationName(query) };
+    logger.api('fetchStatusColumnsFromBoard', query);
+
+    const { response } = await wrapMondayApiCall('fetchStatusColumnsFromBoard', apiRequest, () => monday.api(query));
+    const columns = response.data?.boards?.[0]?.columns || [];
+    const statusColumns = columns
+        .filter(col => col.type === 'status')
+        .map(col => ({
+            id: col.id,
+            title: col.title,
+            settings_str: col.settings_str
+        }));
+    
+    logger.functionEnd('fetchStatusColumnsFromBoard', { count: statusColumns.length });
+    return statusColumns;
+};
+
+/**
+ * חילוץ labels מהגדרות עמודת סטטוס
+ * תומך בפורמט חדש (array) ופורמט ישן (object)
+ * @param {string|object} columnSettings - הגדרות העמודה (settings או settings_str)
+ * @returns {Array<{id: string, label: string, color?: string}>}
+ */
+export const parseStatusLabels = (columnSettings) => {
+    if (!columnSettings) return [];
+    
+    let settings = columnSettings;
+    
+    // אם זה string, נפרסר אותו
+    if (typeof columnSettings === 'string') {
+        try {
+            settings = JSON.parse(columnSettings);
+        } catch {
+            logger.warn('parseStatusLabels', 'Failed to parse column settings string');
+            return [];
+        }
+    }
+    
+    if (!settings.labels) return [];
+    
+    // פורמט חדש - מערך
+    if (Array.isArray(settings.labels)) {
+        return settings.labels
+            .filter(item => item && item.label && !item.is_deactivated)
+            .map(item => ({
+                id: item.id?.toString() || item.label,
+                label: item.label,
+                color: item.color || item.hex
+            }));
+    }
+    
+    // פורמט ישן - אובייקט
+    return Object.entries(settings.labels)
+        .filter(([id]) => id !== 'empty' && id !== '')
+        .map(([id, data]) => ({
+            id,
+            label: typeof data === 'string' ? data : (data?.label || ''),
+            color: typeof data === 'object' ? (data?.color || data?.hex) : undefined
+        }))
+        .filter(item => item.label); // מסנן ערכים ריקים
+};
+
+/**
+ * שליפת ערכי סטטוס עבור רשימת אייטמים
+ * @param {object} monday - Monday SDK instance
+ * @param {string[]} itemIds - רשימת מזהי אייטמים
+ * @param {string} statusColumnId - מזהה עמודת הסטטוס
+ * @returns {Promise<Map<string, string>>} - מפה של itemId -> statusLabel
+ */
+export const fetchItemsStatus = async (monday, itemIds, statusColumnId) => {
+    if (!itemIds || itemIds.length === 0 || !statusColumnId) {
+        return new Map();
+    }
+    
+    logger.functionStart('fetchItemsStatus', { itemCount: itemIds.length, statusColumnId });
+
+    const query = `query {
+        items(ids: [${itemIds.join(',')}]) {
+            id
+            column_values(ids: ["${statusColumnId}"]) {
+                id
+                text
+            }
+        }
+    }`;
+
+    const apiRequest = { query, variables: null, operationName: extractOperationName(query) };
+    logger.api('fetchItemsStatus', query);
+
+    const { response } = await wrapMondayApiCall('fetchItemsStatus', apiRequest, () => monday.api(query));
+    const items = response.data?.items || [];
+    const statusMap = new Map();
+    
+    items.forEach(item => {
+        const statusColumn = item.column_values?.find(col => col.id === statusColumnId);
+        if (statusColumn) {
+            // text מכיל את ה-label של הסטטוס
+            statusMap.set(item.id.toString(), statusColumn.text || '');
+        }
+    });
+    
+    logger.functionEnd('fetchItemsStatus', { mappedCount: statusMap.size });
+    return statusMap;
+};

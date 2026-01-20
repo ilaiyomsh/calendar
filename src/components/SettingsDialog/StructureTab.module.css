@@ -1,0 +1,75 @@
+.container {
+  animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.optionsGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.notesToggle {
+  margin-top: 18px;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 16px 18px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background-color: #ffffff;
+}
+
+.notesToggle:hover {
+  background-color: #f9fafb;
+}
+
+.notesCheckbox {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+.notesCheckbox input[type="checkbox"] {
+  width: 22px;
+  height: 22px;
+  accent-color: #2563eb;
+  cursor: pointer;
+}
+
+.notesContent {
+  flex: 1;
+}
+
+.notesTitle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 4px;
+}
+
+.notesIcon {
+  color: #6b7280;
+}
+
+.notesDescription {
+  display: block;
+  font-size: 14px;
+  color: #6b7280;
+  line-height: 1.5;
+}

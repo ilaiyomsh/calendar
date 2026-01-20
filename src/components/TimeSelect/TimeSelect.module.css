@@ -37,10 +37,10 @@
     flex: 1;
     border: none;
     background: transparent;
-    padding: 8px;
-    font-size: 0.9rem;
+    padding: 8px 2px;
+    font-size: 0.85rem;
     color: #323338;
-    text-align: right;
+    text-align: center;
     outline: none;
     min-width: 0;
     font-family: inherit;
@@ -56,9 +56,9 @@
 
 .triggerIcon {
     color: #676879;
-    font-size: 12px;
-    margin-right: 4px;
-    padding: 8px 4px;
+    font-size: 10px;
+    margin-right: 2px;
+    padding: 8px 2px;
     cursor: pointer;
     flex-shrink: 0;
     user-select: none;

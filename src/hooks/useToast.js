@@ -9,7 +9,7 @@ export const useToast = () => {
     const [toasts, setToasts] = useState([]);
     const [errorDetailsModal, setErrorDetailsModal] = useState(null);
 
-    const showToast = useCallback((message, type = 'info', duration = 5000, errorDetails = null) => {
+    const showToast = useCallback((message, type = 'info', duration = 1500, errorDetails = null) => {
         const id = Date.now() + Math.random();
         const newToast = { id, message, type, duration, errorDetails };
         
@@ -22,7 +22,7 @@ export const useToast = () => {
         setToasts(prev => prev.filter(toast => toast.id !== id));
     }, []);
 
-    const showSuccess = useCallback((message, duration) => {
+    const showSuccess = useCallback((message, duration = 1500) => {
         return showToast(message, 'success', duration);
     }, [showToast]);
 

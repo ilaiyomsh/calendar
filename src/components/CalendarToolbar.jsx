@@ -1,8 +1,8 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Navigate } from 'react-big-calendar';
-import { IconButton } from '@vibe/core';
-import { Settings } from '@vibe/icons';
-import { useSettings } from '../contexts/SettingsContext';
+import { Settings } from 'lucide-react';
+import { NavigationChevronLeft, NavigationChevronRight, DropdownChevronDown } from "@vibe/icons";
+import logger from '../utils/logger';
 
 const CalendarToolbar = ({ 
   onNavigate, 
@@ -11,52 +11,93 @@ const CalendarToolbar = ({
   view, 
   views, 
   localizer,
-  // Custom props passed via componentsProps or context
   onOpenSettings,
-  monday,
-  customSettings,
-  columnIds,
-  events,
   isOwner = false
 }) => {
+  const [isViewMenuOpen, setIsViewMenuOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsViewMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleViewChange = (newView) => {
+    onView(newView);
+    setIsViewMenuOpen(false);
+  };
+
   return (
     <div className="rbc-toolbar">
-      {/* צד ימין - כפתורי תצוגה + פעולות מותאמות */}
-      <span className="rbc-btn-group">
-        {/* כפתור הגדרות - מוצג רק ל-owners */}
+      {/* צד ימין - ניווט וכותרת */}
+      <div className="rbc-toolbar-section rbc-toolbar-nav">
+        <button 
+          type="button" 
+          className="rbc-today-btn" 
+          onClick={() => onNavigate(Navigate.TODAY)}
+        >
+          היום
+        </button>
+        
+        <div className="rbc-nav-arrows">
+          <button type="button" className="rbc-nav-btn" onClick={() => onNavigate(Navigate.PREVIOUS)} title="קודם">
+            <NavigationChevronRight size="20" />
+          </button>
+          <button type="button" className="rbc-nav-btn" onClick={() => onNavigate(Navigate.NEXT)} title="הבא">
+            <NavigationChevronLeft size="20" />
+          </button>
+        </div>
+        
+        <span className="rbc-toolbar-label">{label}</span>
+      </div>
+
+      {/* צד שמאל - תצוגות והגדרות */}
+      <div className="rbc-toolbar-section rbc-toolbar-actions">
+        {/* Dropdown תצוגות */}
+        <div className="rbc-view-dropdown" ref={dropdownRef}>
+          <button 
+            type="button" 
+            className="rbc-view-select-button"
+            onClick={() => setIsViewMenuOpen(!isViewMenuOpen)}
+          >
+            <span>{messages[view] || view}</span>
+            <DropdownChevronDown size="20" />
+          </button>
+          
+          {isViewMenuOpen && (
+            <div className="rbc-view-menu">
+              {views.map(viewName => (
+                <button
+                  key={viewName}
+                  type="button"
+                  className={view === viewName ? 'active' : ''}
+                  onClick={() => handleViewChange(viewName)}
+                >
+                  {messages[viewName] || viewName}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* כפתור הגדרות */}
         {isOwner && (
           <button 
             type="button" 
+            className="rbc-settings-btn"
             onClick={onOpenSettings}
             title="הגדרות"
-            style={{ padding: '6px', background: 'transparent', border: 'none', cursor: 'pointer' }}
           >
             <Settings size={20} />
           </button>
         )}
-
-        {/* כפתורי תצוגה (חודש/שבוע/יום) */}
-        {views.map(viewName => (
-          <button
-            key={viewName}
-            type="button"
-            className={view === viewName ? 'rbc-active' : ''}
-            onClick={() => onView(viewName)}
-          >
-            {messages[viewName] || viewName}
-          </button>
-        ))}
-      </span>
-
-      {/* מרכז - כותרת התאריך */}
-      <span className="rbc-toolbar-label">{label}</span>
-
-      {/* צד שמאל - כפתורי ניווט */}
-      <span className="rbc-btn-group">
-        <button type="button" onClick={() => onNavigate(Navigate.NEXT)}>הבא</button>
-        <button type="button" onClick={() => onNavigate(Navigate.PREVIOUS)}>קודם</button>
-        <button type="button" onClick={() => onNavigate(Navigate.TODAY)}>היום</button>
-      </span>
+      </div>
     </div>
   );
 };
@@ -65,9 +106,9 @@ const CalendarToolbar = ({
 const messages = {
   month: 'חודש',
   week: 'שבוע',
+  work_week: 'שבוע עבודה',
   day: 'יום',
   agenda: 'סדר יום'
 };
 
 export default CalendarToolbar;
-

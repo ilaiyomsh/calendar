@@ -1,0 +1,343 @@
+.container {
+  animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Info Box */
+.infoBox {
+  background-color: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.infoTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e40af;
+  margin: 0 0 4px 0;
+}
+
+.infoText {
+  font-size: 13px;
+  color: #3b82f6;
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* Accordion */
+.accordion {
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 12px;
+  transition: all 0.2s ease;
+  background-color: #ffffff;
+}
+
+.accordion.accordionOpen {
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.accordionHeader {
+  width: 100%;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: right;
+  transition: background-color 0.2s ease;
+}
+
+.accordionHeader:hover {
+  background-color: #f9fafb;
+}
+
+.accordionOpen .accordionHeader {
+  background-color: #f9fafb;
+}
+
+.accordionTitle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.accordionIcon {
+  padding: 8px;
+  border-radius: 8px;
+  background-color: #f3f4f6;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.accordionIcon.accordionIconActive {
+  background-color: #dbeafe;
+  color: #2563eb;
+}
+
+.accordionTitleText {
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.accordionBadge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background-color: #fef3c7;
+  color: #92400e;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 12px;
+  margin-right: auto;
+}
+
+.chevron {
+  color: #9ca3af;
+}
+
+.accordionContent {
+  padding: 16px;
+  padding-top: 8px;
+  border-top: 1px solid #f3f4f6;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Field Wrapper */
+.fieldWrapper {
+  margin-bottom: 12px;
+}
+
+.fieldLabel {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 6px;
+}
+
+.required {
+  color: #ef4444;
+}
+
+.fieldDescription {
+  font-size: 12px;
+  color: #6b7280;
+  margin: 0 0 8px 0;
+  line-height: 1.4;
+}
+
+.fieldError {
+  font-size: 12px;
+  color: #ef4444;
+  margin: 6px 0 0 0;
+}
+
+.warning {
+  font-size: 12px;
+  color: #f59e0b;
+  background-color: #fef3c7;
+  padding: 10px 12px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* Toggle Row */
+.toggleRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  margin-bottom: 12px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.toggleInfo {
+  flex: 1;
+}
+
+.toggleInfo .fieldLabel {
+  margin-bottom: 2px;
+}
+
+.toggleInfo .fieldDescription {
+  margin-bottom: 0;
+}
+
+.toggle {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  border-radius: 12px;
+  background-color: #d1d5db;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  flex-shrink: 0;
+}
+
+.toggle:hover {
+  background-color: #9ca3af;
+}
+
+.toggle.toggleOn {
+  background-color: #2563eb;
+}
+
+.toggle.toggleOn:hover {
+  background-color: #1d4ed8;
+}
+
+.toggle.toggleDisabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.toggleKnob {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background-color: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s ease;
+}
+
+.toggle.toggleOn .toggleKnob {
+  transform: translateX(-20px);
+}
+
+/* Validation Warning */
+.validationWarning {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 12px;
+  background-color: #fef3c7;
+  border: 1px solid #f59e0b;
+  border-radius: 8px;
+  color: #92400e;
+  font-size: 13px;
+}
+
+.validationWarning svg {
+  flex-shrink: 0;
+  color: #f59e0b;
+  margin-top: 2px;
+}
+
+.validationWarning strong {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.validationWarning small {
+  display: block;
+  margin-top: 8px;
+  color: #a16207;
+  font-size: 11px;
+}
+
+.missingLabels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.missingLabel {
+  background-color: #fbbf24;
+  color: #78350f;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* Create Column Button */
+.createColumnButton {
+  display: block;
+  margin-top: 12px;
+  padding: 8px 16px;
+  background-color: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.createColumnButton:hover:not(:disabled) {
+  background-color: #1d4ed8;
+}
+
+.createColumnButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.createColumnButtonAlt {
+  display: block;
+  margin-top: 8px;
+  padding: 6px 12px;
+  background-color: transparent;
+  color: #2563eb;
+  border: 1px dashed #2563eb;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: 100%;
+  text-align: center;
+}
+
+.createColumnButtonAlt:hover:not(:disabled) {
+  background-color: #eff6ff;
+}
+
+.createColumnButtonAlt:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

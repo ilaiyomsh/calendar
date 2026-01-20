@@ -1,77 +1,100 @@
 import { useMemo } from 'react';
+import { STRUCTURE_MODES } from '../../contexts/SettingsContext';
 
 /**
  * Hook ל-validation של הגדרות
  * @param {Object} settings - ההגדרות הנוכחיות
  * @param {Object} context - ה-context של Monday
- * @returns {Object} { errors, isValid, getFieldError }
+ * @returns {Object} { errors, isValid, getFieldError, getMissingFieldsMessage }
  */
 export const useSettingsValidation = (settings, context) => {
-  const errors = useMemo(() => {
-    const errs = {};
+  const { structureMode } = settings;
+  
+  // בדיקה אם המצב כולל משימות
+  const hasTasks = structureMode === STRUCTURE_MODES.PROJECT_WITH_TASKS;
+  
+  // בדיקה אם המצב כולל סיווג
+  const hasStage = structureMode === STRUCTURE_MODES.PROJECT_WITH_STAGE;
 
-    // בדיקת לוח חיצוני
+  const errors = useMemo(() => {
+    const errors = {};
+
+    // --- שדות חובה תמיד ---
+    
+    // לוח פרויקטים
     if (!settings.connectedBoardId) {
-      errs.connectedBoardId = 'יש לבחור לוח חיצוני';
+      errors.connectedBoardId = 'יש לבחור לוח פרויקטים';
     }
     if (settings.connectedBoardId && (!settings.peopleColumnIds || settings.peopleColumnIds.length === 0)) {
-      errs.peopleColumnIds = 'יש לבחור לפחות עמודת אנשים אחת';
+      errors.peopleColumnIds = 'יש לבחור לפחות עמודת אנשים אחת';
     }
 
-    // בדיקת לוח נוכחי
+    // לוח נוכחי
     if (!context?.boardId) {
-      errs.currentBoard = 'לא נמצא לוח נוכחי - פתח את האפליקציה מתוך לוח';
+      errors.currentBoard = 'לא נמצא לוח נוכחי - פתח את האפליקציה מתוך לוח';
     } else {
+      if (!settings.projectColumnId) {
+        errors.projectColumnId = 'יש לבחור עמודת קישור לפרויקט';
+      }
       if (!settings.dateColumnId) {
-        errs.dateColumnId = 'יש לבחור עמודת תאריך';
+        errors.dateColumnId = 'יש לבחור עמודת תאריך';
       }
       if (!settings.durationColumnId) {
-        errs.durationColumnId = 'יש לבחור עמודת משך זמן';
-      }
-      if (!settings.projectColumnId) {
-        errs.projectColumnId = 'יש לבחור עמודת קישור לפרויקט';
+        errors.durationColumnId = 'יש לבחור עמודת משך זמן';
       }
       if (!settings.reporterColumnId) {
-        errs.reporterColumnId = 'יש לבחור עמודת מדווח';
+        errors.reporterColumnId = 'יש לבחור עמודת מדווח';
       }
       if (!settings.eventTypeStatusColumnId) {
-        errs.eventTypeStatusColumnId = 'יש לבחור עמודת סטטוס לסוג אירוע';
+        errors.eventTypeStatusColumnId = 'יש לבחור עמודת סוג דיווח';
+      }
+      if (!settings.nonBillableStatusColumnId) {
+        errors.nonBillableStatusColumnId = 'יש לבחור עמודת סוגי לא לחיוב';
       }
     }
 
-    // בדיקת מוצרים - חובה במערכת
-    if (!settings.productsCustomerColumnId) {
-      errs.productsCustomerColumnId = 'יש לבחור עמודת מוצרים בלוח לקוחות';
-    }
-    
-    if (settings.productsCustomerColumnId) {
-      if (!settings.productsBoardId) {
-        errs.productsBoardId = 'יש לבחור לוח מוצרים';
+    // --- שדות חובה רק במצבי TASKS ---
+    if (hasTasks) {
+      if (!settings.tasksProjectColumnId) {
+        errors.tasksProjectColumnId = 'יש לבחור עמודת משימות בלוח פרויקטים';
       }
-      if (context?.boardId && !settings.productColumnId) {
-        errs.productColumnId = 'יש לבחור עמודת קישור למוצר בלוח הנוכחי';
+      if (settings.tasksProjectColumnId && !settings.tasksBoardId) {
+        errors.tasksBoardId = 'יש לבחור לוח משימות';
       }
-    }
-
-    // בדיקת שלב - חובה אם יש מוצר
-    if (settings.productColumnId && !settings.stageColumnId) {
-      errs.stageColumnId = 'יש לבחור עמודת שלב (חובה אם יש הגדרת מוצר)';
-    }
-
-    // בדיקת שעות עבודה
-    if (settings.workDayStart && settings.workDayEnd) {
-      const [startHours, startMinutes] = settings.workDayStart.split(':').map(Number);
-      const [endHours, endMinutes] = settings.workDayEnd.split(':').map(Number);
-      const startTime = startHours * 60 + startMinutes;
-      const endTime = endHours * 60 + endMinutes;
-      
-      if (startTime >= endTime) {
-        errs.workHours = 'שעת התחלה חייבת להיות לפני שעת הסיום';
+      if (settings.tasksBoardId && context?.boardId && !settings.taskColumnId) {
+        errors.taskColumnId = 'יש לבחור עמודת קישור למשימה בלוח הנוכחי';
       }
     }
 
-    return errs;
-  }, [settings, context]);
+    // --- שדות חובה רק במצבי STAGE ---
+    if (hasStage && context?.boardId) {
+      if (!settings.stageColumnId) {
+        errors.stageColumnId = 'יש לבחור עמודת סיווג';
+      }
+    }
+
+    // --- בדיקת פילטר סטטוס פרויקטים ---
+    if (settings.projectStatusFilterEnabled) {
+      if (!settings.projectStatusColumnId) {
+        errors.projectStatusColumnId = 'יש לבחור עמודת סטטוס בלוח פרויקטים';
+      }
+      if (!settings.projectActiveStatusValues || settings.projectActiveStatusValues.length === 0) {
+        errors.projectActiveStatusValues = 'יש לבחור לפחות ערך סטטוס אחד';
+      }
+    }
+
+    // --- בדיקת פילטר סטטוס משימות ---
+    if (hasTasks && settings.taskStatusFilterEnabled) {
+      if (!settings.taskStatusColumnId) {
+        errors.taskStatusColumnId = 'יש לבחור עמודת סטטוס בלוח משימות';
+      }
+      if (!settings.taskActiveStatusValues || settings.taskActiveStatusValues.length === 0) {
+        errors.taskActiveStatusValues = 'יש לבחור לפחות ערך סטטוס אחד';
+      }
+    }
+
+    return errors;
+  }, [settings, context, hasTasks, hasStage]);
 
   const isValid = Object.keys(errors).length === 0;
 
@@ -79,10 +102,18 @@ export const useSettingsValidation = (settings, context) => {
     return errors[fieldName] || null;
   };
 
+  // הודעה מסכמת לשמירה חלקית
+  const getMissingFieldsMessage = () => {
+    const errorCount = Object.keys(errors).length;
+    if (errorCount === 0) return null;
+    
+    return `יש ${errorCount} שדות חסרים`;
+  };
+
   return {
     errors,
     isValid,
-    getFieldError
+    getFieldError,
+    getMissingFieldsMessage
   };
 };
-

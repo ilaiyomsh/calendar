@@ -1,0 +1,133 @@
+.overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10010;
+    backdrop-filter: blur(2px);
+    direction: rtl;
+}
+
+.dialog {
+    background-color: #ffffff;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 400px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+    from { 
+        transform: translateY(20px); 
+        opacity: 0; 
+    }
+    to { 
+        transform: translateY(0); 
+        opacity: 1; 
+    }
+}
+
+.header {
+    padding: 20px 24px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #f0f0f0;
+    background-color: #fffbeb;
+}
+
+.titleGroup {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.titleGroup h3 {
+    margin: 0;
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #92400e;
+}
+
+.warningIcon {
+    color: #f59e0b;
+}
+
+.closeButton {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #92400e;
+    padding: 4px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s;
+}
+
+.closeButton:hover {
+    background-color: rgba(146, 64, 14, 0.1);
+}
+
+.content {
+    padding: 24px;
+    text-align: center;
+}
+
+.message {
+    margin: 0;
+    color: #4b5563;
+    font-size: 1rem;
+    line-height: 1.6;
+}
+
+.footer {
+    padding: 16px 24px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    border-top: 1px solid #f0f0f0;
+    background-color: #fafafa;
+}
+
+.button {
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.cancelBtn {
+    background-color: #f3f4f6;
+    color: #374151;
+}
+
+.cancelBtn:hover {
+    background-color: #e5e7eb;
+}
+
+.settingsBtn {
+    background-color: #0073ea;
+    color: white;
+}
+
+.settingsBtn:hover {
+    background-color: #0060b9;
+    transform: translateY(-1px);
+}

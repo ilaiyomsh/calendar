@@ -98,6 +98,7 @@ const logWithColor = (level, message, data = null) => {
 const logger = {
   /**
    * הגדרת רמת לוג
+   * @param {string|number} level - 'DEBUG' | 'INFO' | 'WARN' | 'ERROR' | 'NONE'
    */
   setLevel: (level) => {
     if (typeof level === 'string') {
@@ -105,7 +106,15 @@ const logger = {
     } else {
       currentLevel = level;
     }
+    console.log(`%c🔧 Log level changed to: ${Object.keys(LOG_LEVELS).find(k => LOG_LEVELS[k] === currentLevel)}`, 
+                'color: #9c27b0; font-weight: bold');
   },
+
+  /**
+   * קבלת רמת הלוג הנוכחית
+   * @returns {string} שם רמת הלוג הנוכחית
+   */
+  getLevel: () => Object.keys(LOG_LEVELS).find(k => LOG_LEVELS[k] === currentLevel),
 
   /**
    * בדיקה אם מצב debug פעיל
@@ -231,6 +240,57 @@ const logger = {
     }
   }
 };
+
+// ============================================
+// פקודות גלובליות לדיבאג בפרודקשן
+// הקלד בקונסול את הפקודות הבאות:
+// - enableDebugLogs()  - הפעלת לוגים מלאים
+// - disableDebugLogs() - השבתת לוגים (חזרה לפרודקשן)
+// - getLogLevel()      - הצגת רמת הלוג הנוכחית
+// - setLogLevel('INFO') - הגדרת רמה ספציפית
+// ============================================
+
+if (typeof window !== 'undefined') {
+  /**
+   * הפעלת לוגים מלאים בפרודקשן
+   * הקלד בקונסול: enableDebugLogs()
+   */
+  window.enableDebugLogs = () => {
+    logger.setLevel('DEBUG');
+    console.log('%c🐛 Debug logs ENABLED - All logs will now be displayed', 
+                'color: #4caf50; font-weight: bold; font-size: 14px');
+    console.log('%c💡 To disable: disableDebugLogs()', 'color: #9e9e9e');
+  };
+
+  /**
+   * השבתת לוגים (חזרה למצב פרודקשן)
+   * הקלד בקונסול: disableDebugLogs()
+   */
+  window.disableDebugLogs = () => {
+    logger.setLevel('ERROR');
+    console.log('%c🔇 Debug logs DISABLED - Only errors will be displayed', 
+                'color: #f44336; font-weight: bold; font-size: 14px');
+  };
+
+  /**
+   * הצגת רמת הלוג הנוכחית
+   * הקלד בקונסול: getLogLevel()
+   */
+  window.getLogLevel = () => {
+    const level = logger.getLevel();
+    console.log(`%c📊 Current log level: ${level}`, 'color: #2196f3; font-weight: bold');
+    return level;
+  };
+
+  /**
+   * הגדרת רמת לוג ספציפית
+   * הקלד בקונסול: setLogLevel('INFO')
+   * @param {string} level - 'DEBUG' | 'INFO' | 'WARN' | 'ERROR' | 'NONE'
+   */
+  window.setLogLevel = (level) => {
+    logger.setLevel(level);
+  };
+}
 
 // ייצוא
 export default logger;

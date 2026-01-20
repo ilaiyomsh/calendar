@@ -4,6 +4,7 @@
 
 import { format, parse } from 'date-fns';
 import logger from './logger';
+import { isAllDayEventType, parseDuration, calculateEndDateFromDays } from './durationUtils';
 
 /**
  * קבלת מזהי העמודות מההגדרות
@@ -14,7 +15,10 @@ export const getColumnIds = (settings) => {
     const columnIds = {
         startDate: null,
         duration: null,
-        connectedItem: null
+        connectedItem: null,
+        status: null,
+        eventTypeStatus: null,
+        notes: null
     };
 
     // חילוץ מזהה עמודת תאריך התחלה
@@ -30,6 +34,19 @@ export const getColumnIds = (settings) => {
     // חילוץ מזהה עמודת board relation
     if (settings.perent_item_board) {
         columnIds.connectedItem = Object.keys(settings.perent_item_board)[0];
+    }
+
+    // הוספת עמודות סטטוס והערות
+    if (settings.status) {
+        columnIds.status = Object.keys(settings.status)[0];
+    }
+    
+    if (settings.event_type_status) {
+        columnIds.eventTypeStatus = Object.keys(settings.event_type_status)[0];
+    }
+    
+    if (settings.notes) {
+        columnIds.notes = Object.keys(settings.notes)[0];
     }
 
     return columnIds;
@@ -101,7 +118,7 @@ export const parseBoardRelationColumn = (valueJson) => {
 /**
  * המרת אייטם מ-Monday לאירוע בלוח
  * @param {Object} item - אייטם מ-Monday
- * @param {Object} columnIds - מזהי העמודות
+ * @param {Object} columnIds - מזהי העמודות (כולל סוג האירוע)
  * @returns {Object|null} - אירוע ללוח או null
  */
 export const mapItemToEvent = (item, columnIds) => {
@@ -110,27 +127,50 @@ export const mapItemToEvent = (item, columnIds) => {
     // מציאת העמודות הרלוונטיות
     const dateColumn = item.column_values?.find(col => col.id === columnIds.startDate);
     const durationColumn = item.column_values?.find(col => col.id === columnIds.duration);
+    const typeColumn = item.column_values?.find(col => col.id === columnIds.eventTypeStatus);
     
     // פרסור תאריך התחלה
     const startDate = parseDateColumn(dateColumn?.value);
     if (!startDate) {
-        // לוג להערה - ניתן להפעיל לצורך דיבוג
-        // logger.warn('mondayColumns', `Item ${item.id} has no valid start date`);
         return null;
     }
 
-    // פרסור משך זמן
-    const durationMinutes = parseHourColumn(durationColumn?.value);
-    
-    // חישוב תאריך סיום
-    const endDate = new Date(startDate.getTime() + durationMinutes * 60000);
+    // זיהוי סוג האירוע
+    const eventType = typeColumn?.text || '';
+    const isAllDay = isAllDayEventType(eventType);
+
+    // חילוץ משך גולמי
+    let rawDuration = 0;
+    const durationValue = durationColumn?.value;
+    if (durationValue) {
+        rawDuration = parseHourColumn(durationValue) / 60; // המרה לשעות עשרוניות
+    }
+
+    // פרסור Duration פולימורפי
+    const duration = parseDuration(rawDuration, eventType);
+
+    let endDate;
+    if (isAllDay) {
+        // אירוע יומי - duration מייצג ימים
+        startDate.setHours(0, 0, 0, 0);
+        endDate = calculateEndDateFromDays(startDate, duration.value);
+    } else {
+        // אירוע שעתי - duration מייצג שעות
+        const durationMinutes = Math.round(duration.value * 60);
+        const effectiveDurationMinutes = durationMinutes > 0 ? durationMinutes : 60;
+        endDate = new Date(startDate.getTime() + effectiveDurationMinutes * 60000);
+    }
 
     return {
         id: item.id,
         title: item.name,
         start: startDate,
         end: endDate,
-        mondayItemId: item.id
+        allDay: isAllDay,
+        eventType: eventType,
+        mondayItemId: item.id,
+        notes: item.column_values?.find(col => col.id === columnIds.notes)?.text || '',
+        durationDays: isAllDay ? duration.value : null
     };
 };
 

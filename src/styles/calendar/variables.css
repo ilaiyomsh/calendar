@@ -1,0 +1,64 @@
+/* Design Tokens - Google Calendar Style */
+
+:root {
+  /* Colors - Primary */
+  --gc-primary: #1a73e8;
+  --gc-primary-light: #e8f0fe;
+  
+  /* Colors - Borders & Dividers */
+  --gc-border: #dadce0;
+  --gc-border-light: #e0e0e0;
+  
+  /* Colors - Text */
+  --gc-text-primary: #3c4043;
+  --gc-text-secondary: #70757a;
+  
+  /* Colors - Today Indicator */
+  --gc-today-circle: #1a73e8;
+  --gc-time-indicator: #ea4335;
+  --gc-bg-today: #e8f0fe;
+  
+  /* Colors - Event Types (dynamic colors from colorUtils.js) */
+  /* Note: Colors are now generated dynamically by getEventColor() based on projectId or eventType */
+  --gc-event-sick: #e2445c;
+  --gc-event-vacation: #00c875;
+  --gc-event-reserves: #579bfc;
+  --gc-event-default: #3174ad;
+  
+  /* Layout - Spacing */
+  --gc-event-gap: 2px;
+  --gc-event-padding: 4px 8px;
+  --gc-event-radius: 8px;
+  
+  /* Layout - Dimensions */
+  --gc-gutter-width: 60px;
+  --gc-header-height: 48px;
+  --gc-slot-height: 60px;
+  
+  /* All-day events overlap (dynamic - set by JS) */
+  --allday-overlap: 0;
+  
+  /* Z-Index Hierarchy */
+  --gc-z-grid: 1;
+  --gc-z-event: 10;
+  --gc-z-event-dragging: 15;
+  --gc-z-now-indicator: 20;
+  --gc-z-header: 30;
+  --gc-z-modal: 1000;
+  
+  /* Typography */
+  --gc-font-family: 'Rubik', sans-serif;
+  --gc-font-size-header: 11px;
+  --gc-font-size-event: 15px;
+  --gc-font-size-small: 11px;
+  --gc-font-weight-header: 500;
+  --gc-font-weight-event: normal;
+  
+  /* Shadows */
+  --gc-shadow-hover: 0 2px 6px rgba(0, 0, 0, 0.15);
+  --gc-shadow-drag: 0 6px 10px rgba(0, 0, 0, 0.14);
+  
+  /* Transitions */
+  --gc-transition: all 0.2s ease-in-out;
+}
+

@@ -51,8 +51,8 @@ export const useStageOptions = (monday, boardId, columnId) => {
                             // עמודת status או dropdown - labels נמצאים ב-settings.labels
                             if (settings.labels && Array.isArray(settings.labels)) {
                                 settings.labels.forEach((label) => {
-                                    // רק labels שלא מושבתים
-                                    if (!label.is_deactivated) {
+                                    // רק labels שלא מושבתים ושיש להם טקסט
+                                    if (!label.is_deactivated && label.label && label.label.trim() !== '') {
                                         options.push({
                                             id: label.id?.toString() || label.label,
                                             value: label.label,

@@ -1,11 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { useSettings } from '../../contexts/SettingsContext';
-import { useCustomers } from '../../hooks/useCustomers';
-import { useProducts } from '../../hooks/useProducts';
+import { useSettings, STRUCTURE_MODES } from '../../contexts/SettingsContext';
+import { useProjects } from '../../hooks/useProjects';
+import { useTasks } from '../../hooks/useTasks';
 import { useStageOptions } from '../../hooks/useStageOptions';
-import { fetchCurrentUser } from '../../utils/mondayApi';
-import ProductSelect from '../ProductSelect';
-import StageSelect from '../StageSelect';
+import { useNonBillableOptions } from '../../hooks/useNonBillableOptions';
+import TaskSelect from '../TaskSelect';
 import ConfirmDialog from '../ConfirmDialog';
 import styles from './EventModal.module.css';
 
@@ -16,6 +15,7 @@ export default function EventModal({
     onCreate,
     eventToEdit = null,
     isEditMode = false,
+    isLoadingEventData = false,
     onUpdate = null,
     onDelete = null,
     selectedItem: propSelectedItem = null,
@@ -23,41 +23,47 @@ export default function EventModal({
     monday
 }) {
     const { customSettings } = useSettings();
-    const { customers, loading: loadingCustomers, error: customersError, refetch: refetchCustomers } = useCustomers();
-    const { createProduct, fetchForCustomer, products, loading: loadingProducts } = useProducts();
+    const { projects, loading: loadingProjects, error: projectsError, refetch: refetchProjects } = useProjects();
+    const { createTask, fetchForProject, tasks, loading: loadingTasks } = useTasks();
     
     // State - משתמש ב-prop אם קיים, אחרת state פנימי
     const [internalSelectedItem, setInternalSelectedItem] = useState(null);
-    const [localCustomers, setLocalCustomers] = useState(customers);
+    const [localProjects, setLocalProjects] = useState(projects);
     
-    // עדכון localCustomers כש-customers משתנה
+    // עדכון localProjects כש-projects משתנה
     useEffect(() => {
-        setLocalCustomers(customers);
-    }, [customers]);
+        setLocalProjects(projects);
+    }, [projects]);
     
-    // מציאת selectedItem מה-localCustomers
+    // מציאת selectedItem מה-localProjects
     const selectedItem = propSelectedItem !== null 
-        ? (localCustomers.find(c => c.id === propSelectedItem.id) || propSelectedItem)
+        ? (localProjects.find(p => p.id === propSelectedItem.id) || propSelectedItem)
         : internalSelectedItem;
     const setSelectedItem = setPropSelectedItem || setInternalSelectedItem;
     
-    // State - צריך להיות מוגדר לפני useEffect שמשתמש בו
     const [notes, setNotes] = useState("");
-    const [selectedProduct, setSelectedProduct] = useState(null);
+    const [selectedTask, setSelectedTask] = useState(null);
     const [selectedStage, setSelectedStage] = useState(null);
-    const [isCreatingProduct, setIsCreatingProduct] = useState(false);
-    // State נפרד למוצרים של הלקוח הנבחר - כמו ב-AllDayEventModal
-    const [selectedItemProducts, setSelectedItemProducts] = useState([]);
+    const [isBillable, setIsBillable] = useState(true);
+    const [selectedNonBillableType, setSelectedNonBillableType] = useState(null);
+    const [isCreatingTask, setIsCreatingTask] = useState(false);
+    // State נפרד למשימות של הפרויקט הנבחר
+    const [selectedItemTasks, setSelectedItemTasks] = useState([]);
     
     // State - תיבת אישור למחיקה
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     
-    // טעינת ערכי שלב
+    // טעינת ערכי שלב ושם המשתמש
     const [boardId, setBoardId] = useState(null);
+    const [reporterName, setReporterName] = useState('');
     useEffect(() => {
         if (monday) {
             monday.get('context').then(context => {
                 setBoardId(context.data?.boardId);
+            });
+            // שליפת שם המשתמש הנוכחי
+            monday.api(`query { me { name } }`).then(res => {
+                setReporterName(res.data?.me?.name || '');
             });
         }
     }, [monday]);
@@ -67,149 +73,180 @@ export default function EventModal({
         customSettings.stageColumnId && boardId ? boardId : null,
         customSettings.stageColumnId
     );
-    
-    // עדכון selectedItem כש-localCustomers משתנה (אם יש propSelectedItem)
-    // אבל לא בעת יצירת מוצר חדש כדי למנוע race conditions
-    useEffect(() => {
-        if (propSelectedItem !== null && localCustomers.length > 0 && setPropSelectedItem && !isCreatingProduct) {
-            // לא צריך לעדכן את propSelectedItem כאן - המוצרים ייטענו דרך useProducts
-            // כשהלקוח נבחר
-        }
-    }, [localCustomers, propSelectedItem, setPropSelectedItem, isCreatingProduct]);
 
+    const { nonBillableOptions, loading: loadingNonBillable } = useNonBillableOptions(
+        monday,
+        customSettings.nonBillableStatusColumnId && boardId ? boardId : null,
+        customSettings.nonBillableStatusColumnId
+    );
+    
     // Reset state when dialog opens
     useEffect(() => {
         if (isOpen) {
             if (isEditMode && eventToEdit) {
                 // מצב עריכה - טעינת נתונים קיימים
                 setNotes(eventToEdit.notes || "");
-                setSelectedProduct(eventToEdit.productId || null);
+                setSelectedTask(eventToEdit.taskId || null);
                 setSelectedStage(eventToEdit.stageId || null);
-                // מציאת הלקוח מהרשימה
-                if (eventToEdit.customerId && localCustomers.length > 0) {
-                    const customer = localCustomers.find(c => c.id === eventToEdit.customerId);
-                    if (customer) {
-                        setSelectedItem(customer);
-                        
-                        // הוספת המוצר הנבחר לרשימה מיד (בלי לחכות לטעינת כל המוצרים)
-                        if (eventToEdit.selectedProductData) {
-                            setSelectedItemProducts([eventToEdit.selectedProductData]);
-                            setSelectedProduct(eventToEdit.selectedProductData.id);
+                setIsBillable(eventToEdit.isBillable !== false);
+                setSelectedNonBillableType(eventToEdit.nonBillableType || null);
+
+                // שימוש בנתונים ראשוניים אם קיימים באירוע
+                if (eventToEdit.selectedProjectData) {
+                    setSelectedItem(eventToEdit.selectedProjectData);
+                }
+                if (eventToEdit.selectedTaskData) {
+                    setSelectedItemTasks([eventToEdit.selectedTaskData]);
+                    setSelectedTask(eventToEdit.selectedTaskData.id);
+                }
+
+                // מציאת הפרויקט המלא מהרשימה
+                if (eventToEdit.projectId) {
+                    const project = localProjects.find(p => p.id === eventToEdit.projectId);
+                    if (project) {
+                        setSelectedItem(project);
+                        if (customSettings.tasksProjectColumnId) {
+                            fetchForProject(project.id);
                         }
-                        
-                        // טעינת כל המוצרים ברקע (לא חוסם את פתיחת התיבה)
-                        if (customSettings.productsCustomerColumnId) {
-                            fetchForCustomer(customer.id);
+                    } else if (eventToEdit.projectId) {
+                        if (customSettings.tasksProjectColumnId) {
+                            fetchForProject(eventToEdit.projectId);
                         }
                     }
                 }
             } else {
                 // מצב יצירה - איפוס
                 setSelectedItem(null);
-                setSelectedItemProducts([]);
+                setSelectedItemTasks([]);
                 setNotes("");
-                setSelectedProduct(null);
+                setSelectedTask(null);
                 setSelectedStage(null);
-                setIsCreatingProduct(false);
+                setIsBillable(true);
+                setSelectedNonBillableType(null);
+                setIsCreatingTask(false);
             }
         }
-    }, [isOpen, isEditMode, eventToEdit, localCustomers, setSelectedItem, customSettings.productsCustomerColumnId, fetchForCustomer]);
+    }, [isOpen, isEditMode, eventToEdit, localProjects, setSelectedItem, customSettings.tasksProjectColumnId, fetchForProject]);
 
-    // טעינת מוצרים כשמשתמש בוחר לקוח
+    // טעינת משימות כשמשתמש בוחר פרויקט
     useEffect(() => {
-        if (selectedItem && !isCreatingProduct && customSettings.productsCustomerColumnId) {
-            // במצב יצירה - טעינת מוצרים
+        if (selectedItem && !isCreatingTask && customSettings.tasksProjectColumnId) {
             if (!isEditMode) {
-                setSelectedItemProducts([]);
-                setSelectedProduct(null);
-                // איפוס שלב כשהמוצר מוסר
+                setSelectedItemTasks([]);
+                setSelectedTask(null);
                 setSelectedStage(null);
-                fetchForCustomer(selectedItem.id);
+                fetchForProject(selectedItem.id);
             }
-            // במצב עריכה - לא עושים כלום כאן (כי כבר טענו ב-useEffect הקודם)
         } else if (!selectedItem) {
-            setSelectedItemProducts([]);
+            setSelectedItemTasks([]);
         }
-    }, [selectedItem, isCreatingProduct, customSettings.productsCustomerColumnId, fetchForCustomer, isEditMode]);
+    }, [selectedItem, isCreatingTask, customSettings.tasksProjectColumnId, fetchForProject, isEditMode]);
     
-    // איפוס שלב כשהמוצר מוסר (אבל לא כשהמוצר משתנה)
     useEffect(() => {
-        if (!selectedProduct && customSettings.stageColumnId) {
+        if (!selectedTask && customSettings.stageColumnId) {
             setSelectedStage(null);
         }
-    }, [selectedProduct, customSettings.stageColumnId]);
+    }, [selectedTask, customSettings.stageColumnId]);
     
-    // עדכון selectedItemProducts כשהמוצרים נטענים (במצב עריכה - עדכון הרשימה אחרי שהתיבה כבר נפתחה)
     useEffect(() => {
-        if (products && products.length > 0 && selectedItem) {
-            // עדכון הרשימה עם כל המוצרים (מחליף את המוצר הבודד שהיה)
-            setSelectedItemProducts(products);
-            // במצב עריכה, אם יש productId ב-eventToEdit, נבחר אותו
-            if (isEditMode && eventToEdit?.productId) {
-                // בדיקה שהמוצר קיים ברשימה
-                const productExists = products.some(p => p.id === eventToEdit.productId);
-                if (productExists) {
-                    setSelectedProduct(eventToEdit.productId);
+        if (tasks && tasks.length > 0 && selectedItem) {
+            setSelectedItemTasks(tasks);
+            if (isEditMode && eventToEdit?.taskId) {
+                const taskExists = tasks.some(t => t.id === eventToEdit.taskId);
+                if (taskExists) {
+                    setSelectedTask(eventToEdit.taskId);
                 }
             }
-        } else if (products && products.length === 0 && selectedItem) {
-            // אם אין מוצרים, אבל יש מוצר נבחר במצב עריכה, נשאיר אותו
-            if (!isEditMode || !eventToEdit?.selectedProductData) {
-                setSelectedItemProducts([]);
+        } else if (tasks && tasks.length === 0 && selectedItem) {
+            if (!isEditMode || !eventToEdit?.selectedTaskData) {
+                setSelectedItemTasks([]);
             }
         }
-    }, [products, selectedItem, isEditMode, eventToEdit]);
+    }, [tasks, selectedItem, isEditMode, eventToEdit]);
 
-    const handleCreateProduct = async (productName) => {
+    const handleCreateTask = async (taskName) => {
         if (!selectedItem) return;
-        
-        setIsCreatingProduct(true);
+        setIsCreatingTask(true);
         try {
-            const newProduct = await createProduct(selectedItem.id, productName);
-            if (newProduct) {
-                // עדכון selectedItemProducts עם המוצר החדש - ישירות, כמו ב-AllDayEventModal
-                // זה מבטיח שהמוצר יופיע מיד ברשימה
-                setSelectedItemProducts(prev => [...prev, newProduct]);
-                
-                // בחירת המוצר החדש - מיד אחרי עדכון selectedItemProducts
-                setSelectedProduct(newProduct.id);
-                
-                // לא צריך לעדכן את localCustomers או selectedItem - המוצרים נשמרים ב-selectedItemProducts
-                // והם ייטענו מחדש דרך useProducts כשצריך
+            const newTask = await createTask(selectedItem.id, taskName);
+            if (newTask) {
+                setSelectedItemTasks(prev => [...prev, newTask]);
+                setSelectedTask(newTask.id);
             }
         } finally {
-            setIsCreatingProduct(false);
+            setIsCreatingTask(false);
         }
     };
 
     const handleCreate = async () => {
-        // מאפשרים שמירה גם אם רק יש הערה, או רק פרויקט, או שניהם
-        if (!selectedItem && !notes.trim()) return;
+        const { structureMode } = customSettings;
         
-        // בדיקת בחירת מוצר אם מגדרות מוגדרות
-        if (customSettings.productColumnId && !selectedProduct) {
-            alert('יש לבחור מוצר');
-            return;
+        // לא לחיוב - נדרש רק סוג דיווח
+        if (!isBillable) {
+            if (!selectedNonBillableType) {
+                alert('יש לבחור סוג דיווח לא לחיוב');
+                return;
+            }
         }
         
-        // בדיקת בחירת שלב אם יש מוצר
-        if (customSettings.productColumnId && selectedProduct && customSettings.stageColumnId && !selectedStage) {
-            alert('יש לבחור שלב');
-            return;
+        // לחיוב
+        if (isBillable) {
+            // פרויקט חובה תמיד
+            if (!selectedItem) {
+                alert('יש לבחור פרויקט');
+                return;
+            }
+            
+            // במצב TASKS - משימה חובה
+            if (structureMode === STRUCTURE_MODES.PROJECT_WITH_TASKS && 
+                customSettings.taskColumnId && !selectedTask) {
+                alert('יש לבחור משימה');
+                return;
+            }
+            
+            // במצב PROJECT_WITH_STAGE - סיווג חובה
+            if (structureMode === STRUCTURE_MODES.PROJECT_WITH_STAGE && 
+                customSettings.stageColumnId && !selectedStage) {
+                alert('יש לבחור סיווג');
+                return;
+            }
         }
 
-        // שליפת שם המשתמש ושם המוצר
-        const currentUser = await fetchCurrentUser(monday);
-        const reporterName = currentUser?.name || 'לא ידוע';
-        const product = selectedItemProducts.find(p => p.id === selectedProduct);
-        const productName = product?.name || 'ללא מוצר';
+        const task = selectedItemTasks.find(t => t.id === selectedTask);
+        const taskName = task?.name || 'ללא משימה';
+        const projectName = selectedItem?.name;
+        
+        // קביעת כותרת האירוע לפי מבנה הדיווח (structureMode כבר מוגדר למעלה)
+        let eventTitle;
+        if (isBillable) {
+            // לחיוב - לפי מבנה נבחר:
+            // PROJECT_ONLY: "שם הפרויקט"
+            // PROJECT_WITH_STAGE: "שם הפרויקט - סיווג"
+            // PROJECT_WITH_TASKS: "שם הפרויקט - שם המשימה"
+            if (structureMode === STRUCTURE_MODES.PROJECT_ONLY) {
+                eventTitle = projectName || 'ללא פרויקט';
+            } else if (structureMode === STRUCTURE_MODES.PROJECT_WITH_STAGE) {
+                eventTitle = selectedStage ? `${projectName} - ${selectedStage}` : projectName;
+            } else if (structureMode === STRUCTURE_MODES.PROJECT_WITH_TASKS) {
+                eventTitle = projectName ? `${projectName} - ${taskName}` : taskName;
+            } else {
+                // ברירת מחדל
+                eventTitle = projectName || 'ללא פרויקט';
+            }
+        } else {
+            // לא לחיוב: "סוג לא לחיוב - שם המדווח"
+            const nonBillableLabel = nonBillableOptions.find(opt => opt.label === selectedNonBillableType)?.label || selectedNonBillableType || 'לא לחיוב';
+            eventTitle = reporterName ? `${nonBillableLabel} - ${reporterName}` : nonBillableLabel;
+        }
         
         const eventData = {
-            title: `${productName} - ${reporterName}`,  // במקום selectedItem.name
+            title: eventTitle,
             itemId: selectedItem?.id,
             notes: notes,
-            productId: selectedProduct,
-            stageId: selectedStage
+            taskId: selectedTask,
+            stageId: selectedStage,
+            isBillable: isBillable,
+            nonBillableType: isBillable ? null : selectedNonBillableType
         };
 
         if (isEditMode && onUpdate) {
@@ -222,28 +259,50 @@ export default function EventModal({
 
     if (!pendingSlot || !isOpen) return null;
 
-    // פורמט תאריך כותרת
     const dateStr = pendingSlot?.start 
-        ? pendingSlot.start.toLocaleDateString('he-IL', { 
-            weekday: 'long', 
-            day: 'numeric', 
-            month: 'long' 
-        }) 
+        ? pendingSlot.start.toLocaleDateString('he-IL', { weekday: 'long', day: 'numeric', month: 'long' }) 
         : '';
 
-    // בדיקה אם הפרטים מלאים
     const isFormValid = () => {
+        // לא לחיוב - נדרש רק סוג אירוע
+        if (!isBillable) {
+            return !!selectedNonBillableType;
+        }
+        // לחיוב - פרויקט חובה תמיד
         if (!selectedItem) return false;
-        if (customSettings.productColumnId && !selectedProduct) return false;
-        if (customSettings.productColumnId && selectedProduct && customSettings.stageColumnId && !selectedStage) return false;
+        
+        const { structureMode } = customSettings;
+        
+        // במצב TASKS - משימה חובה
+        if (structureMode === STRUCTURE_MODES.PROJECT_WITH_TASKS && 
+            customSettings.taskColumnId && !selectedTask) {
+            return false;
+        }
+        
+        // במצב STAGE - סיווג חובה
+        if (structureMode === STRUCTURE_MODES.PROJECT_WITH_STAGE && 
+            customSettings.stageColumnId && !selectedStage) {
+            return false;
+        }
+        
         return true;
     };
 
     const formIsValid = isFormValid();
 
-    // טיפול ב-Enter key
+    // האם להציג את שדה המלל החופשי (Notes)
+    const showNotesField = customSettings.enableNotes && (
+        !isBillable ? !!selectedNonBillableType : (
+            selectedItem && (
+                customSettings.structureMode === STRUCTURE_MODES.PROJECT_ONLY ||
+                (customSettings.structureMode === STRUCTURE_MODES.PROJECT_WITH_TASKS && selectedTask) ||
+                (customSettings.structureMode === STRUCTURE_MODES.PROJECT_WITH_STAGE && selectedStage)
+            )
+        )
+    );
+
     const handleKeyDown = (e) => {
-        if (e.key === 'Enter' && formIsValid && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
+        if (e.key === 'Enter' && formIsValid && !e.shiftKey && !e.ctrlKey && !e.metaKey && e.target.tagName !== 'TEXTAREA') {
             e.preventDefault();
             handleCreate();
         }
@@ -251,21 +310,10 @@ export default function EventModal({
 
     return (
         <div className={styles.overlay} onClick={(e) => {
-            // לא לסגור אם תיבת confirm פתוחה
-            if (showDeleteConfirm) {
-                return;
-            }
-            if (e.target === e.currentTarget) {
-                onClose();
-            }
+            if (showDeleteConfirm) return;
+            if (e.target === e.currentTarget) onClose();
         }}>
-            <div 
-                className={styles.modal} 
-                onClick={(e) => e.stopPropagation()} 
-                onKeyDown={handleKeyDown}
-                tabIndex={-1}
-            >
-                {/* Header */}
+            <div className={styles.modal} onClick={(e) => e.stopPropagation()} onKeyDown={handleKeyDown} tabIndex={-1}>
                 <div className={styles.header}>
                     <div className={styles.titleGroup}>
                         <h2 className={styles.title}>דיווח שעות</h2>
@@ -274,111 +322,161 @@ export default function EventModal({
                     <button className={styles.closeBtn} onClick={onClose}>✕</button>
                 </div>
 
-                {/* Content */}
-                <div className={styles.content}>
-                    {/* לקוח / פרויקט */}
-                    <div className={styles.formGroup}>
-                        <label className={styles.label}>לקוח</label>
-                        {isEditMode ? (
-                            // במצב עריכה - הצגה read-only
-                            <div className={styles.readOnlyField}>
-                                {selectedItem ? selectedItem.name : 'לא נבחר לקוח'}
-                            </div>
-                        ) : (
-                            // במצב יצירה - כפתורי בחירה
-                            <div className={styles.grid}>
-                                {loadingCustomers ? (
-                                    <div className={styles.loading}>טוען...</div>
-                                ) : customersError ? (
-                                    <div className={styles.loading}>{customersError}</div>
-                                ) : localCustomers
-                                    .slice()
-                                    .sort((a, b) => a.name.localeCompare(b.name, 'he'))
-                                    .map(item => (
+                <div className={styles.content} style={{ position: 'relative' }}>
+                    {isLoadingEventData && (
+                        <div className={styles.loadingOverlay}>
+                            <div className={styles.spinner}></div>
+                        </div>
+                    )}
+
+                    {/* בחירת מצב דיווח - לחיוב / לא לחיוב */}
+                    <div className={styles.modeSelector}>
+                        <button
+                            className={`${styles.modeButton} ${isBillable ? styles.modeButtonActive : ''}`}
+                            onClick={() => setIsBillable(true)}
+                        >
+                            לחיוב
+                        </button>
+                        <button
+                            className={`${styles.modeButton} ${!isBillable ? styles.modeButtonActive : ''}`}
+                            onClick={() => setIsBillable(false)}
+                        >
+                            לא לחיוב
+                        </button>
+                    </div>
+
+                    {!isBillable && customSettings.nonBillableStatusColumnId && (
+                        <div className={styles.formGroup}>
+                            <label className={styles.label}>סוג דיווח לא לחיוב <span className={styles.required}>*</span></label>
+                            {loadingNonBillable ? (
+                                <div className={styles.loading}>טוען...</div>
+                            ) : (
+                                <div className={styles.grid}>
+                                    {nonBillableOptions.map(option => (
                                         <button
-                                            key={item.id}
-                                            onClick={() => {
-                                                setSelectedItem(item.id === selectedItem?.id ? null : item);
-                                            }}
-                                            className={`${styles.itemButton} ${selectedItem?.id === item.id ? styles.selected : ''}`}
+                                            key={option.id}
+                                            onClick={() => setSelectedNonBillableType(option.label === selectedNonBillableType ? null : option.label)}
+                                            className={`${styles.itemButton} ${selectedNonBillableType === option.label ? styles.selected : ''}`}
                                         >
-                                            {item.name}
+                                            {option.label}
                                         </button>
                                     ))}
-                            </div>
-                        )}
-                    </div>
-                    
-                    {/* סעיף בחירת מוצר */}
-                    {customSettings.productColumnId && selectedItem && (
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* פרויקט - רק לדיווח לחיוב */}
+                    {isBillable && (
                         <div className={styles.formGroup}>
-                            <label className={styles.label}>מוצר</label>
+                            <label className={styles.label}>
+                                פרויקט <span className={styles.required}>*</span>
+                            </label>
+                            {isEditMode ? (
+                                <div className={styles.readOnlyField}>
+                                    {selectedItem ? selectedItem.name : (isLoadingEventData ? 'טוען...' : 'לא נבחר פרויקט')}
+                                </div>
+                            ) : (
+                                <div className={styles.grid}>
+                                    {loadingProjects ? (
+                                        <div className={styles.loading}>טוען...</div>
+                                    ) : projectsError ? (
+                                        <div className={styles.loading}>{projectsError}</div>
+                                    ) : localProjects
+                                        .slice()
+                                        .sort((a, b) => a.name.localeCompare(b.name, 'he'))
+                                        .map(item => (
+                                            <button
+                                                key={item.id}
+                                                onClick={() => setSelectedItem(item.id === selectedItem?.id ? null : item)}
+                                                className={`${styles.itemButton} ${selectedItem?.id === item.id ? styles.selected : ''}`}
+                                            >
+                                                {item.name}
+                                            </button>
+                                        ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* משימה - מוצג רק במצב TASKS */}
+                    {isBillable && customSettings.taskColumnId && selectedItem && 
+                     customSettings.structureMode === STRUCTURE_MODES.PROJECT_WITH_TASKS && (
+                        <div className={styles.formGroup}>
+                            <label className={styles.label}>משימה <span className={styles.required}>*</span></label>
                             <div className={styles.productSection}>
-                                <ProductSelect 
-                                    products={selectedItemProducts}
-                                    selectedProduct={selectedProduct}
-                                    onSelectProduct={setSelectedProduct}
-                                    onCreateNew={async (productName) => await handleCreateProduct(productName)}
+                                <TaskSelect 
+                                    products={selectedItemTasks}
+                                    selectedProduct={selectedTask}
+                                    onSelectProduct={setSelectedTask}
+                                    onCreateNew={async (taskName) => await handleCreateTask(taskName)}
                                     isLoading={false}
                                     disabled={false}
-                                    isCreatingProduct={isCreatingProduct}
+                                    isCreatingProduct={isCreatingTask}
+                                    placeholder="בחר משימה..."
                                 />
                             </div>
                         </div>
                     )}
 
-                    {/* סעיף בחירת שלב */}
-                    {customSettings.stageColumnId && selectedItem && (
+                    {/* סיווג - מוצג רק במצב STAGE */}
+                    {isBillable && customSettings.stageColumnId && selectedItem && 
+                     customSettings.structureMode === STRUCTURE_MODES.PROJECT_WITH_STAGE && (
                         <div className={styles.formGroup}>
-                            <label className={styles.label}>שלב {customSettings.productColumnId && selectedProduct && <span className={styles.required}></span>}</label>
-                            <div className={styles.productSection}>
-                                <StageSelect 
-                                    stages={stageOptions}
-                                    selectedStage={selectedStage}
-                                    onSelectStage={setSelectedStage}
-                                    isLoading={loadingStages}
-                                    disabled={false}
-                                />
-                            </div>
+                            <label className={styles.label}>סיווג</label>
+                            {loadingStages ? (
+                                <div className={styles.loading}>טוען...</div>
+                            ) : (
+                                <div className={styles.grid}>
+                                    {stageOptions.map(option => (
+                                        <button
+                                            key={option.id}
+                                            onClick={() => setSelectedStage(option.label === selectedStage ? null : option.label)}
+                                            className={`${styles.itemButton} ${selectedStage === option.label ? styles.selected : ''}`}
+                                        >
+                                            {option.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* הערות/מלל חופשי - מוצג רק אם מופעל בהגדרות ורק אחרי בחירות רלוונטיות */}
+                    {showNotesField && (
+                        <div className={styles.formGroup}>
+                            <label className={styles.label}>מלל חופשי</label>
+                            <textarea
+                                className={styles.textarea}
+                                value={notes}
+                                onChange={(e) => setNotes(e.target.value)}
+                                placeholder="הוסף הערות כאן..."
+                            />
                         </div>
                     )}
                 </div>
 
-                {/* Footer */}
                 <div className={styles.footer}>
                     {isEditMode && onDelete && (
-                        <button 
-                            className={`${styles.btn} ${styles.btnDanger}`}
-                            onClick={() => setShowDeleteConfirm(true)}
-                        >
-                            מחק
-                        </button>
+                        <button className={`${styles.btn} ${styles.btnDanger}`} onClick={() => setShowDeleteConfirm(true)}>מחק</button>
                     )}
+                    <button className={`${styles.btn} ${styles.btnSecondary}`} onClick={onClose}>ביטול</button>
                     <button 
-                        className={`${styles.btn} ${styles.btnSecondary}`}
-                        onClick={onClose}
-                    >
-                        ביטול
-                    </button>
-                    <button 
-                        className={`${styles.btn} ${formIsValid ? styles.btnPrimaryActive : styles.btnPrimary}`}
+                        className={`${styles.btn} ${formIsValid && !isLoadingEventData ? styles.btnPrimaryActive : styles.btnPrimary}`}
                         onClick={handleCreate}
-                        disabled={!formIsValid}
+                        disabled={!formIsValid || isLoadingEventData}
                     >
-                        {isEditMode ? 'עדכן' : 'שמור'}
+                        {isEditMode ? (isLoadingEventData ? 'טוען...' : 'עדכן') : 'שמור'}
                     </button>
                 </div>
             </div>
             
-            {/* תיבת אישור למחיקה */}
             <ConfirmDialog
                 isOpen={showDeleteConfirm}
                 onClose={() => setShowDeleteConfirm(false)}
                 onConfirm={() => {
                     setShowDeleteConfirm(false);
-                    if (onDelete) {
-                        onDelete();
-                    }
+                    if (onDelete) onDelete();
                     onClose();
                 }}
                 onCancel={() => setShowDeleteConfirm(false)}
@@ -391,4 +489,3 @@ export default function EventModal({
         </div>
     );
 }
-

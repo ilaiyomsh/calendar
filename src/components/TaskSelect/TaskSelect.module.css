@@ -1,0 +1,245 @@
+.container {
+    position: relative;
+    width: 100%;
+}
+
+.trigger {
+    width: 100%;
+    background-color: white;
+    border: 1px solid #d0d4e4;
+    border-radius: 4px;
+    padding: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-sizing: border-box;
+}
+
+.trigger:hover {
+    border-color: #0073ea;
+}
+
+.trigger:focus-within {
+    border-color: #0073ea;
+    outline: none;
+}
+
+.trigger:disabled,
+.trigger.disabled {
+    background-color: #f6f7fb;
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.triggerText {
+    font-size: 0.9rem;
+    color: #323338;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+    min-width: 0;
+    text-align: right;
+}
+
+.triggerIcon {
+    color: #676879;
+    font-size: 12px;
+    margin-right: 4px;
+}
+
+.dropdown {
+    position: fixed;
+    z-index: 10020;
+    margin-top: 4px;
+    background-color: #ffffff;
+    border: 1px solid #d0d4e4;
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    max-height: 300px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+/* סגנונות לתיבת החיפוש */
+.searchContainer {
+    padding: 8px;
+    border-bottom: 1px solid #e0e0e0;
+    background-color: #ffffff;
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.searchInput {
+    width: 100%;
+    padding: 8px 32px 8px 12px;
+    border: 1px solid #d0d4e4;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    outline: none;
+    box-sizing: border-box;
+    text-align: right;
+}
+
+.searchInput:focus {
+    border-color: #0073ea;
+}
+
+.searchInput::placeholder {
+    color: #b0b0b0;
+}
+
+.searchIcon {
+    position: absolute;
+    left: 16px;
+    color: #676879;
+    font-size: 14px;
+    pointer-events: none;
+}
+
+/* הצעה ליצירת משימה חדשה */
+.createSuggestion {
+    padding: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: background-color 0.15s;
+    color: #0073ea;
+    font-weight: 500;
+    font-size: 14px;
+}
+
+.createSuggestion:hover {
+    background-color: #e3f2fd;
+}
+
+.createSuggestionIcon {
+    font-size: 18px;
+    font-weight: bold;
+    color: #0073ea;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.tasksList {
+    overflow-y: auto;
+    flex: 1;
+    padding: 8px;
+}
+
+.taskItem {
+    padding: 10px 12px;
+    font-size: 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background-color 0.15s;
+    background-color: transparent;
+    color: #323338;
+    font-weight: normal;
+}
+
+.taskItem:hover {
+    background-color: #f6f7fb;
+    color: #323338;
+}
+
+.taskItem.selected {
+    background-color: #e3f2fd;
+    color: #0073e6;
+    font-weight: 500;
+}
+
+.taskItem.selected:hover {
+    background-color: #e3f2fd;
+    color: #0073e6;
+}
+
+.emptyState {
+    padding: 16px;
+    text-align: center;
+    font-size: 12px;
+    color: #676879;
+}
+
+.footer {
+    border-top: 1px solid #e0e0e0;
+    padding: 8px;
+    background-color: #ffffff;
+}
+
+.addButton {
+    width: 100%;
+    padding: 8px 12px;
+    background-color: #ffffff;
+    border: 1px solid #d0d4e4;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: #323338;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.addButton:hover {
+    background-color: #f6f7fb;
+    border-color: #0073ea;
+    color: #0073ea;
+}
+
+.createForm {
+    display: flex;
+    gap: 6px;
+}
+
+.createInput {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1px solid #d0d4e4;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    outline: none;
+    box-sizing: border-box;
+}
+
+.createInput:focus {
+    border-color: #0073ea;
+}
+
+.createButton {
+    padding: 8px 12px;
+    background-color: #0073ea;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+.createButton:hover {
+    background-color: #0060b9;
+}
+
+.cancelButton {
+    padding: 8px 12px;
+    background-color: #ffffff;
+    color: #323338;
+    border: 1px solid #d0d4e4;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+.cancelButton:hover {
+    background-color: #f6f7fb;
+}

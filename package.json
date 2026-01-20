@@ -3,11 +3,12 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "start": "npm run stop && concurrently \"npm run server\" \"npm run expose\"",
+    "postinstall": "patch-package",
+    "start": "pnpm run stop && concurrently \"pnpm run server\" \"pnpm run expose\"",
     "build": "vite build",
     "deploy:build": "vite build",
     "deploy:push": "mapps code:push --client-side -d \"build\"",
-    "deploy": "npm run deploy:build && npm run deploy:push",
+    "deploy": "pnpm run deploy:build && pnpm run deploy:push",
     "expose": "mapps tunnel:create -p 8301",
     "server": "vite",
     "test": "react-scripts test",
@@ -15,8 +16,10 @@
     "stop": "kill-port 8301 && kill-port 4049 && kill-port 4040"
   },
   "dependencies": {
+    "@hebcal/core": "^6.0.8",
     "@mondaycom/apps-sdk": "^2.1.2",
     "@vibe/core": "^3.77.0",
+    "@vibe/icons": "^1.16.0",
     "date-fns": "^4.1.0",
     "lucide-react": "^0.555.0",
     "monday-sdk-js": "^0.5.5",
@@ -43,6 +46,7 @@
     "concurrently": "^5.2.0",
     "cross-port-killer": "^1.2.1",
     "eslint-config-react-app": "^7.0.1",
+    "patch-package": "^8.0.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "sass": "^1.54.8",

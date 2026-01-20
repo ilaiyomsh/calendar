@@ -10,7 +10,6 @@
     align-items: center;
     z-index: 10030;
     direction: rtl;
-    font-family: 'Figtree', 'Roboto', 'Rubik', 'Noto Kufi Arabic', sans-serif;
     padding: 20px;
 }
 
@@ -136,7 +135,6 @@
 .jsonValue,
 .fullJson {
     font-size: 12px;
-    font-family: 'Courier New', 'Monaco', 'Consolas', monospace;
     background-color: #f7f9fa;
     border: 1px solid #e6e9ef;
     border-radius: 4px;
@@ -152,7 +150,6 @@
 
 .stackTrace {
     font-size: 11px;
-    font-family: 'Courier New', 'Monaco', 'Consolas', monospace;
     background-color: #f7f9fa;
     border: 1px solid #e6e9ef;
     border-radius: 4px;

@@ -2,11 +2,44 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { format } from 'date-fns';
 import { useSettings } from '../contexts/SettingsContext';
 import { createBoardItem, deleteItem, updateItemColumnValues } from '../utils/mondayApi';
+import { getColumnIds, mapItemToEvent } from '../utils/mondayColumns';
+import { isAllDayEventType, parseDuration, calculateEndDateFromDays, calculateDaysDiff, formatDurationForSave } from '../utils/durationUtils';
 import logger from '../utils/logger';
+
+/**
+ * @typedef {Object} CalendarEvent
+ * @property {string} id - Monday item ID
+ * @property {string} title - כותרת האירוע
+ * @property {Date} start - זמן התחלה
+ * @property {Date} end - זמן סיום
+ * @property {boolean} allDay - האם זה אירוע יומי
+ * @property {string} [mondayItemId] - Monday item ID (זהה ל-id)
+ * @property {string} [notes] - הערות
+ * @property {string} [projectId] - מזהה פרויקט מקושר
+ * @property {string} [taskId] - מזהה משימה מקושרת
+ * @property {string} [eventType] - סוג אירוע (שעתי/חופשה/מחלה/מילואים)
+ * @property {number} [durationDays] - משך בימים (לאירועים יומיים)
+ */
+
+/**
+ * @typedef {Object} UseMondayEventsReturn
+ * @property {CalendarEvent[]} events - רשימת האירועים
+ * @property {boolean} loading - האם בטעינה
+ * @property {string|null} error - הודעת שגיאה
+ * @property {Function} loadEvents - טעינת אירועים
+ * @property {Function} createEvent - יצירת אירוע חדש
+ * @property {Function} updateEvent - עדכון אירוע
+ * @property {Function} deleteEvent - מחיקת אירוע
+ * @property {Function} updateEventPosition - עדכון מיקום אירוע (drag/resize)
+ * @property {Function} addEvent - הוספת אירוע ל-state
+ */
 
 /**
  * Hook לניהול אירועים ב-Monday Calendar
  * מטפל בכל הפעולות CRUD על אירועים
+ * @param {Object} monday - Monday SDK instance
+ * @param {Object} context - Monday context (boardId, etc.)
+ * @returns {UseMondayEventsReturn}
  */
 export const useMondayEvents = (monday, context) => {
     const { customSettings } = useSettings();
@@ -158,6 +191,12 @@ export const useMondayEvents = (monday, context) => {
                                             color
                                         }
                                     }
+                                    ... on BoardRelationValue {
+                                        linked_items {
+                                            id
+                                            name
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -189,123 +228,66 @@ export const useMondayEvents = (monday, context) => {
             }
 
             const rawItems = allItems;
-
-            // מיפוי וחישוב לתצוגה
+            
+            // מיפוי וחישוב לתצוגה תוך שימוש בהגדרות המותאמות
             const mappedEvents = rawItems.map(item => {
                 const dateColumn = item.column_values.find(col => col.id === customSettings.dateColumnId);
                 const durationColumn = item.column_values.find(col => col.id === customSettings.durationColumnId);
                 const notesColumn = item.column_values.find(col => col.id === customSettings.notesColumnId);
-                const statusColumn = customSettings.statusColumnId 
-                    ? item.column_values.find(col => col.id === customSettings.statusColumnId)
+                const typeColumn = customSettings.eventTypeStatusColumnId 
+                    ? item.column_values.find(col => col.id === customSettings.eventTypeStatusColumnId)
                     : null;
-                const stageColumn = customSettings.stageColumnId 
-                    ? item.column_values.find(col => col.id === customSettings.stageColumnId)
+                // חילוץ פרויקט מקושר
+                const projectColumn = customSettings.projectColumnId 
+                    ? item.column_values.find(col => col.id === customSettings.projectColumnId)
                     : null;
+                const projectId = projectColumn?.linked_items?.[0]?.id || null;
 
                 // חילוץ התחלה
                 let start = null;
                 if (dateColumn?.date) {
                     const [year, month, day] = dateColumn.date.split('-').map(Number);
-                    
                     let hours = 0, minutes = 0, seconds = 0;
                     if (dateColumn.time) {
                         [hours, minutes, seconds] = dateColumn.time.split(':').map(Number);
                     }
-
                     start = new Date(year, month - 1, day, hours, minutes, seconds || 0);
                 }
 
                 if (!start || isNaN(start.getTime())) return null;
 
-                // חילוץ משך
-                let durationMinutes = 60;
+                // חילוץ משך גולמי מהעמודה
+                let rawDuration = 0;
                 if (durationColumn?.value) {
                     try {
-                        let durationHours = 0;
-                        
-                        if (typeof durationColumn.value === 'string') {
-                            try {
-                                const parsed = JSON.parse(durationColumn.value);
-                                if (typeof parsed === 'number') {
-                                    durationHours = parsed;
-                                } else if (parsed && typeof parsed === 'object') {
-                                    durationHours = parseFloat(parsed.value || parsed.number) || 0;
-                                } else {
-                                    durationHours = parseFloat(parsed) || 0;
-                                }
-                            } catch {
-                                durationHours = parseFloat(durationColumn.value) || 0;
-                            }
-                        } else if (typeof durationColumn.value === 'number') {
-                            durationHours = durationColumn.value;
-                        }
-                        
-                        if (!isNaN(durationHours)) {
-                            if (durationHours === 0) {
-                                durationMinutes = 0;
-                            } else {
-                                durationMinutes = Math.round(durationHours * 60);
-                            }
-                        } else {
-                            logger.warn('useMondayEvents.loadEvents', `Invalid duration hours: ${durationHours} for item: ${item.name}`);
-                            return null;
-                        }
-                    } catch (e) {
-                        logger.error('useMondayEvents.loadEvents', 'Error parsing duration', e);
+                        const parsed = JSON.parse(durationColumn.value);
+                        rawDuration = parseFloat(parsed) || 0;
+                    } catch {
+                        rawDuration = parseFloat(durationColumn.value) || 0;
                     }
-                } else {
-                    logger.warn('useMondayEvents.loadEvents', `No duration column value for item: ${item.name}`);
+                } else if (durationColumn?.text) {
+                    rawDuration = parseFloat(durationColumn.text) || 0;
                 }
 
-                // חילוץ הערות
-                let notes = '';
-                if (notesColumn?.value) {
-                    try {
-                        notes = notesColumn.value || '';
-                    } catch (e) {
-                        logger.error('useMondayEvents.loadEvents', 'Error parsing notes', e);
-                    }
-                }
+                // זיהוי סוג האירוע
+                const eventTypeText = typeColumn?.text || '';
+                const isAllDay = isAllDayEventType(eventTypeText);
 
-                // חילוץ צבע הסטטוס
-                let statusColor = null;
-                if (statusColumn?.label_style?.color) {
-                    statusColor = statusColumn.label_style.color;
-                }
+                // פרסור Duration פולימורפי - שעות לשעתי, ימים ליומי
+                const duration = parseDuration(rawDuration, eventTypeText);
 
-                // חילוץ שלב (רק אם יש ערך, לא להציג ביומן)
-                let stageId = null;
-                if (stageColumn) {
-                    if (stageColumn.label) {
-                        stageId = stageColumn.label;
-                    } else if (stageColumn.value) {
-                        try {
-                            const parsed = typeof stageColumn.value === 'string' 
-                                ? JSON.parse(stageColumn.value) 
-                                : stageColumn.value;
-                            if (parsed?.label) {
-                                stageId = parsed.label;
-                            } else if (typeof parsed === 'string') {
-                                stageId = parsed;
-                            }
-                        } catch (e) {
-                            // אם יש שגיאה בפענוח, ננסה את הערך הישיר
-                            if (typeof stageColumn.value === 'string') {
-                                stageId = stageColumn.value;
-                            }
-                        }
-                    }
-                }
-
-                // חישוב סיום
                 let end;
-                let isAllDay = false;
-                
-                if (durationMinutes === 0) {
-                    end = new Date(start);
-                    isAllDay = true;
+                if (isAllDay) {
+                    // אירוע יומי - duration מייצג ימים
+                    start.setHours(0, 0, 0, 0);
+                    // חישוב end (Exclusive) - נדרש ע"י react-big-calendar
+                    end = calculateEndDateFromDays(start, duration.value);
                 } else {
-                    end = new Date(start.getTime() + durationMinutes * 60000);
+                    // אירוע שעתי - duration מייצג שעות
+                    const durationMinutes = Math.round(duration.value * 60);
+                    // ברירת מחדל שעה אחת אם אין משך
+                    const effectiveDurationMinutes = durationMinutes > 0 ? durationMinutes : 60;
+                    end = new Date(start.getTime() + effectiveDurationMinutes * 60000);
                 }
 
                 return {
@@ -315,9 +297,10 @@ export const useMondayEvents = (monday, context) => {
                     end: end,
                     allDay: isAllDay,
                     mondayItemId: item.id,
-                    notes: notes,
-                    statusColor: statusColor,
-                    stageId: stageId
+                    notes: notesColumn?.text || '',
+                    projectId,
+                    eventType: eventTypeText,
+                    durationDays: isAllDay ? duration.value : null // שמירת מספר הימים לשימוש ב-Resize
                 };
             }).filter(Boolean);
 
@@ -349,7 +332,7 @@ export const useMondayEvents = (monday, context) => {
     /**
      * בניית column values ליצירה/עדכון
      */
-    const buildColumnValues = useCallback((eventData, startTime, endTime, currentUser) => {
+    const buildColumnValues = useCallback((eventData, startTime, endTime, currentUser, totalCost = null) => {
         const durationMinutes = Math.round((endTime - startTime) / 60000);
         const durationHours = durationMinutes / 60;
 
@@ -375,6 +358,11 @@ export const useMondayEvents = (monday, context) => {
         // עמודת משך זמן - המרה לשעות עשרוניות
         columnValues[customSettings.durationColumnId] = durationHours.toFixed(2);
 
+        // עמודת עלות עובד (אם רלוונטי)
+        if (totalCost !== null && customSettings.totalCostColumnId) {
+            columnValues[customSettings.totalCostColumnId] = totalCost.toFixed(2);
+        }
+
         // עמודת קישור לפרויקט (אם נבחר פרויקט ויש הגדרה לעמודה)
         if (eventData.itemId && customSettings.projectColumnId) {
             columnValues[customSettings.projectColumnId] = {
@@ -382,10 +370,10 @@ export const useMondayEvents = (monday, context) => {
             };
         }
         
-        // עמודת קישור למוצר (אם נבחר מוצר ויש הגדרה לעמודה)
-        if (eventData.productId && customSettings.productColumnId) {
-            columnValues[customSettings.productColumnId] = {
-                item_ids: [parseInt(eventData.productId)]
+        // עמודת קישור למשימה (אם נבחרה משימה ויש הגדרה לעמודה)
+        if (eventData.taskId && customSettings.taskColumnId) {
+            columnValues[customSettings.taskColumnId] = {
+                item_ids: [parseInt(eventData.taskId)]
             };
         }
         
@@ -401,14 +389,23 @@ export const useMondayEvents = (monday, context) => {
             };
         }
         
-        // הוספת סטטוס "שעתי" לאירועים שעתיים
+        // קביעת סוג הדיווח (שעתי / לא לחיוב) וערך הסטטוס המתאים
         if (customSettings.eventTypeStatusColumnId) {
+            const isBillable = eventData.isBillable !== false; // ברירת מחדל: true
+            
             columnValues[customSettings.eventTypeStatusColumnId] = {
-                label: "שעתי"
+                label: isBillable ? "שעתי" : "לא לחיוב"
             };
+
+            // אם זה לא לחיוב, נעדכן גם את עמודת הסטטוס של סוגי "לא לחיוב"
+            if (!isBillable && eventData.nonBillableType && customSettings.nonBillableStatusColumnId) {
+                columnValues[customSettings.nonBillableStatusColumnId] = {
+                    label: eventData.nonBillableType
+                };
+            }
         }
         
-        // הוספת שלב (אם יש מוצר ויש הגדרה לעמודה)
+        // הוספת שלב (אם יש משימה ויש הגדרה לעמודה)
         if (eventData.stageId && customSettings.stageColumnId) {
             columnValues[customSettings.stageColumnId] = {
                 label: eventData.stageId
@@ -432,9 +429,20 @@ export const useMondayEvents = (monday, context) => {
             logger.functionStart('useMondayEvents.createEvent', { eventData, startTime, endTime });
 
             const itemName = eventData.title;
+            
             const currentUserId = context?.user?.id;
 
-            const columnValues = buildColumnValues(eventData, startTime, endTime, currentUserId ? { id: currentUserId } : null);
+            // חישוב עלות עובד אם הפיצ'ר פעיל
+            let totalCost = null;
+            if (customSettings.useEmployeeCost && currentUserId && customSettings.totalCostColumnId) {
+                const hourlyRate = await fetchEmployeeHourlyRate(currentUserId);
+                if (hourlyRate !== null) {
+                    const durationHours = (endTime - startTime) / 3600000;
+                    totalCost = hourlyRate * durationHours;
+                }
+            }
+
+            const columnValues = buildColumnValues(eventData, startTime, endTime, currentUserId ? { id: currentUserId } : null, totalCost);
             const columnValuesJson = JSON.stringify(columnValues);
 
             const createdItem = await createBoardItem(
@@ -447,11 +455,13 @@ export const useMondayEvents = (monday, context) => {
             if (createdItem) {
                 const newEvent = {
                     id: createdItem.id,
-                    title: itemName,
+                    title: itemName, 
                     start: startTime,
                     end: endTime,
                     mondayItemId: createdItem.id,
-                    notes: eventData.notes
+                    notes: eventData.notes,
+                    projectId: eventData.itemId || null,
+                    eventType: "שעתי" // אירועים שנוצרים ידנית הם תמיד שעתיים
                 };
 
                 setEvents(prev => [...prev, newEvent]);
@@ -494,12 +504,24 @@ export const useMondayEvents = (monday, context) => {
                         title: itemName,
                         start: startTime,
                         end: endTime,
-                        notes: eventData.notes
+                        notes: eventData.notes,
+                        projectId: eventData.itemId || ev.projectId,
+                        eventType: ev.allDay ? ev.eventType : "שעתי"
                     }
                     : ev
             ));
 
-            const columnValues = buildColumnValues(eventData, startTime, endTime, currentUserId ? { id: currentUserId } : null);
+            // חישוב עלות עובד אם הפיצ'ר פעיל
+            let totalCost = null;
+            if (customSettings.useEmployeeCost && currentUserId && customSettings.totalCostColumnId) {
+                const hourlyRate = await fetchEmployeeHourlyRate(currentUserId);
+                if (hourlyRate !== null) {
+                    const durationHours = (endTime - startTime) / 3600000;
+                    totalCost = hourlyRate * durationHours;
+                }
+            }
+
+            const columnValues = buildColumnValues(eventData, startTime, endTime, currentUserId ? { id: currentUserId } : null, totalCost);
 
             await updateItemColumnValues(monday, context.boardId, eventId, columnValues);
             
@@ -568,49 +590,71 @@ export const useMondayEvents = (monday, context) => {
             logger.functionStart('useMondayEvents.updateEventPosition', { id: event.mondayItemId, newStart, newEnd });
 
             // Optimistic update
+            const newDurationDays = event.allDay ? calculateDaysDiff(newStart, newEnd) : null;
             setEvents(prev => {
                 const filtered = prev.filter(ev => ev.id !== event.id);
-                return [...filtered, { ...event, start: newStart, end: newEnd }];
+                return [...filtered, { 
+                    ...event, 
+                    start: newStart, 
+                    end: newEnd,
+                    durationDays: newDurationDays 
+                }];
             });
 
-            // חישובים
-            const durationMinutes = Math.round((newEnd - newStart) / 60000);
-
-            // המרת הזמן המקומי ל-UTC
-            const utcYear = newStart.getUTCFullYear();
-            const utcMonth = newStart.getUTCMonth() + 1;
-            const utcDay = newStart.getUTCDate();
-            const utcHours = newStart.getUTCHours();
-            const utcMinutes = newStart.getUTCMinutes();
-            const utcSeconds = newStart.getUTCSeconds();
-
-            const dateStr = `${utcYear}-${String(utcMonth).padStart(2, '0')}-${String(utcDay).padStart(2, '0')}`;
-            const timeStr = `${String(utcHours).padStart(2, '0')}:${String(utcMinutes).padStart(2, '0')}:${String(utcSeconds).padStart(2, '0')}`;
-
             const columnValues = {};
-            columnValues[customSettings.dateColumnId] = {
-                date: dateStr,
-                time: timeStr
-            };
 
-            const durationHours = durationMinutes / 60;
-            columnValues[customSettings.durationColumnId] = durationHours.toFixed(2);
-            
-            // הוספת סטטוס לפי סוג האירוע
-            if (customSettings.eventTypeStatusColumnId) {
-                // אם זה אירוע יומי, נבדוק את הכותרת
-                if (event.allDay) {
-                    const typeNames = {
-                        'מחלה': 'מחלה',
-                        'חופשה': 'חופשה',
-                        'מילואים': 'מילואים'
-                    };
-                    const statusLabel = typeNames[event.title] || 'שעתי';
-                    columnValues[customSettings.eventTypeStatusColumnId] = {
-                        label: statusLabel
-                    };
-                } else {
-                    // אירוע שעתי
+            if (event.allDay) {
+                // אירוע יומי - עדכון תאריך ומשך בימים
+                // המרה לתאריך מקומי (לא UTC) כי אירועים יומיים הם ללא שעה
+                const localYear = newStart.getFullYear();
+                const localMonth = newStart.getMonth() + 1;
+                const localDay = newStart.getDate();
+                const dateStr = `${localYear}-${String(localMonth).padStart(2, '0')}-${String(localDay).padStart(2, '0')}`;
+                
+                columnValues[customSettings.dateColumnId] = {
+                    date: dateStr
+                    // ללא time - אירוע יומי לא צריך שעה
+                };
+                
+                // חישוב מספר הימים החדש (לתמיכה ב-Resize)
+                const newDurationDays = calculateDaysDiff(newStart, newEnd);
+                columnValues[customSettings.durationColumnId] = formatDurationForSave(newDurationDays, event.eventType);
+                
+                // לא לשלוח eventTypeStatusColumnId - לא לשנות סוג אירוע
+                // לא לחשב עלות עובד - אין משך שעות
+            } else {
+                // אירוע שעתי - לוגיקה מלאה
+                const durationMinutes = Math.round((newEnd - newStart) / 60000);
+
+                // המרת הזמן המקומי ל-UTC
+                const utcYear = newStart.getUTCFullYear();
+                const utcMonth = newStart.getUTCMonth() + 1;
+                const utcDay = newStart.getUTCDate();
+                const utcHours = newStart.getUTCHours();
+                const utcMinutes = newStart.getUTCMinutes();
+                const utcSeconds = newStart.getUTCSeconds();
+
+                const dateStr = `${utcYear}-${String(utcMonth).padStart(2, '0')}-${String(utcDay).padStart(2, '0')}`;
+                const timeStr = `${String(utcHours).padStart(2, '0')}:${String(utcMinutes).padStart(2, '0')}:${String(utcSeconds).padStart(2, '0')}`;
+
+                columnValues[customSettings.dateColumnId] = {
+                    date: dateStr,
+                    time: timeStr
+                };
+
+                const durationHours = durationMinutes / 60;
+                columnValues[customSettings.durationColumnId] = durationHours.toFixed(2);
+                
+                // חישוב עלות עובד אם הפיצ'ר פעיל
+                if (customSettings.useEmployeeCost && context?.user?.id && customSettings.totalCostColumnId) {
+                    const hourlyRate = await fetchEmployeeHourlyRate(context.user.id);
+                    if (hourlyRate !== null) {
+                        columnValues[customSettings.totalCostColumnId] = (hourlyRate * durationHours).toFixed(2);
+                    }
+                }
+                
+                // הוספת סטטוס "שעתי" לאירועים שעתיים
+                if (customSettings.eventTypeStatusColumnId) {
                     columnValues[customSettings.eventTypeStatusColumnId] = {
                         label: "שעתי"
                     };
@@ -637,6 +681,58 @@ export const useMondayEvents = (monday, context) => {
         setEvents(prev => [...prev, event]);
     }, []);
 
+    /**
+     * שליפת מחיר לשעה של עובד מלוח העובדים
+     */
+    const fetchEmployeeHourlyRate = useCallback(async (userId) => {
+        if (!customSettings.employeesBoardId || !customSettings.employeesPersonColumnId || !customSettings.employeesHourlyRateColumnId) {
+            return null;
+        }
+
+        try {
+            logger.functionStart('fetchEmployeeHourlyRate', { userId });
+            
+            // שאילתה למציאת האייטם בלוח עובדים שבו המשתמש מופיע בעמודת ה-Person
+            // משתמשים ב-assigned_to_me כדי לזהות את המשתמש הנוכחי בצורה אמינה
+            const query = `query {
+                boards(ids: [${customSettings.employeesBoardId}]) {
+                    items_page(query_params: {
+                        rules: [{
+                            column_id: "${customSettings.employeesPersonColumnId}",
+                            compare_value: ["assigned_to_me"],
+                            operator: any_of
+                        }]
+                    }) {
+                        items {
+                            column_values(ids: ["${customSettings.employeesHourlyRateColumnId}"]) {
+                                ...on NumbersValue {
+                                    number
+                                }
+                            }
+                        }
+                    }
+                }
+            }`;
+
+            const res = await monday.api(query);
+            const items = res.data?.boards?.[0]?.items_page?.items;
+
+            if (items && items.length > 0) {
+                const rateVal = items[0].column_values[0];
+                const rate = parseFloat(rateVal?.number) || 0;
+                
+                logger.functionEnd('fetchEmployeeHourlyRate', { rate });
+                return rate;
+            }
+
+            logger.warn('fetchEmployeeHourlyRate', 'Employee not found in employees board', { userId });
+            return null;
+        } catch (error) {
+            logger.error('fetchEmployeeHourlyRate', 'Error fetching hourly rate', error);
+            return null;
+        }
+    }, [customSettings, monday]);
+
     return {
         events,
         loading,
@@ -646,7 +742,8 @@ export const useMondayEvents = (monday, context) => {
         updateEvent,
         deleteEvent,
         updateEventPosition,
-        addEvent
+        addEvent,
+        fetchEmployeeHourlyRate
     };
 };
 

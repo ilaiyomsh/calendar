@@ -101,6 +101,11 @@ const ERROR_MESSAGES = {
         canRetry: false,
         actionRequired: 'בדוק את הנתונים שהוזנו'
     },
+    'INVALID_ARGUMENT_EXCEPTION': {
+        userMessage: 'הנתונים שהוזנו אינם תקינים. אנא בדוק את הקלט.',
+        canRetry: false,
+        actionRequired: 'בדוק את הנתונים שהוזנו'
+    },
 
     // Rate limiting
     'Rate Limit Exceeded': {

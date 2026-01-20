@@ -1,0 +1,196 @@
+/* Toolbar Styling - Navigation and view controls */
+
+.rbc-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 24px; /* צמצום פאדינג מ-16px */
+    background: white;
+    border-bottom: 1px solid #e6e9ef;
+    margin-bottom: 0;
+    gap: 16px;
+    direction: rtl;
+}
+
+.rbc-toolbar-section {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+/* Navigation Section (Right) */
+.rbc-toolbar-nav {
+    gap: 16px;
+}
+
+.rbc-today-btn {
+    background-color: #0073ea !important;
+    color: white !important;
+    border: none !important;
+    padding: 8px 20px !important;
+    border-radius: 20px !important;
+    font-size: 14px !important;
+    font-weight: 500 !important;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.rbc-today-btn:hover {
+    background-color: #0060b9 !important;
+}
+
+.rbc-nav-arrows {
+    display: flex;
+    gap: 8px;
+}
+
+.rbc-nav-btn {
+    background: white !important;
+    border: 1px solid #d0d4e4 !important;
+    color: #323338 !important;
+    width: 32px !important;
+    height: 32px !important;
+    padding: 0 !important;
+    border-radius: 50% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 18px !important;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.rbc-nav-btn:hover {
+    background-color: #f5f6f8 !important;
+    border-color: #676879 !important;
+}
+
+.rbc-toolbar-label {
+    font-size: 20px;
+    font-weight: 400;
+    color: #323338;
+    margin-right: 8px;
+}
+
+/* Actions Section (Left) */
+.rbc-toolbar-actions {
+    gap: 16px;
+}
+
+.rbc-view-dropdown {
+    position: relative;
+}
+
+.rbc-view-select-button {
+    display: flex;
+    align-items: center;
+    justify-content: center; /* שינוי ל-center כדי לשמור אותם צמודים ומרכזיים */
+    gap: 12px;
+    background: white !important;
+    border: 1px solid #d0d4e4 !important;
+    padding: 0 16px !important; /* הסרת פאדינג אנכי לטובת גובה קבוע */
+    height: 34px !important; /* גובה קבוע עוזר ליישור מדויק */
+    border-radius: 20px !important;
+    color: #323338 !important;
+    font-size: 14px !important;
+    font-weight: 500 !important;
+    cursor: pointer;
+    min-width: 100px;
+}
+
+.rbc-view-select-button span {
+    display: inline-flex;
+    align-items: center;
+    height: 100%;
+}
+
+.rbc-view-select-button svg {
+    display: inline-block;
+    vertical-align: middle;
+}
+
+.rbc-view-select-button:hover {
+    background-color: #f5f6f8 !important;
+    border-color: #676879 !important;
+}
+
+.rbc-view-menu {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    background: white;
+    border: 1px solid #d0d4e4;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    z-index: 1000;
+    min-width: 140px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.rbc-view-menu button {
+    background: none !important;
+    border: none !important;
+    padding: 10px 16px !important;
+    text-align: right !important;
+    width: 100% !important;
+    font-size: 14px !important;
+    color: #323338 !important;
+    cursor: pointer;
+    border-radius: 0 !important;
+}
+
+.rbc-view-menu button:hover {
+    background-color: #f5f6f8 !important;
+}
+
+.rbc-view-menu button.active {
+    background-color: #e5f3ff !important;
+    color: #0073ea !important;
+    font-weight: 600 !important;
+}
+
+.rbc-settings-btn {
+    background: none !important;
+    border: none !important;
+    color: #676879 !important;
+    padding: 8px !important;
+    cursor: pointer;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border-radius: 50% !important;
+    transition: all 0.2s;
+}
+
+.rbc-settings-btn:hover {
+    background-color: #f5f6f8 !important;
+    color: #323338 !important;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+    .rbc-toolbar {
+        flex-direction: column;
+        padding: 12px;
+        gap: 12px;
+    }
+    
+    .rbc-toolbar-section {
+        width: 100%;
+        justify-content: space-between;
+    }
+    
+    .rbc-toolbar-nav {
+        order: 2;
+    }
+    
+    .rbc-toolbar-actions {
+        order: 1;
+    }
+    
+    .rbc-toolbar-label {
+        font-size: 16px;
+    }
+}

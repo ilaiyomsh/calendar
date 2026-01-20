@@ -11,25 +11,33 @@
   z-index: 10005;
   backdrop-filter: blur(2px);
   direction: rtl;
-  font-family: 'Figtree', sans-serif;
+  overflow-y: auto; /* מאפשר גלילה של כל ה-overlay אם המסך קטן מדי */
+  padding: 20px 0;
 }
 
 .modal {
   background-color: white;
   border-radius: 12px;
   width: 90%;
-  max-width: 500px;
+  max-width: 750px;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
   display: flex;
   flex-direction: column;
   max-height: 90vh;
   transition: all 0.3s ease;
   overflow: hidden;
+  position: relative; /* הוספת position יחסי למודאל */
+}
+
+.modalVisible {
+  overflow: visible !important;
+  max-height: 80vh !important; /* צמצום קל של גובה המודאל כדי להשאיר מקום ללוח השנה שצף */
 }
 
 .modalWide {
-  max-width: 1000px;
+  max-width: 1500px;
   height: 80vh;
+  max-height: 80vh;
 }
 
 .header {
@@ -39,6 +47,8 @@
   justify-content: space-between;
   align-items: center;
   background-color: #f7f9fa;
+  border-radius: 12px 12px 0 0; /* שמירה על פינות מעוגלות למעלה */
+  flex-shrink: 0; /* מונע התכווצות של ה-header */
 }
 
 .header h2 {
@@ -68,6 +78,19 @@
   padding: 24px;
   overflow-y: auto;
   flex: 1;
+}
+
+.contentVisible {
+  overflow: visible !important;
+}
+
+/* תוכן במצב form - מאפשר גלילה */
+.contentForm {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1 1 0; /* חשוב: flex-basis: 0 מאלץ אותו להתחיל מגובה 0 */
 }
 
 /* --- תפריט ראשי --- */
@@ -134,8 +157,10 @@
 /* --- תצוגה מפוצלת --- */
 .splitView {
   display: flex;
-  height: 100%;
   gap: 20px;
+  min-height: 0; /* מאפשר ל-flex children להתכווץ */
+  flex: 1 1 0; /* חשוב: flex-basis: 0 מאלץ אותו להתחיל מגובה 0 ולגדול */
+  overflow: hidden;
 }
 
 .sidebar {
@@ -146,19 +171,15 @@
   flex-direction: column;
   background-color: #fcfcfd;
   border-radius: 8px;
-}
-
-.sidebarHeader {
-  font-weight: 600;
-  margin-bottom: 12px;
-  color: #676879;
-  font-size: 0.9rem;
+  min-height: 0; /* מאפשר ל-flex child להתכווץ */
+  overflow: hidden;
+  padding-top: 16px; /* הוספת ריווח למעלה מאחר והכותרת הוסרה */
+  gap: 12px; /* רווח אחיד בין האלמנטים בסיידבר */
 }
 
 .searchBox {
   width: 90%;
   padding: 8px 12px;
-  margin-bottom: 12px;
   border: 1px solid #d0d4e4;
   border-radius: 4px;
   font-size: 0.9rem;
@@ -169,7 +190,7 @@
   outline: none;
 }
 
-.customerList {
+.projectList {
   flex: 1;
   overflow-y: auto;
   display: flex;
@@ -178,7 +199,7 @@
   padding-right: 2px;
 }
 
-.customerItem {
+.projectItem {
   padding: 10px 12px;
   background: white;
   border: 1px solid #e6e9ef;
@@ -192,128 +213,128 @@
   justify-content: space-between;
 }
 
-.customerItem:hover {
+.projectItem:hover {
   border-color: #0073ea;
   background-color: #f0f3ff;
   color: #0073ea;
 }
 
 .mainForm {
-  flex: 1;
+  flex: 1 1 0; /* חשוב: flex-basis: 0 מאלץ אותו להתחיל מגובה 0 */
   overflow-y: auto;
-  overflow-x: hidden; /* מונע גלילה אופקית */
+  overflow-x: hidden;
   padding-right: 4px;
+  padding-bottom: 12px;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  min-width: 0; /* מאפשר flex להתכווץ */
+  min-width: 0;
+  min-height: 0; /* מאפשר ל-flex child להתכווץ ולהציג גלילה */
 }
 
 .reportRow {
   background: #fff;
-  border: 1px solid transparent;
+  border: 1px solid #e6e9ef;
   padding: 16px 20px;
-  border-radius: 12px;
+  border-radius: 8px;
   position: relative;
   transition: all 0.2s;
   display: flex;
-  align-items: center;
-  gap: 6px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-  overflow: hidden; /* מונע גלילה אופקית */
-  min-width: 0; /* מאפשר flex items להתכווץ */
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+  min-width: 0;
+  flex-shrink: 0;
 }
 
 .reportRow:hover {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  border-color: #e5e7eb;
+  border-color: #d0d4e4;
+}
+
+.rowHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.rowMainContent {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  width: 100%;
+}
+
+.selectorsGroup {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.projectName {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #323338;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Times Group - All Editable */
 .timesGroup {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   gap: 8px;
-  flex-shrink: 0; /* מונע התכווצות */
-  min-width: auto;
+  flex-shrink: 0;
 }
 
 .timeFieldWrapper {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  min-width: 100px;
-  width: 100px;
+  gap: 6px;
+  width: 90px;
 }
 
 .timeLabelSmall {
-  font-size: 10px;
-  color: #9ca3af;
-  margin-bottom: 2px;
+  font-size: 11px;
+  color: #676879;
   font-weight: 500;
-}
-
-.timeInputInline {
-  color: #374151;
-  font-weight: 500;
-  font-size: 1rem;
-  background-color: transparent;
-  border: none;
-  padding: 0;
-  width: 60px;
   text-align: center;
-  cursor: text;
-  transition: background-color 0.2s;
-  appearance: textfield;
-  -moz-appearance: textfield;
-}
-
-.timeInputInline::-webkit-calendar-picker-indicator {
-  display: none;
-}
-
-.timeInputInline:hover {
-  background-color: #f3f4f6;
-  border-radius: 4px;
-}
-
-.timeInputInline:focus {
-  outline: none;
-  background-color: #f3f4f6;
-  border-radius: 4px;
 }
 
 .timeSeparatorInline {
   color: #d1d5db;
   font-weight: 300;
-  font-size: 1.25rem;
-  padding-bottom: 4px;
+  font-size: 1.2rem;
+  margin-top: 18px; /* Alignment with inputs */
 }
 
 /* Visual Separator */
 .visualSeparator {
   height: 40px;
   width: 1px;
-  background-color: #f3f4f6;
+  background-color: #e6e9ef;
   margin: 0 4px;
-  flex-shrink: 0; /* מונע התכווצות */
+  flex-shrink: 0;
 }
 
 /* Duration */
 .durationWrapper {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  padding-top: 0;
-  flex-shrink: 0; /* מונע התכווצות */
-  min-width: 100px;
-  width: 100px;
+  gap: 6px;
+  flex-shrink: 0;
+  width: 110px;
 }
 
 .durationInputInline {
   font-size: 1rem;
   color: #1f2937;
-  font-family: 'Courier New', monospace;
   letter-spacing: 0.05em;
   width: 60px;
   text-align: center;
@@ -343,31 +364,36 @@
 /* Notes */
 .notesWrapper {
   flex: 1;
-  min-width: 0; /* מאפשר התכווצות */
-  border-right: 1px solid #f3f4f6;
-  padding-right: 16px;
-  padding-top: 8px;
-  overflow: hidden; /* מונע גלילה */
+  min-width: 0;
+  padding-top: 4px;
+  margin-bottom: 8px; /* הוספת ריווח בין תיבת הטקסט לגבול התחתון של השורה */
 }
 
 .notesInput {
   width: 100%;
-  background-color: transparent;
-  border: none;
-  font-size: 0.875rem;
-  color: #4b5563;
-  padding: 4px 0;
-  overflow: hidden;
+  background-color: #fcfcfd;
+  border: 1px solid #d0d4e4;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  color: #323338;
+  padding: 6px 10px;
+  transition: all 0.2s;
   text-overflow: ellipsis;
-  white-space: nowrap; /* שורה אחת */
+  white-space: nowrap;
+  overflow: hidden;
 }
 
-.notesInput::placeholder {
-  color: #d1d5db;
+.notesInput:hover {
+  border-color: #0073ea;
+  background-color: #ffffff;
 }
 
 .notesInput:focus {
   outline: none;
+  border-color: #0073ea;
+  background-color: #ffffff;
+  box-shadow: 0 0 0 2px rgba(0, 115, 234, 0.1);
+  text-overflow: clip; /* ביטול שלוש נקודות בזמן עריכה כדי לראות את כל הטקסט */
 }
 
 /* Delete Button - Top Left Corner */
@@ -398,32 +424,6 @@
   background-color: #fee2e2;
 }
 
-.customerProductGroup {
-  width: 250px;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  border-left: 1px solid #f3f4f6;
-  padding-left: 16px;
-}
-
-.customerName {
-  font-size: 1rem;
-  font-weight: 700;
-  color: #1f2937;
-  line-height: 1.2;
-  margin-bottom: 4px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.productField {
-  width: 100%;
-}
-
-
 .input, .select {
   padding: 8px;
   border: 1px solid #d0d4e4;
@@ -439,7 +439,6 @@
   outline: none;
 }
 
-
 .footer {
   padding: 20px;
   border-top: 1px solid #e6e9ef;
@@ -447,7 +446,9 @@
   justify-content: flex-end;
   align-items: center;
   gap: 12px;
+  flex-shrink: 0; /* מונע התכווצות של ה-footer */
   background-color: #f7f9fa;
+  border-radius: 0 0 12px 12px; /* שמירה על פינות מעוגלות למטה */
 }
 
 .footer .deleteBtn {
@@ -473,7 +474,6 @@
   font-size: 1.875rem;
   font-weight: 700;
   color: #323338;
-  font-family: 'Courier New', monospace;
   letter-spacing: -0.025em;
   line-height: 1;
 }
@@ -525,4 +525,239 @@
   flex-direction: column;
   align-items: center;
   gap: 16px;
+}
+
+/* --- בחירת מספר ימים --- */
+.daysSelectionContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 16px; /* צמצום מ-24px */
+  padding: 10px 20px; /* צמצום פאדינג */
+  max-width: 400px;
+  margin: 0 auto;
+}
+
+.daysSelectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e6e9ef;
+}
+
+.daysSelectionContent {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+.daysLabel {
+  font-size: 1rem;
+  color: #323338;
+  font-weight: 500;
+}
+
+.daysSelect {
+  padding: 12px 16px;
+  border: 1px solid #d0d4e4;
+  border-radius: 8px;
+  font-size: 1rem;
+  min-width: 150px;
+  cursor: pointer;
+  background-color: white;
+  transition: all 0.2s;
+}
+
+.daysSelect:hover {
+  border-color: #0073ea;
+}
+
+.daysSelect:focus {
+  border-color: #0073ea;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(0, 115, 234, 0.1);
+}
+
+.daysSelectionPreview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background-color: #f7f9fa;
+  border-radius: 8px;
+  color: #676879;
+  font-size: 0.95rem;
+}
+
+/* --- בחירת תאריך סיום --- */
+.dateRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.dateDisplay {
+  padding: 12px 16px;
+  background-color: #f7f9fa;
+  border: 1px solid #e6e9ef;
+  border-radius: 8px;
+  font-size: 1rem;
+  min-width: 150px;
+  text-align: center;
+  color: #676879;
+}
+
+.datePickerWrapper {
+  position: relative;
+}
+
+.datePickerButton {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 1px solid #d0d4e4;
+  border-radius: 8px;
+  font-size: 1rem;
+  min-width: 150px;
+  cursor: pointer;
+  background-color: white;
+  transition: all 0.2s;
+  color: #323338;
+}
+
+.datePickerButton:hover {
+  border-color: #0073ea;
+  background-color: #f0f3ff;
+}
+
+.datePickerButton:focus {
+  border-color: #0073ea;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(0, 115, 234, 0.1);
+}
+
+.datePickerDropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10000; /* Z-index גבוה מאוד כדי להיות מעל ה-footer */
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25); /* צל חזק יותר להדגשת הגובה */
+  border-radius: 8px;
+  animation: fadeIn 0.15s ease-out;
+  background: white;
+}
+
+/* אם המסך נמוך מאוד, נפתח את לוח השנה כלפי מעלה */
+@media (max-height: 750px) {
+  .datePickerDropdown {
+    top: auto;
+    bottom: calc(100% + 8px);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+/* Stage Buttons */
+.stageButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.stageButton {
+  padding: 6px 12px;
+  border: 1px solid #d0d4e4;
+  border-radius: 6px;
+  background-color: #ffffff;
+  color: #323338;
+  font-size: 13px; /* הגדלה קלה של הכתב */
+  font-weight: 500; /* הוספת עובי לכתב */
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.stageButton:hover {
+  border-color: #0073ea;
+  background-color: #f0f3ff;
+}
+
+.stageButtonSelected {
+  border-color: #0073ea;
+  background-color: #0073ea;
+  color: white;
+}
+
+.stageButtonSelected:hover {
+  background-color: #0060c2;
+}
+
+.loadingSmall {
+  font-size: 12px;
+  color: #676879;
+}
+
+/* Duration Control with Plus/Minus */
+.durationControl {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  border: 1px solid #d0d4e4;
+  border-radius: 4px;
+  overflow: hidden;
+  background-color: #ffffff;
+  transition: all 0.2s;
+  height: 36px; /* עדכון ל-36px להתאמה מושלמת */
+}
+
+.durationControl:hover {
+  border-color: #0073ea;
+}
+
+.durationBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 100%;
+  background-color: #f5f6f8;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  color: #676879;
+}
+
+.durationBtn:hover {
+  background-color: #e6e9ef;
+  color: #0073ea;
+}
+
+.durationBtn:active {
+  background-color: #d0d4e4;
+}
+
+.durationValue {
+  min-width: 50px;
+  text-align: center;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #323338;
+  padding: 0 4px;
 }
