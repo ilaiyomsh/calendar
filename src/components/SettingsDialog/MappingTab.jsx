@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { Briefcase, ListTodo, Table, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Briefcase, ListTodo, Table, ChevronDown, ChevronUp, AlertTriangle, CalendarCheck, Filter, Clock } from 'lucide-react';
 import SearchableSelect from './SearchableSelect';
 import MultiSelect from './MultiSelect';
 import { STRUCTURE_MODES } from '../../contexts/SettingsContext';
 import { fetchStatusColumnsFromBoard, parseStatusLabels, createEventTypeStatusColumn } from '../../utils/mondayApi';
-import { validateEventTypeColumn, REQUIRED_EVENT_TYPE_LABELS } from '../../utils/eventTypeValidation';
+import { parseStatusColumnLabels } from '../../utils/eventTypeValidation';
+import { EVENT_CATEGORIES, CATEGORY_LABELS, UNMAPPED, UNMAPPED_LABEL, validateMapping, createLegacyMapping } from '../../utils/eventTypeMapping';
+import { getEffectiveBoardId } from '../../utils/boardIdResolver';
 import logger from '../../utils/logger';
 import styles from './MappingTab.module.css';
 
@@ -24,7 +26,7 @@ const MappingTab = ({
   const { structureMode } = settings;
   
   // State - סקשנים פתוחים
-  const [openSection, setOpenSection] = useState('projects');
+  const [openSection, setOpenSection] = useState(''); // כל הסעיפים סגורים בברירת מחדל
   
   // State - עמודות לוח פרויקטים
   const [peopleColumns, setPeopleColumns] = useState([]);
@@ -40,12 +42,19 @@ const MappingTab = ({
   const [taskStatusColumns, setTaskStatusColumns] = useState([]);
   const [taskStatusLabels, setTaskStatusLabels] = useState([]);
   const [loadingTaskStatusColumns, setLoadingTaskStatusColumns] = useState(false);
+
+  // State - עמודות לוח הקצאות (Assignments)
+  const [assignmentPersonColumns, setAssignmentPersonColumns] = useState([]);
+  const [assignmentDateColumns, setAssignmentDateColumns] = useState([]);
+  const [assignmentBoardRelationColumns, setAssignmentBoardRelationColumns] = useState([]);
+  const [loadingAssignmentColumns, setLoadingAssignmentColumns] = useState(false);
   
   // State - עמודות לוח דיווחים נוכחי
   const [dateColumns, setDateColumns] = useState([]);
   const [durationColumns, setDurationColumns] = useState([]);
   const [projectColumns, setProjectColumns] = useState([]);
   const [taskColumns, setTaskColumns] = useState([]);
+  const [assignmentColumns, setAssignmentColumns] = useState([]);
   const [reporterColumns, setReporterColumns] = useState([]);
   const [statusColumns, setStatusColumns] = useState([]);
   const [statusColumnsWithSettings, setStatusColumnsWithSettings] = useState([]);
@@ -56,12 +65,46 @@ const MappingTab = ({
   // State - ולידציה של עמודת סוג דיווח
   const [eventTypeValidation, setEventTypeValidation] = useState({ isValid: true, missingLabels: [] });
   const [isCreatingEventTypeColumn, setIsCreatingEventTypeColumn] = useState(false);
-  
+
+  // State - לייבלים של עמודת סוג דיווח (לשימוש ב-Planned vs Actual)
+  const [eventTypeStatusLabels, setEventTypeStatusLabels] = useState([]);
+
   // בדיקה אם מצב כולל משימות
   const hasTasks = structureMode === STRUCTURE_MODES.PROJECT_WITH_TASKS;
-  
+
   // בדיקה אם מצב כולל סיווג
   const hasStage = structureMode === STRUCTURE_MODES.PROJECT_WITH_STAGE;
+
+  // חישוב לוח דיווחים אפקטיבי
+  const effectiveBoardId = useMemo(() =>
+    getEffectiveBoardId(settings, context),
+    [settings, context]
+  );
+
+  // האם יש context.boardId זמין
+  const hasContextBoard = !!context?.boardId;
+
+  // טעינה ראשונית כשה-component נטען
+  useEffect(() => {
+    // טעינת עמודות לוח פרויקטים
+    if (settings.connectedBoardId) {
+      fetchPeopleColumns(settings.connectedBoardId);
+      fetchProjectTasksColumns(settings.connectedBoardId);
+      if (settings.projectStatusFilterEnabled) {
+        fetchProjectStatusColumns(settings.connectedBoardId, settings.projectStatusColumnId);
+      }
+    }
+    
+    // טעינת עמודות לוח דיווחים
+    if (effectiveBoardId) {
+      fetchCurrentBoardColumns(effectiveBoardId, settings.connectedBoardId, settings.tasksBoardId);
+    }
+    
+    // טעינת עמודות לוח הקצאות
+    if (settings.assignmentsBoardId) {
+      fetchAssignmentBoardColumns(settings.assignmentsBoardId);
+    }
+  }, []); // ריק - מופעל רק פעם אחת בטעינה
 
   // טעינת עמודות לוח פרויקטים בעת שינוי
   useEffect(() => {
@@ -74,12 +117,12 @@ const MappingTab = ({
     }
   }, [settings.connectedBoardId]);
 
-  // טעינת עמודות לוח נוכחי
+  // טעינת עמודות לוח דיווחים (הלוח האפקטיבי)
   useEffect(() => {
-    if (context?.boardId) {
-      fetchCurrentBoardColumns(context.boardId, settings.connectedBoardId, settings.tasksBoardId);
+    if (effectiveBoardId) {
+      fetchCurrentBoardColumns(effectiveBoardId, settings.connectedBoardId, settings.tasksBoardId);
     }
-  }, [context?.boardId, settings.connectedBoardId, settings.tasksBoardId]);
+  }, [effectiveBoardId, settings.connectedBoardId, settings.tasksBoardId]);
 
   // טעינת לוחות משימות מעמודת Connect Boards
   useEffect(() => {
@@ -94,6 +137,13 @@ const MappingTab = ({
       fetchTaskStatusColumns(settings.tasksBoardId, settings.taskStatusColumnId);
     }
   }, [settings.tasksBoardId, settings.taskStatusFilterEnabled]);
+
+  // טעינת עמודות לוח הקצאות
+  useEffect(() => {
+    if (settings.assignmentsBoardId) {
+      fetchAssignmentBoardColumns(settings.assignmentsBoardId);
+    }
+  }, [settings.assignmentsBoardId]);
 
   // --- API Functions ---
   
@@ -210,12 +260,22 @@ const MappingTab = ({
           return true;
         }).map(col => ({ id: col.id, name: col.title })));
         
-        // ולידציה של עמודת סוג דיווח אם כבר נבחרה
+        // עמודות קישור להקצאה - כל עמודות board_relation (ללא סינון)
+        setAssignmentColumns(columns.filter(col => {
+          return col.type === 'board_relation';
+        }).map(col => ({ id: col.id, name: col.title })));
+        
+        // טעינת לייבלים של עמודת סוג דיווח אם כבר נבחרה
         if (settings.eventTypeStatusColumnId) {
           const selectedCol = columns.find(col => col.id === settings.eventTypeStatusColumnId);
           if (selectedCol?.settings_str) {
-            const validation = validateEventTypeColumn(selectedCol.settings_str);
-            setEventTypeValidation(validation);
+            const labels = parseStatusColumnLabels(selectedCol.settings_str);
+            setEventTypeStatusLabels(labels.map(l => ({ id: l.label, name: l.label, color: l.color || '' })));
+            // ולידציה של המיפוי הנוכחי
+            if (settings.eventTypeMapping) {
+              const validation = validateMapping(settings.eventTypeMapping);
+              setEventTypeValidation({ isValid: validation.isValid, missingLabels: validation.errors });
+            }
           }
         }
       }
@@ -306,6 +366,34 @@ const MappingTab = ({
     }
   };
 
+  // טעינת עמודות לוח הקצאות
+  const fetchAssignmentBoardColumns = async (boardId) => {
+    if (!boardId) {
+      setAssignmentPersonColumns([]);
+      setAssignmentDateColumns([]);
+      setAssignmentBoardRelationColumns([]);
+      return;
+    }
+    setLoadingAssignmentColumns(true);
+    try {
+      const query = `query { boards(ids: [${boardId}]) { columns { id title type settings_str } } }`;
+      const res = await monday.api(query);
+      if (res.data?.boards?.[0]) {
+        const columns = res.data.boards[0].columns;
+        setAssignmentPersonColumns(columns.filter(col => col.type === 'people').map(col => ({ id: col.id, name: col.title })));
+        setAssignmentDateColumns(columns.filter(col => col.type === 'date').map(col => ({ id: col.id, name: col.title })));
+        setAssignmentBoardRelationColumns(columns.filter(col => col.type === 'board_relation').map(col => ({ id: col.id, name: col.title })));
+      }
+    } catch (err) {
+      logger.error('MappingTab', 'Error fetching assignment board columns', err);
+      setAssignmentPersonColumns([]);
+      setAssignmentDateColumns([]);
+      setAssignmentBoardRelationColumns([]);
+    } finally {
+      setLoadingAssignmentColumns(false);
+    }
+  };
+
   // --- Handlers ---
 
   const handleConnectedBoardChange = (newBoardId) => {
@@ -348,8 +436,8 @@ const MappingTab = ({
       taskStatusColumnId: '',
       taskActiveStatusValues: []
     });
-    if (newBoardId && context?.boardId) {
-      fetchCurrentBoardColumns(context.boardId, settings.connectedBoardId, newBoardId);
+    if (newBoardId && effectiveBoardId) {
+      fetchCurrentBoardColumns(effectiveBoardId, settings.connectedBoardId, newBoardId);
     }
   };
 
@@ -393,33 +481,89 @@ const MappingTab = ({
     fetchTaskStatusLabels(newColumnId);
   };
 
-  // ולידציה של עמודת סוג דיווח
-  const handleEventTypeColumnChange = (newColumnId) => {
-    onChange({ eventTypeStatusColumnId: newColumnId });
-    
-    if (newColumnId) {
-      const selectedCol = statusColumnsWithSettings.find(col => col.id === newColumnId);
-      if (selectedCol?.settings_str) {
-        const validation = validateEventTypeColumn(selectedCol.settings_str);
-        setEventTypeValidation(validation);
-      } else {
-        setEventTypeValidation({ isValid: true, missingLabels: [] });
-      }
-    } else {
-      setEventTypeValidation({ isValid: true, missingLabels: [] });
+  // שינוי לוח הקצאות - איפוס כל העמודות
+  const handleAssignmentsBoardChange = (newBoardId) => {
+    onChange({
+      assignmentsBoardId: newBoardId,
+      assignmentPersonColumnId: '',
+      assignmentStartDateColumnId: '',
+      assignmentEndDateColumnId: '',
+      assignmentProjectLinkColumnId: ''
+    });
+    setAssignmentPersonColumns([]);
+    setAssignmentDateColumns([]);
+    setAssignmentBoardRelationColumns([]);
+
+    if (newBoardId) {
+      fetchAssignmentBoardColumns(newBoardId);
     }
   };
 
+  // ולידציה של עמודת סוג דיווח + חילוץ לייבלים + ניסיון מיגרציה אוטומטית
+  const handleEventTypeColumnChange = (newColumnId) => {
+    onChange({ eventTypeStatusColumnId: newColumnId });
+
+    if (newColumnId) {
+      const selectedCol = statusColumnsWithSettings.find(col => col.id === newColumnId);
+      if (selectedCol?.settings_str) {
+        // חילוץ לייבלים כולל צבעים
+        const labels = parseStatusColumnLabels(selectedCol.settings_str);
+        setEventTypeStatusLabels(labels.map(l => ({ id: l.label, name: l.label, color: l.color || '' })));
+
+        // ניסיון מיגרציה אוטומטית אם אין מיפוי קיים
+        if (!settings.eventTypeMapping) {
+          const result = createLegacyMapping(labels);
+          if (result) {
+            onChange({
+              eventTypeStatusColumnId: newColumnId,
+              eventTypeMapping: result.mapping,
+              eventTypeLabelColors: result.colors
+            });
+            const validation = validateMapping(result.mapping);
+            setEventTypeValidation({ isValid: validation.isValid, missingLabels: validation.errors });
+            return;
+          }
+        }
+
+        // ולידציה של המיפוי הנוכחי
+        if (settings.eventTypeMapping) {
+          const validation = validateMapping(settings.eventTypeMapping);
+          setEventTypeValidation({ isValid: validation.isValid, missingLabels: validation.errors });
+        } else {
+          setEventTypeValidation({ isValid: false, missingLabels: ['יש להגדיר מיפוי סוגי דיווח'] });
+        }
+      } else {
+        setEventTypeValidation({ isValid: true, missingLabels: [] });
+        setEventTypeStatusLabels([]);
+      }
+    } else {
+      setEventTypeValidation({ isValid: true, missingLabels: [] });
+      setEventTypeStatusLabels([]);
+      onChange({ eventTypeStatusColumnId: null, eventTypeMapping: null, eventTypeLabelColors: null });
+    }
+  };
+
+  // טעינת לייבלים של עמודת סוג דיווח בעת טעינה ראשונית
+  useEffect(() => {
+    if (settings.eventTypeStatusColumnId && statusColumnsWithSettings.length > 0) {
+      const selectedCol = statusColumnsWithSettings.find(col => col.id === settings.eventTypeStatusColumnId);
+      if (selectedCol?.settings_str) {
+        const labels = parseStatusColumnLabels(selectedCol.settings_str);
+        setEventTypeStatusLabels(labels.map(l => ({ id: l.label, name: l.label, color: l.color || '' })));
+      }
+    }
+  }, [settings.eventTypeStatusColumnId, statusColumnsWithSettings]);
+
   // יצירת עמודת סוג דיווח חדשה
   const handleCreateEventTypeColumn = async () => {
-    if (!context?.boardId) return;
-    
+    if (!effectiveBoardId) return;
+
     setIsCreatingEventTypeColumn(true);
     try {
-      const newColumnId = await createEventTypeStatusColumn(monday, context.boardId);
+      const newColumnId = await createEventTypeStatusColumn(monday, effectiveBoardId);
       if (newColumnId) {
         // רענון רשימת העמודות
-        await fetchCurrentBoardColumns(context.boardId, settings.connectedBoardId, settings.tasksBoardId);
+        await fetchCurrentBoardColumns(effectiveBoardId, settings.connectedBoardId, settings.tasksBoardId);
         // בחירת העמודה החדשה
         onChange({ eventTypeStatusColumnId: newColumnId });
         setEventTypeValidation({ isValid: true, missingLabels: [] });
@@ -430,6 +574,71 @@ const MappingTab = ({
       showErrorWithDetails(err, { functionName: 'handleCreateEventTypeColumn' });
     } finally {
       setIsCreatingEventTypeColumn(false);
+    }
+  };
+
+  // טיפול בשינוי מיפוי של לייבל בודד
+  const handleMappingLabelChange = (labelName, category) => {
+    const currentMapping = { ...(settings.eventTypeMapping || {}) };
+    const currentColors = { ...(settings.eventTypeLabelColors || {}) };
+
+    if (category === UNMAPPED) {
+      delete currentMapping[labelName];
+    } else {
+      currentMapping[labelName] = category;
+    }
+
+    // עדכון צבעים
+    const labelObj = eventTypeStatusLabels.find(l => l.name === labelName);
+    if (labelObj?.color) {
+      currentColors[labelName] = labelObj.color;
+    }
+
+    onChange({ eventTypeMapping: currentMapping, eventTypeLabelColors: currentColors });
+
+    // ולידציה
+    const validation = validateMapping(currentMapping);
+    setEventTypeValidation({ isValid: validation.isValid, missingLabels: validation.errors });
+  };
+
+  // בדיקה אם קטגוריה חד-פעמית כבר תפוסה
+  const isCategoryTaken = (category) => {
+    if (!settings.eventTypeMapping) return false;
+    if (category !== EVENT_CATEGORIES.BILLABLE && category !== EVENT_CATEGORIES.TEMPORARY) return false;
+    return Object.values(settings.eventTypeMapping).filter(c => c === category).length >= 1;
+  };
+
+  // שינוי טוגל שימוש בלוח נוכחי
+  const handleUseCurrentBoardToggle = () => {
+    const newValue = !settings.useCurrentBoardForReporting;
+    onChange({
+      useCurrentBoardForReporting: newValue,
+      // אם עוברים ללוח נוכחי, מאפסים את לוח הדיווחים
+      timeReportingBoardId: newValue ? null : settings.timeReportingBoardId
+    });
+  };
+
+  // שינוי לוח דיווחים
+  const handleTimeReportingBoardChange = (newBoardId) => {
+    onChange({
+      timeReportingBoardId: newBoardId,
+      // איפוס כל העמודות של לוח הדיווחים
+      dateColumnId: '',
+      endTimeColumnId: '',
+      durationColumnId: '',
+      projectColumnId: '',
+      taskColumnId: '',
+      assignmentColumnId: '',
+      reporterColumnId: '',
+      eventTypeStatusColumnId: '',
+      nonBillableStatusColumnId: '',
+      stageColumnId: '',
+      notesColumnId: ''
+    });
+
+    // טעינת עמודות הלוח החדש
+    if (newBoardId) {
+      fetchCurrentBoardColumns(newBoardId, settings.connectedBoardId, settings.tasksBoardId);
     }
   };
 
@@ -501,30 +710,43 @@ const MappingTab = ({
 
   return (
     <div className={styles.container}>
+      {/* טוגל בחירה בין לוח פרויקטים ללוח הקצאות */}
+      <div style={{ marginBottom: '24px' }}>
+        <ToggleRow
+          label="השתמש בלוח הקצאות למשיכת פרויקטים"
+          description="כאשר פעיל, הפרויקטים יימשכו מלוח ההקצאות לפי המשתמש והתאריך הנוכחי. אחרת, יימשכו מלוח הפרויקטים."
+          checked={settings.useAssignmentsMode}
+          onChange={() => onChange({ useAssignmentsMode: !settings.useAssignmentsMode })}
+        />
+      </div>
+
       {/* סקשן 1: לוח פרויקטים */}
       <AccordionSection id="projects" title="לוח פרויקטים" icon={Briefcase}>
-        <FieldWrapper label="בחר את לוח הפרויקטים" required>
-          <SearchableSelect 
-            options={boards} 
-            value={settings.connectedBoardId} 
-            onChange={handleConnectedBoardChange} 
-            placeholder="בחר לוח..." 
-            isLoading={loadingBoards} 
-          />
-        </FieldWrapper>
-
-        <FieldWrapper label="עמודות לשיוך (אנשים)" required>
-          <div className={!settings.connectedBoardId ? styles.disabled : ''}>
-            <MultiSelect 
-              options={peopleColumns} 
-              value={settings.peopleColumnIds} 
-              onChange={(ids) => onChange({ peopleColumnIds: ids })} 
-              placeholder="בחר עמודות אנשים..." 
-              isLoading={loadingPeopleColumns} 
-              disabled={!settings.connectedBoardId} 
+        <div className={settings.useAssignmentsMode ? styles.disabled : ''}>
+          <FieldWrapper label="בחר את לוח הפרויקטים" required={!settings.useAssignmentsMode}>
+            <SearchableSelect 
+              options={boards} 
+              value={settings.connectedBoardId} 
+              onChange={handleConnectedBoardChange} 
+              placeholder="בחר לוח..." 
+              isLoading={loadingBoards} 
+              disabled={settings.useAssignmentsMode}
             />
-          </div>
-        </FieldWrapper>
+          </FieldWrapper>
+
+          <FieldWrapper label="עמודות לשיוך (אנשים)" required={!settings.useAssignmentsMode}>
+            <div className={(!settings.connectedBoardId || settings.useAssignmentsMode) ? styles.disabled : ''}>
+              <MultiSelect 
+                options={peopleColumns} 
+                value={settings.peopleColumnIds} 
+                onChange={(ids) => onChange({ peopleColumnIds: ids })} 
+                placeholder="בחר עמודות אנשים..." 
+                isLoading={loadingPeopleColumns} 
+                disabled={!settings.connectedBoardId || settings.useAssignmentsMode} 
+              />
+            </div>
+          </FieldWrapper>
+        </div>
 
         <ToggleRow
           label="סינון פרויקטים לפי סטטוס"
@@ -560,10 +782,82 @@ const MappingTab = ({
         )}
       </AccordionSection>
 
-      {/* סקשן 2: לוח משימות (מותנה) */}
-      <AccordionSection 
-        id="tasks" 
-        title="לוח משימות" 
+      {/* סקשן 2: לוח הקצאות */}
+      <AccordionSection id="assignments" title="לוח הקצאות" icon={CalendarCheck}>
+        <div className={!settings.useAssignmentsMode ? styles.disabled : ''}>
+          <p className={styles.fieldDescription} style={{ marginBottom: '16px' }}>
+            הקצאות מאפשרות סינון פרויקטים לפי טווח תאריכים. אם לא מוגדר, ייעשה שימוש בעמודות אנשים מלוח הפרויקטים.
+          </p>
+
+          <FieldWrapper label="לוח הקצאות" required={settings.useAssignmentsMode}>
+            <SearchableSelect
+              options={boards}
+              value={settings.assignmentsBoardId}
+              onChange={handleAssignmentsBoardChange}
+              placeholder="בחר לוח הקצאות..."
+              isLoading={loadingBoards}
+              disabled={!settings.useAssignmentsMode}
+            />
+          </FieldWrapper>
+
+          {settings.assignmentsBoardId && (
+            <>
+              <FieldWrapper label="עמודת אנשים" required={settings.useAssignmentsMode}>
+                <SearchableSelect
+                  options={assignmentPersonColumns}
+                  value={settings.assignmentPersonColumnId}
+                  onChange={(id) => onChange({ assignmentPersonColumnId: id })}
+                  placeholder="בחר עמודת אנשים..."
+                  isLoading={loadingAssignmentColumns}
+                  showSearch={false}
+                  disabled={!settings.useAssignmentsMode}
+                />
+              </FieldWrapper>
+
+              <FieldWrapper label="עמודת תאריך התחלה" required={settings.useAssignmentsMode}>
+                <SearchableSelect
+                  options={assignmentDateColumns}
+                  value={settings.assignmentStartDateColumnId}
+                  onChange={(id) => onChange({ assignmentStartDateColumnId: id })}
+                  placeholder="בחר עמודת תאריך התחלה..."
+                  isLoading={loadingAssignmentColumns}
+                  showSearch={false}
+                  disabled={!settings.useAssignmentsMode}
+                />
+              </FieldWrapper>
+
+              <FieldWrapper label="עמודת תאריך סיום" required={settings.useAssignmentsMode}>
+                <SearchableSelect
+                  options={assignmentDateColumns}
+                  value={settings.assignmentEndDateColumnId}
+                  onChange={(id) => onChange({ assignmentEndDateColumnId: id })}
+                  placeholder="בחר עמודת תאריך סיום..."
+                  isLoading={loadingAssignmentColumns}
+                  showSearch={false}
+                  disabled={!settings.useAssignmentsMode}
+                />
+              </FieldWrapper>
+
+              <FieldWrapper label="עמודת קישור לפרויקט" required={settings.useAssignmentsMode}>
+                <SearchableSelect
+                  options={assignmentBoardRelationColumns}
+                  value={settings.assignmentProjectLinkColumnId}
+                  onChange={(id) => onChange({ assignmentProjectLinkColumnId: id })}
+                  placeholder="בחר עמודת קישור לפרויקט..."
+                  isLoading={loadingAssignmentColumns}
+                  showSearch={false}
+                  disabled={!settings.useAssignmentsMode}
+                />
+              </FieldWrapper>
+            </>
+          )}
+        </div>
+      </AccordionSection>
+
+      {/* סקשן 3: לוח משימות (מותנה) */}
+      <AccordionSection
+        id="tasks"
+        title="לוח משימות"
         icon={ListTodo}
         isVisible={hasTasks}
       >
@@ -633,19 +927,43 @@ const MappingTab = ({
         )}
       </AccordionSection>
 
-      {/* סקשן 3: לוח דיווחי שעות */}
-      <AccordionSection id="timesheet" title="לוח דיווחי שעות (נוכחי)" icon={Table}>
-        {!context?.boardId && (
-          <p className={styles.warning}>לא נמצא לוח נוכחי - אנא פתח את האפליקציה מתוך לוח</p>
+      {/* סקשן 4: לוח דיווחי שעות */}
+      <AccordionSection id="timesheet" title="לוח דיווחי שעות" icon={Table}>
+        <ToggleRow
+          label="שימוש בלוח הנוכחי"
+          description="כאשר פעיל, הדיווחים יישמרו בלוח שבו האפליקציה מותקנת"
+          checked={settings.useCurrentBoardForReporting}
+          onChange={handleUseCurrentBoardToggle}
+          disabled={!hasContextBoard}
+        />
+
+        {(!settings.useCurrentBoardForReporting || !hasContextBoard) && (
+          <FieldWrapper
+            label="בחר לוח דיווחי שעות"
+            required
+            description={!hasContextBoard ? "האפליקציה רצה כ-Custom Object - יש לבחור לוח דיווחים" : undefined}
+          >
+            <SearchableSelect
+              options={boards}
+              value={settings.timeReportingBoardId}
+              onChange={handleTimeReportingBoardChange}
+              placeholder="בחר לוח דיווחי שעות..."
+              isLoading={loadingBoards}
+            />
+          </FieldWrapper>
+        )}
+
+        {!effectiveBoardId && (
+          <p className={styles.warning}>לא נבחר לוח דיווחים - יש לבחור לוח או להפעיל את האפליקציה מתוך לוח</p>
         )}
 
         <FieldWrapper label="עמודת קישור לפרויקט" required>
-          <div className={!context?.boardId ? styles.disabled : ''}>
-            <SearchableSelect 
-              options={projectColumns} 
-              value={settings.projectColumnId} 
-              onChange={(id) => onChange({ projectColumnId: id })} 
-              placeholder="בחר עמודת קישור..." 
+          <div className={!effectiveBoardId ? styles.disabled : ''}>
+            <SearchableSelect
+              options={projectColumns}
+              value={settings.projectColumnId}
+              onChange={(id) => onChange({ projectColumnId: id })}
+              placeholder="בחר עמודת קישור..."
               isLoading={loadingCurrentBoardColumns}
               showSearch={false}
             />
@@ -654,12 +972,12 @@ const MappingTab = ({
 
         {hasTasks && settings.tasksBoardId && (
           <FieldWrapper label="עמודת קישור למשימה" required>
-            <div className={!context?.boardId ? styles.disabled : ''}>
-              <SearchableSelect 
-                options={taskColumns} 
-                value={settings.taskColumnId} 
-                onChange={(id) => onChange({ taskColumnId: id })} 
-                placeholder="בחר עמודת קישור למשימה..." 
+            <div className={!effectiveBoardId ? styles.disabled : ''}>
+              <SearchableSelect
+                options={taskColumns}
+                value={settings.taskColumnId}
+                onChange={(id) => onChange({ taskColumnId: id })}
+                placeholder="בחר עמודת קישור למשימה..."
                 isLoading={loadingCurrentBoardColumns}
                 showSearch={false}
               />
@@ -667,26 +985,55 @@ const MappingTab = ({
           </FieldWrapper>
         )}
 
-        <FieldWrapper label="עמודת תאריך" required>
-          <div className={!context?.boardId ? styles.disabled : ''}>
-            <SearchableSelect 
-              options={dateColumns} 
-              value={settings.dateColumnId} 
-              onChange={(id) => onChange({ dateColumnId: id })} 
-              placeholder="בחר עמודת תאריך..." 
+        {settings.useAssignmentsMode && settings.assignmentsBoardId && (
+          <FieldWrapper label="עמודת קישור להקצאה" required>
+            <div className={!effectiveBoardId ? styles.disabled : ''}>
+              <SearchableSelect
+                options={assignmentColumns}
+                value={settings.assignmentColumnId}
+                onChange={(id) => onChange({ assignmentColumnId: id })}
+                placeholder="בחר עמודת קישור להקצאה..."
+                isLoading={loadingCurrentBoardColumns}
+                showSearch={false}
+              />
+            </div>
+          </FieldWrapper>
+        )}
+
+        <FieldWrapper label="עמודת תאריך (התחלה)" required>
+          <div className={!effectiveBoardId ? styles.disabled : ''}>
+            <SearchableSelect
+              options={dateColumns}
+              value={settings.dateColumnId}
+              onChange={(id) => onChange({ dateColumnId: id })}
+              placeholder="בחר עמודת תאריך התחלה..."
               isLoading={loadingCurrentBoardColumns}
               showSearch={false}
             />
           </div>
         </FieldWrapper>
 
+        <FieldWrapper label="עמודת תאריך סיום" required>
+          <div className={!effectiveBoardId ? styles.disabled : ''}>
+            <SearchableSelect
+              options={dateColumns}
+              value={settings.endTimeColumnId}
+              onChange={(id) => onChange({ endTimeColumnId: id })}
+              placeholder="בחר עמודת תאריך סיום..."
+              isLoading={loadingCurrentBoardColumns}
+              showSearch={false}
+            />
+          </div>
+          <p className={styles.fieldDescription}>זמן הסיום של האירוע (נדרש לקריאת אירועים זמניים)</p>
+        </FieldWrapper>
+
         <FieldWrapper label="עמודת משך זמן" required>
-          <div className={!context?.boardId ? styles.disabled : ''}>
-            <SearchableSelect 
-              options={durationColumns} 
-              value={settings.durationColumnId} 
-              onChange={(id) => onChange({ durationColumnId: id })} 
-              placeholder="בחר עמודת משך זמן..." 
+          <div className={!effectiveBoardId ? styles.disabled : ''}>
+            <SearchableSelect
+              options={durationColumns}
+              value={settings.durationColumnId}
+              onChange={(id) => onChange({ durationColumnId: id })}
+              placeholder="בחר עמודת משך זמן..."
               isLoading={loadingCurrentBoardColumns}
               showSearch={false}
             />
@@ -694,12 +1041,12 @@ const MappingTab = ({
         </FieldWrapper>
 
         <FieldWrapper label="עמודת מדווח" required>
-          <div className={!context?.boardId ? styles.disabled : ''}>
-            <SearchableSelect 
-              options={reporterColumns} 
-              value={settings.reporterColumnId} 
-              onChange={(id) => onChange({ reporterColumnId: id })} 
-              placeholder="בחר עמודת מדווח..." 
+          <div className={!effectiveBoardId ? styles.disabled : ''}>
+            <SearchableSelect
+              options={reporterColumns}
+              value={settings.reporterColumnId}
+              onChange={(id) => onChange({ reporterColumnId: id })}
+              placeholder="בחר עמודת מדווח..."
               isLoading={loadingCurrentBoardColumns}
               showSearch={false}
             />
@@ -707,39 +1054,63 @@ const MappingTab = ({
         </FieldWrapper>
 
         <FieldWrapper label="עמודת סוג דיווח" required>
-          <div className={!context?.boardId ? styles.disabled : ''}>
-            <SearchableSelect 
-              options={statusColumns} 
-              value={settings.eventTypeStatusColumnId} 
-              onChange={handleEventTypeColumnChange} 
-              placeholder="בחר עמודת סוג דיווח..." 
+          <div className={!effectiveBoardId ? styles.disabled : ''}>
+            <SearchableSelect
+              options={statusColumns}
+              value={settings.eventTypeStatusColumnId}
+              onChange={handleEventTypeColumnChange}
+              placeholder="בחר עמודת סוג דיווח..."
               isLoading={loadingCurrentBoardColumns}
               showSearch={false}
             />
           </div>
-          {settings.eventTypeStatusColumnId && !eventTypeValidation.isValid && (
-            <div className={styles.validationWarning}>
-              <AlertTriangle size={16} />
-              <div>
-                <strong>העמודה חסרה לייבלים נדרשים:</strong>
-                <div className={styles.missingLabels}>
-                  {eventTypeValidation.missingLabels.map(label => (
-                    <span key={label} className={styles.missingLabel}>{label}</span>
-                  ))}
+          {/* מיפוי סוגי דיווח */}
+          {settings.eventTypeStatusColumnId && eventTypeStatusLabels.length > 0 && (
+            <div className={styles.mappingSection}>
+              <div className={styles.mappingSectionTitle}>מיפוי סוגי דיווח</div>
+              <small className={styles.mappingSectionDesc}>שייך כל לייבל לקטגוריה</small>
+              {eventTypeStatusLabels.map(labelObj => {
+                const currentCategory = (settings.eventTypeMapping || {})[labelObj.name] || UNMAPPED;
+                return (
+                  <div key={labelObj.name} className={styles.mappingRow}>
+                    <span className={styles.mappingColorDot} style={{ backgroundColor: labelObj.color || '#ccc' }} />
+                    <span className={styles.mappingLabelText}>{labelObj.name}</span>
+                    <select
+                      className={styles.mappingSelect}
+                      value={currentCategory}
+                      onChange={(e) => handleMappingLabelChange(labelObj.name, e.target.value)}
+                    >
+                      <option value={UNMAPPED}>{UNMAPPED_LABEL}</option>
+                      {Object.entries(CATEGORY_LABELS).map(([cat, catLabel]) => (
+                        <option
+                          key={cat}
+                          value={cat}
+                          disabled={isCategoryTaken(cat) && currentCategory !== cat}
+                        >
+                          {catLabel}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                );
+              })}
+              {/* ולידציה */}
+              {eventTypeValidation.isValid ? (
+                <div className={styles.mappingValid}>✓ מיפוי תקין</div>
+              ) : (
+                <div className={styles.mappingErrors}>
+                  <AlertTriangle size={14} />
+                  <div>
+                    {eventTypeValidation.missingLabels.map((err, i) => (
+                      <div key={i}>{err}</div>
+                    ))}
+                  </div>
                 </div>
-                <small>הלייבלים הנדרשים: {REQUIRED_EVENT_TYPE_LABELS.join(', ')}</small>
-                <button 
-                  className={styles.createColumnButton}
-                  onClick={handleCreateEventTypeColumn}
-                  disabled={isCreatingEventTypeColumn}
-                >
-                  {isCreatingEventTypeColumn ? 'יוצר עמודה...' : 'צור עמודה חדשה עם הלייבלים הנדרשים'}
-                </button>
-              </div>
+              )}
             </div>
           )}
-          {!settings.eventTypeStatusColumnId && context?.boardId && (
-            <button 
+          {!settings.eventTypeStatusColumnId && effectiveBoardId && (
+            <button
               className={styles.createColumnButtonAlt}
               onClick={handleCreateEventTypeColumn}
               disabled={isCreatingEventTypeColumn}
@@ -750,12 +1121,12 @@ const MappingTab = ({
         </FieldWrapper>
 
         <FieldWrapper label="עמודת סיווג - לא לחיוב" required>
-          <div className={!context?.boardId ? styles.disabled : ''}>
-            <SearchableSelect 
-              options={statusColumns} 
-              value={settings.nonBillableStatusColumnId} 
-              onChange={(id) => onChange({ nonBillableStatusColumnId: id })} 
-              placeholder="בחר עמודת סטטוס..." 
+          <div className={!effectiveBoardId ? styles.disabled : ''}>
+            <SearchableSelect
+              options={statusColumns}
+              value={settings.nonBillableStatusColumnId}
+              onChange={(id) => onChange({ nonBillableStatusColumnId: id })}
+              placeholder="בחר עמודת סטטוס..."
               isLoading={loadingCurrentBoardColumns}
               showSearch={false}
             />
@@ -764,12 +1135,12 @@ const MappingTab = ({
 
         {hasStage && (
           <FieldWrapper label="עמודת סיווג - לחיוב" required>
-            <div className={!context?.boardId ? styles.disabled : ''}>
-              <SearchableSelect 
-                options={stageColumns} 
-                value={settings.stageColumnId} 
-                onChange={(id) => onChange({ stageColumnId: id })} 
-                placeholder="בחר עמודת סיווג..." 
+            <div className={!effectiveBoardId ? styles.disabled : ''}>
+              <SearchableSelect
+                options={stageColumns}
+                value={settings.stageColumnId}
+                onChange={(id) => onChange({ stageColumnId: id })}
+                placeholder="בחר עמודת סיווג..."
                 isLoading={loadingCurrentBoardColumns}
                 showSearch={false}
               />
@@ -779,18 +1150,33 @@ const MappingTab = ({
 
         {settings.enableNotes && (
           <FieldWrapper label="עמודת הערות">
-            <div className={!context?.boardId ? styles.disabled : ''}>
-              <SearchableSelect 
-                options={textColumns} 
-                value={settings.notesColumnId} 
-                onChange={(id) => onChange({ notesColumnId: id })} 
-                placeholder="בחר עמודת הערות..." 
+            <div className={!effectiveBoardId ? styles.disabled : ''}>
+              <SearchableSelect
+                options={textColumns}
+                value={settings.notesColumnId}
+                onChange={(id) => onChange({ notesColumnId: id })}
+                placeholder="בחר עמודת הערות..."
                 isLoading={loadingCurrentBoardColumns}
                 showSearch={false}
               />
             </div>
           </FieldWrapper>
         )}
+      </AccordionSection>
+
+      {/* סקשן 5: אירועים זמניים */}
+      <AccordionSection id="plannedVsActual" title="אירועים זמניים" icon={Clock}>
+        <p className={styles.fieldDescription} style={{ marginBottom: '16px' }}>
+          אירועים עם סטטוס <strong>"זמני"</strong> יוצגו בעיצוב חלול (hollow).
+          לחיצה עליהם תפתח טופס המרה בו המשתמש יבחר את סוג האירוע (שעתי/חופשה/מחלה/מילואים) ואת הסיווג (לחיוב/לא לחיוב).
+        </p>
+
+        <ToggleRow
+          label="הצג אירועים זמניים בלוח"
+          description="כאשר פעיל, אירועים זמניים יוצגו בלוח השנה בעיצוב חלול"
+          checked={settings.showTemporaryEvents !== false}
+          onChange={() => onChange({ showTemporaryEvents: !(settings.showTemporaryEvents !== false) })}
+        />
       </AccordionSection>
     </div>
   );

@@ -4,15 +4,22 @@
  * - אירועים יומיים: duration = ימים (מספר שלם)
  */
 
-// סוגי אירועים יומיים
+import { isAllDayLabel } from './eventTypeMapping';
+
+// סוגי אירועים יומיים - legacy, לתאימות לאחור
 export const ALL_DAY_EVENT_TYPES = ['חופשה', 'מחלה', 'מילואים'];
 
 /**
  * בדיקה אם סוג האירוע הוא יומי (לא שעתי)
  * @param {string} eventType - סוג האירוע
+ * @param {Object} [mapping] - מיפוי סוגי דיווח (אופציונלי)
  * @returns {boolean}
  */
-export const isAllDayEventType = (eventType) => {
+export const isAllDayEventType = (eventType, mapping) => {
+    if (mapping) {
+        return isAllDayLabel(eventType, mapping);
+    }
+    // fallback legacy
     return ALL_DAY_EVENT_TYPES.includes(eventType);
 };
 
@@ -48,12 +55,13 @@ export const calculateEndDateFromDays = (start, durationDays) => {
  * פרסור duration לפי סוג האירוע
  * @param {number|string} durationValue - ערך ה-duration מה-DB
  * @param {string} eventType - סוג האירוע
+ * @param {Object} [mapping] - מיפוי סוגי דיווח (אופציונלי)
  * @returns {object} - { value: number, unit: 'hours' | 'days' }
  */
-export const parseDuration = (durationValue, eventType) => {
+export const parseDuration = (durationValue, eventType, mapping) => {
     const numValue = parseFloat(durationValue) || 0;
-    
-    if (isAllDayEventType(eventType)) {
+
+    if (isAllDayEventType(eventType, mapping)) {
         // אירוע יומי - הערך מייצג ימים
         // תאימות אחורה: duration=0 נחשב כיום אחד
         return {
@@ -73,10 +81,11 @@ export const parseDuration = (durationValue, eventType) => {
  * המרת duration לפורמט לשמירה ב-monday
  * @param {number} value - ערך המשך
  * @param {string} eventType - סוג האירוע
+ * @param {Object} [mapping] - מיפוי סוגי דיווח (אופציונלי)
  * @returns {string} - ערך לשמירה (עשרוני לשעות, שלם לימים)
  */
-export const formatDurationForSave = (value, eventType) => {
-    if (isAllDayEventType(eventType)) {
+export const formatDurationForSave = (value, eventType, mapping) => {
+    if (isAllDayEventType(eventType, mapping)) {
         // ימים - מספר שלם
         return Math.max(1, Math.round(value)).toString();
     } else {

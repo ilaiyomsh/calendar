@@ -177,19 +177,25 @@ export const getHolidayColor = (holidayType) => {
  * מחזיר צבע לאירוע לפי סוג האירוע או מזהה הפרויקט
  * @param {string} eventType - סוג האירוע (חופשה/מחלה/מילואים/שעתי)
  * @param {string} projectId - מזהה הפרויקט
+ * @param {string} [eventTypeColor] - צבע הלייבל מ-Monday API (label_style.color)
  * @returns {string} - צבע בפורמט HSL או HEX
  */
-export const getEventColor = (eventType, projectId) => {
-    // 1. אירועים יומיים - צבע קבוע (מוודא שהוא כהה מספיק)
+export const getEventColor = (eventType, projectId, eventTypeColor) => {
+    // 1. צבע מ-Monday API (מיפוי דינאמי)
+    if (eventTypeColor) {
+        return ensureDarkEnough(eventTypeColor);
+    }
+
+    // 2. אירועים יומיים - צבע קבוע legacy (מוודא שהוא כהה מספיק)
     if (eventType && EVENT_TYPE_COLORS[eventType]) {
         return ensureDarkEnough(EVENT_TYPE_COLORS[eventType]);
     }
-    
-    // 2. אירועים עם פרויקט - צבע דינאמי לפי מזהה הפרויקט (כבר עטוף ב-stringToColor)
+
+    // 3. אירועים עם פרויקט - צבע דינאמי לפי מזהה הפרויקט (כבר עטוף ב-stringToColor)
     if (projectId) {
         return stringToColor(projectId.toString());
     }
-    
-    // 3. ברירת מחדל
+
+    // 4. ברירת מחדל
     return ensureDarkEnough('#3174ad');
 };

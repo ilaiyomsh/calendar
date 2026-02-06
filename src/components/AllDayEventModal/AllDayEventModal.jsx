@@ -1,11 +1,13 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Sun, Thermometer, Briefcase, FileText, Plus, Minus, Trash2, X, Clock, Calendar } from 'lucide-react';
+import { FileText, Plus, Minus, Trash2, X, Clock, Calendar } from 'lucide-react';
 import { differenceInDays } from 'date-fns';
 import { useSettings, STRUCTURE_MODES } from '../../contexts/SettingsContext';
 import { useProjects } from '../../hooks/useProjects';
 import { useTasksMultiple } from '../../hooks/useTasksMultiple';
 import { useStageOptions } from '../../hooks/useStageOptions';
 import { useNonBillableOptions } from '../../hooks/useNonBillableOptions';
+import { getEffectiveBoardId } from '../../utils/boardIdResolver';
+import { getAllDayLabels, getNonBillableLabels } from '../../utils/eventTypeMapping';
 import TaskSelect from '../TaskSelect';
 import TimeSelect from '../TimeSelect';
 import ConfirmDialog from '../ConfirmDialog';
@@ -23,7 +25,8 @@ export default function AllDayEventModal({
     isEditMode = false,
     onUpdate = null,
     onDelete = null,
-    monday
+    monday,
+    context = null
 }) {
     const { customSettings } = useSettings();
     const { projects, loading: loadingProjects, refetch: refetchProjects } = useProjects();
@@ -64,17 +67,10 @@ export default function AllDayEventModal({
     const [showCloseConfirm, setShowCloseConfirm] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [editingDuration, setEditingDuration] = useState({});
-    
-    // State - boardId
-    const [boardId, setBoardId] = useState(null);
-    useEffect(() => {
-        if (monday) {
-            monday.get('context').then(context => {
-                setBoardId(context.data?.boardId);
-            });
-        }
-    }, [monday]);
-    
+
+    // חישוב לוח דיווחים אפקטיבי - העמודות נמצאות בלוח הזה
+    const boardId = getEffectiveBoardId(customSettings, context);
+
     // טעינת ערכי שלב
     const { stageOptions, loading: loadingStages } = useStageOptions(
         monday,
@@ -113,12 +109,9 @@ export default function AllDayEventModal({
             logger.debug('AllDayEventModal', 'Modal opened - resetting state');
             
             if (isEditMode && eventToEdit) {
-                const titleToType = {
-                    'מחלה': 'sick',
-                    'חופשה': 'vacation',
-                    'מילואים': 'reserves'
-                };
-                const detectedType = titleToType[eventToEdit.title];
+                // זיהוי סוג אירוע יומי מתוך eventType (הלייבל ישירות)
+                const allDayLabels = getAllDayLabels(customSettings.eventTypeMapping);
+                const detectedType = allDayLabels.find(l => eventToEdit.eventType === l);
                 if (detectedType) {
                     setSelectedType(detectedType);
                     logger.debug('AllDayEventModal', `Edit mode - detected type: ${detectedType}`);
@@ -219,7 +212,7 @@ export default function AllDayEventModal({
         setAddedReports(prev => [...prev, {
             id: Date.now(),
             projectId: null,
-            projectName: 'לא לחיוב',
+            projectName: getNonBillableLabels(customSettings.eventTypeMapping)[0] || 'לא לחיוב',
             tasks: [],
             hours: hours,
             startTime: startTime,
@@ -609,23 +602,27 @@ export default function AllDayEventModal({
     
     if (!isOpen || !pendingDate) return null;
     
+    const allDayLabels = getAllDayLabels(customSettings.eventTypeMapping);
+    const labelColors = customSettings.eventTypeLabelColors || {};
+
     const renderMenu = () => (
         <div className={styles.menuContainer}>
-            <button className={`${styles.menuButton} ${styles.btnVacation} ${selectedType === 'vacation' ? styles.selected : ''}`} onClick={() => handleSingleTypeSelect('vacation')}>
-                <span className={styles.icon}><Sun size={20} color="#00c875" /></span>
-                <span style={{ marginRight: '12px' }}>חופשה</span>
-                {isEditMode && selectedType === 'vacation' && <span style={{ marginRight: 'auto', color: '#00c875', fontWeight: 600 }}>✓ נבחר</span>}
-            </button>
-            <button className={`${styles.menuButton} ${styles.btnSick} ${selectedType === 'sick' ? styles.selected : ''}`} onClick={() => handleSingleTypeSelect('sick')}>
-                <span className={styles.icon}><Thermometer size={20} color="#e2445c" /></span>
-                <span style={{ marginRight: '12px' }}>מחלה</span>
-                {isEditMode && selectedType === 'sick' && <span style={{ marginRight: 'auto', color: '#e2445c', fontWeight: 600 }}>✓ נבחר</span>}
-            </button>
-            <button className={`${styles.menuButton} ${styles.btnReserves} ${selectedType === 'reserves' ? styles.selected : ''}`} onClick={() => handleSingleTypeSelect('reserves')}>
-                <span className={styles.icon}><Briefcase size={20} color="#579bfc" /></span>
-                <span style={{ marginRight: '12px' }}>מילואים</span>
-                {isEditMode && selectedType === 'reserves' && <span style={{ marginRight: 'auto', color: '#579bfc', fontWeight: 600 }}>✓ נבחר</span>}
-            </button>
+            <div className={styles.menuTopRow}>
+                {allDayLabels.map(label => {
+                    const color = labelColors[label] || '#579bfc';
+                    return (
+                        <button
+                            key={label}
+                            className={`${styles.menuButton} ${styles.btnAllDay} ${selectedType === label ? styles.selected : ''}`}
+                            onClick={() => handleSingleTypeSelect(label)}
+                        >
+                            <span className={styles.colorDot} style={{ backgroundColor: color }} />
+                            <span style={{ marginRight: '12px' }}>{label}</span>
+                            {isEditMode && selectedType === label && <span style={{ marginRight: 'auto', color, fontWeight: 600 }}>✓ נבחר</span>}
+                        </button>
+                    );
+                })}
+            </div>
             {!isEditMode && (
                 <button className={`${styles.menuButton} ${styles.btnMultiple}`} onClick={() => {
                     setSelectedType('reports');
@@ -713,63 +710,75 @@ export default function AllDayEventModal({
                                     )}
                                 </div>
                                 <div className={styles.visualSeparator}></div>
-                                <div className={styles.timesGroup}>
+                                <div className={styles.timeGridContainer}>
                                     <div className={styles.timeFieldWrapper}>
-                                        <span className={styles.timeLabelSmall}>התחלה</span>
-                                        <TimeSelect times={timeOptions} selectedTime={report.startTime || ''} onSelectTime={(time) => updateReport(report.id, 'startTime', time)} isLoading={false} disabled={false} placeholder="שעה" />
+                                        <span className={styles.timeLabelSmall}>שעת התחלה</span>
+                                        <TimeSelect
+                                            times={timeOptions}
+                                            selectedTime={report.startTime || ''}
+                                            onSelectTime={(time) => updateReport(report.id, 'startTime', time)}
+                                            isLoading={false}
+                                            disabled={false}
+                                            placeholder="שעה"
+                                        />
                                     </div>
-                                    <span className={styles.timeSeparatorInline}>-</span>
                                     <div className={styles.timeFieldWrapper}>
-                                        <span className={styles.timeLabelSmall}>סיום</span>
-                                        <TimeSelect times={timeOptions} selectedTime={report.endTime || ''} onSelectTime={(time) => updateReport(report.id, 'endTime', time)} isLoading={false} disabled={false} placeholder="שעה" />
+                                        <span className={styles.timeLabelSmall}>שעת סיום</span>
+                                        <TimeSelect
+                                            times={timeOptions}
+                                            selectedTime={report.endTime || ''}
+                                            onSelectTime={(time) => updateReport(report.id, 'endTime', time)}
+                                            isLoading={false}
+                                            disabled={false}
+                                            placeholder="שעה"
+                                        />
+                                    </div>
+                                    <div className={styles.durationWrapper}>
+                                        <div className={styles.durationControl}>
+                                            <button
+                                                className={styles.durationBtn}
+                                                onClick={() => {
+                                                    const currentDuration = report.startTime && report.endTime 
+                                                        ? calculateDurationStr(report.startTime, report.endTime)
+                                                        : (report.hours ? formatTime(parseFloat(report.hours) * 60) : '01:00');
+                                                    const currentMinutes = parseTime(currentDuration);
+                                                    const newMinutes = Math.max(15, currentMinutes - 15);
+                                                    const hours = (newMinutes / 60).toFixed(2);
+                                                    updateReport(report.id, 'hours', hours);
+                                                }}
+                                                title="הפחת 15 דקות"
+                                            >
+                                                <Minus size={16} />
+                                            </button>
+                                            <span className={styles.durationValue}>
+                                                {report.startTime && report.endTime 
+                                                    ? calculateDurationStr(report.startTime, report.endTime)
+                                                    : (report.hours ? formatTime(parseFloat(report.hours) * 60) : '01:00')}
+                                            </span>
+                                            <button
+                                                className={styles.durationBtn}
+                                                onClick={() => {
+                                                    const currentDuration = report.startTime && report.endTime 
+                                                        ? calculateDurationStr(report.startTime, report.endTime)
+                                                        : (report.hours ? formatTime(parseFloat(report.hours) * 60) : '01:00');
+                                                    const currentMinutes = parseTime(currentDuration);
+                                                    const newMinutes = currentMinutes + 15;
+                                                    const hours = (newMinutes / 60).toFixed(2);
+                                                    updateReport(report.id, 'hours', hours);
+                                                }}
+                                                title="הוסף 15 דקות"
+                                            >
+                                                <Plus size={16} />
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                                 <div className={styles.visualSeparator}></div>
-                                <div className={styles.durationWrapper}>
-                                    <span className={styles.timeLabelSmall}>משך</span>
-                                    <div className={styles.durationControl}>
-                                        <button
-                                            className={styles.durationBtn}
-                                            onClick={() => {
-                                                const currentDuration = report.startTime && report.endTime 
-                                                    ? calculateDurationStr(report.startTime, report.endTime)
-                                                    : (report.hours ? formatTime(parseFloat(report.hours) * 60) : '01:00');
-                                                const currentMinutes = parseTime(currentDuration);
-                                                const newMinutes = Math.max(15, currentMinutes - 15);
-                                                const hours = (newMinutes / 60).toFixed(2);
-                                                updateReport(report.id, 'hours', hours);
-                                            }}
-                                            title="הפחת 15 דקות"
-                                        >
-                                            <Minus size={16} />
-                                        </button>
-                                        <span className={styles.durationValue}>
-                                            {report.startTime && report.endTime 
-                                                ? calculateDurationStr(report.startTime, report.endTime)
-                                                : (report.hours ? formatTime(parseFloat(report.hours) * 60) : '01:00')}
-                                        </span>
-                                        <button
-                                            className={styles.durationBtn}
-                                            onClick={() => {
-                                                const currentDuration = report.startTime && report.endTime 
-                                                    ? calculateDurationStr(report.startTime, report.endTime)
-                                                    : (report.hours ? formatTime(parseFloat(report.hours) * 60) : '01:00');
-                                                const currentMinutes = parseTime(currentDuration);
-                                                const newMinutes = currentMinutes + 15;
-                                                const hours = (newMinutes / 60).toFixed(2);
-                                                updateReport(report.id, 'hours', hours);
-                                            }}
-                                            title="הוסף 15 דקות"
-                                        >
-                                            <Plus size={16} />
-                                        </button>
-                                    </div>
-                                </div>
                                 
                                 {customSettings.enableNotes && (
                                     <div className={styles.notesWrapper}>
-                                        <input
-                                            type="text"
+                                        <span className={styles.timeLabelSmall}>הערות / מלל חופשי</span>
+                                        <textarea
                                             className={styles.notesInput}
                                             placeholder="הערות / מלל חופשי..."
                                             value={report.notes || ''}
@@ -783,12 +792,12 @@ export default function AllDayEventModal({
                 </div>
                 <div className={styles.sidebar}>
                     {/* כפתור לא לחיוב */}
-                    <div 
-                        className={styles.projectItem} 
-                        onClick={addNonBillableReportRow} 
+                    <div
+                        className={styles.projectItem}
+                        onClick={addNonBillableReportRow}
                         title="הוסף דיווח לא לחיוב"
                     >
-                        <span>לא לחיוב</span>
+                        <span>{getNonBillableLabels(customSettings.eventTypeMapping)[0] || 'לא לחיוב'}</span>
                         <Plus size={14} color="#0073ea" />
                     </div>
                     <input type="text" placeholder="חיפוש פרויקט..." className={styles.searchBox} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} autoFocus />
@@ -809,33 +818,19 @@ export default function AllDayEventModal({
     
     // תצוגת בחירת תאריך סיום
     const renderDaysSelection = () => {
-        const typeNames = {
-            sick: 'מחלה',
-            vacation: 'חופשה',
-            reserves: 'מילואים'
-        };
-        const typeColors = {
-            sick: '#e2445c',
-            vacation: '#00c875',
-            reserves: '#579bfc'
-        };
-        const typeIcons = {
-            sick: <Thermometer size={24} color={typeColors[selectedType]} />,
-            vacation: <Sun size={24} color={typeColors[selectedType]} />,
-            reserves: <Briefcase size={24} color={typeColors[selectedType]} />
-        };
-        
+        const typeColor = labelColors[selectedType] || '#579bfc';
+
         // חישוב מספר הימים לתצוגה
-        const calculatedDays = endDate && pendingDate 
-            ? differenceInDays(endDate, pendingDate) + 1 
+        const calculatedDays = endDate && pendingDate
+            ? differenceInDays(endDate, pendingDate) + 1
             : 1;
-        
+
         return (
             <div className={styles.daysSelectionContainer}>
                 <div className={styles.daysSelectionHeader}>
-                    {typeIcons[selectedType]}
+                    <span className={styles.colorDotLarge} style={{ backgroundColor: typeColor }} />
                     <span style={{ marginRight: '10px', fontSize: '18px', fontWeight: 600 }}>
-                        {typeNames[selectedType]}
+                        {selectedType}
                     </span>
                 </div>
                 
@@ -895,8 +890,7 @@ export default function AllDayEventModal({
     const getModalTitle = () => {
         if (viewMode === 'menu') return 'סוג דיווח ליום זה';
         if (viewMode === 'days-selection') {
-            const typeNames = { sick: 'מחלה', vacation: 'חופשה', reserves: 'מילואים' };
-            return `הגדרת ${typeNames[selectedType]}`;
+            return `הגדרת ${selectedType}`;
         }
         return 'דיווח שעות מרוכז';
     };

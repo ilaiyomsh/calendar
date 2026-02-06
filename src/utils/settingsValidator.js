@@ -83,17 +83,23 @@ async function checkBoardExists(monday, boardId) {
 }
 
 /**
- * מחזיר את ההגדרות הנדרשות לפי מצב המבנה
+ * מחזיר את ההגדרות הנדרשות לפי מצב המבנה והאם משתמשים במצב Assignments
  * @param {string} structureMode - מצב מבנה הדיווח
+ * @param {boolean} useAssignmentsMode - האם מצב Assignments מופעל
  * @returns {object} - רשימת ההגדרות הנדרשות
  */
-function getRequiredSettings(structureMode) {
+function getRequiredSettings(structureMode, useAssignmentsMode = false) {
     // הגדרות בסיסיות שתמיד נדרשות
     const required = {
-        boards: ['connectedBoardId'], // לוח הפרויקטים
-        currentBoardColumns: ['dateColumnId', 'durationColumnId', 'projectColumnId', 'reporterColumnId'],
+        boards: [], // לוחות מחוברים
+        currentBoardColumns: ['dateColumnId', 'endTimeColumnId', 'durationColumnId', 'projectColumnId', 'reporterColumnId'],
         optional: ['eventTypeStatusColumnId', 'notesColumnId', 'nonBillableStatusColumnId']
     };
+
+    // לוח פרויקטים נדרש רק אם לא במצב Assignments
+    if (!useAssignmentsMode) {
+        required.boards.push('connectedBoardId');
+    }
 
     // הגדרות נדרשות לפי מצב מבנה
     switch (structureMode) {
@@ -124,7 +130,10 @@ function getRequiredSettings(structureMode) {
  * @returns {Promise<object>} - תוצאת האימות
  */
 export async function validateSettings(monday, customSettings, currentBoardId) {
-    logger.functionStart('validateSettings', { structureMode: customSettings?.structureMode });
+    logger.functionStart('validateSettings', {
+        structureMode: customSettings?.structureMode,
+        useAssignmentsMode: customSettings?.useAssignmentsMode
+    });
 
     const result = {
         isValid: true,
@@ -141,7 +150,10 @@ export async function validateSettings(monday, customSettings, currentBoardId) {
         return result;
     }
 
-    const requiredSettings = getRequiredSettings(customSettings.structureMode);
+    const requiredSettings = getRequiredSettings(
+        customSettings.structureMode,
+        customSettings.useAssignmentsMode
+    );
 
     // === בדיקת הגדרות חסרות ===
     
@@ -209,7 +221,7 @@ export async function validateSettings(monday, customSettings, currentBoardId) {
         
         // איסוף כל העמודות שהוגדרו
         const columnSettings = [
-            'dateColumnId', 'durationColumnId', 'projectColumnId', 
+            'dateColumnId', 'endTimeColumnId', 'durationColumnId', 'projectColumnId',
             'taskColumnId', 'reporterColumnId', 'eventTypeStatusColumnId',
             'nonBillableStatusColumnId', 'stageColumnId', 'notesColumnId'
         ];
@@ -250,6 +262,8 @@ export async function validateSettings(monday, customSettings, currentBoardId) {
     
     if (!customSettings.eventTypeStatusColumnId) {
         result.warnings.push('מומלץ להגדיר עמודת סוג דיווח לסינון אירועים');
+    } else if (!customSettings.eventTypeMapping) {
+        result.warnings.push('עמודת סוג דיווח נבחרה אך לא הוגדר מיפוי סוגי דיווח');
     }
 
     if (customSettings.enableNotes && !customSettings.notesColumnId) {
@@ -281,7 +295,8 @@ function getBoardSettingLabel(key) {
  */
 function getColumnSettingLabel(key) {
     const labels = {
-        dateColumnId: 'עמודת תאריך',
+        dateColumnId: 'עמודת תאריך התחלה',
+        endTimeColumnId: 'עמודת תאריך סיום',
         durationColumnId: 'עמודת משך זמן',
         projectColumnId: 'עמודת פרויקט',
         taskColumnId: 'עמודת משימה',

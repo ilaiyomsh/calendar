@@ -36,16 +36,43 @@ const DEFAULT_SETTINGS = {
   taskStatusColumnId: null,
   taskActiveStatusValues: [],
   
-  // --- לוח דיווחי שעות (נוכחי) ---
+  // --- לוח הקצאות (Assignments) - אופציונלי ---
+  useAssignmentsMode: false,          // האם להשתמש בלוח הקצאות למשיכת פרויקטים
+  assignmentsBoardId: null,           // לוח ההקצאות
+  assignmentPersonColumnId: null,     // עמודת People בלוח הקצאות
+  assignmentStartDateColumnId: null,  // עמודת Date להתחלת ההקצאה
+  assignmentEndDateColumnId: null,    // עמודת Date לסיום ההקצאה
+  assignmentProjectLinkColumnId: null, // עמודת Connect Boards לקישור לפרויקט
+
+  // --- לוח דיווחי שעות ---
+  useCurrentBoardForReporting: true, // האם להשתמש בלוח הנוכחי לדיווחים (ברירת מחדל: כן)
+  timeReportingBoardId: null,        // מזהה לוח דיווחי שעות (אם לא משתמשים בלוח הנוכחי)
   dateColumnId: null,               // עמודת Date למועד התחלה
+  endTimeColumnId: null,            // עמודת Date לזמן סיום (אופציונלי)
   durationColumnId: null,           // עמודת Numbers למשך זמן בשעות
   projectColumnId: null,            // עמודת Connected Board לקישור לפרויקט
   taskColumnId: null,               // עמודת Connected Board לקישור למשימה (רק במצבי TASKS)
+  assignmentColumnId: null,         // עמודת Connected Board לקישור להקצאה (רק במצב הקצאות)
   reporterColumnId: null,           // עמודת People למדווח
   eventTypeStatusColumnId: null,    // עמודת Status לסוג האירוע (לחיוב/לא לחיוב)
   nonBillableStatusColumnId: null,  // עמודת Status לסוגי "לא לחיוב"
   stageColumnId: null,              // עמודת Status/Dropdown לסיווג (רק במצבי STAGE)
-  notesColumnId: null               // עמודת Text להערות חופשיות (רק אם enableNotes)
+  notesColumnId: null,              // עמודת Text להערות חופשיות (רק אם enableNotes)
+
+  // --- אירועים זמניים ---
+  // לייבל "זמני" בעמודת סוג דיווח מסמן אירוע זמני/מתוכנן
+  // כל לייבל אחר (שעתי, חופשה, מחלה, מילואים) מסמן אירוע קבוע
+  // בעת המרה - המשתמש בוחר את סוג האירוע והסיווג בטופס
+  showTemporaryEvents: true,     // האם להציג אירועים זמניים בלוח
+
+  // --- מיפוי סוגי דיווח ---
+  eventTypeMapping: null,          // { 'labelName': 'category', ... } - מיפוי לייבלים לקטגוריות
+  eventTypeLabelColors: null,      // { 'labelName': '#hex', ... } - צבעי הלייבלים מ-Monday
+
+  // --- Filter Configuration ---
+  filterProjectsBoardId: null,   // לוח שממנו נטען רשימת הפרויקטים לפילטר
+  filterEmployeesBoardId: null,  // לוח שממנו נטען רשימת העובדים לפילטר
+  filterEmployeesColumnId: null  // עמודת People בלוח העובדים
 };
 
 // Provider Component

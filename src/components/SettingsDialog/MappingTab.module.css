@@ -341,3 +341,90 @@
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+/* === Event Type Mapping Section === */
+
+.mappingSection {
+  margin-top: 12px;
+  padding: 12px;
+  background: #f7f9fa;
+  border: 1px solid #e6e9ef;
+  border-radius: 8px;
+}
+
+.mappingSectionTitle {
+  font-weight: 600;
+  font-size: 13px;
+  color: #323338;
+  margin-bottom: 2px;
+}
+
+.mappingSectionDesc {
+  display: block;
+  font-size: 11px;
+  color: #676879;
+  margin-bottom: 10px;
+}
+
+.mappingRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid #ecedf5;
+}
+
+.mappingRow:last-of-type {
+  border-bottom: none;
+}
+
+.mappingColorDot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.mappingLabelText {
+  flex: 1;
+  font-size: 13px;
+  color: #323338;
+  min-width: 60px;
+}
+
+.mappingSelect {
+  padding: 4px 8px;
+  border: 1px solid #c5c7d0;
+  border-radius: 4px;
+  font-size: 12px;
+  background: white;
+  cursor: pointer;
+  min-width: 100px;
+  direction: rtl;
+}
+
+.mappingSelect:focus {
+  border-color: #0073ea;
+  outline: none;
+}
+
+.mappingValid {
+  margin-top: 8px;
+  color: #00854d;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.mappingErrors {
+  margin-top: 8px;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  color: #d83a52;
+  font-size: 12px;
+}
+
+.mappingErrors svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}

@@ -100,6 +100,16 @@
   gap: 16px;
 }
 
+.menuTopRow {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+}
+
+.menuTopRow .menuButton {
+  flex: 1;
+}
+
 .menuButton {
   display: flex;
   align-items: center;
@@ -132,6 +142,22 @@
 .btnVacation:hover { border-right: 6px solid #00c875; }
 .btnSick:hover { border-right: 6px solid #e2445c; }
 .btnReserves:hover { border-right: 6px solid #579bfc; }
+
+.btnAllDay:hover { border-right: 6px solid #579bfc; }
+
+.colorDot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.colorDotLarge {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
 
 .btnMultiple { 
   background-color: #f5f6f8; 
@@ -243,7 +269,7 @@
   flex-direction: column;
   gap: 12px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  overflow: hidden;
+  overflow: visible;
   min-width: 0;
   flex-shrink: 0;
 }
@@ -262,17 +288,18 @@
 
 .rowMainContent {
   display: flex;
-  align-items: center;
-  gap: 20px;
+  align-items: flex-end;
+  gap: 16px;
   width: 100%;
+  flex-wrap: nowrap;
 }
 
 .selectorsGroup {
-  flex: 1;
-  min-width: 0;
+  flex: 3 1 0;
+  min-width: 150px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .projectName {
@@ -293,18 +320,44 @@
   flex-shrink: 0;
 }
 
-.timeFieldWrapper {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  width: 90px;
+.timeGridContainer {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 40px 40px;
+    gap: 8px;
+    flex: 3 1 0;
+    min-width: 140px;
+    height: 88px;
 }
 
+.timeFieldWrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    width: 100%;
+    min-width: 0;
+    overflow: visible;
+    height: 40px;
+    position: relative;
+}
+
+.timeFieldWrapper .timeLabelSmall {
+    position: absolute;
+    top: -18px;
+    right: 0;
+    left: 0;
+    text-align: center;
+    font-size: 11px;
+    color: #676879;
+    font-weight: 500;
+}
+
+/* Ensure labels are small and tight */
 .timeLabelSmall {
-  font-size: 11px;
-  color: #676879;
-  font-weight: 500;
-  text-align: center;
+    font-size: 11px;
+    color: #676879;
+    font-weight: 500;
+    margin-bottom: 2px;
 }
 
 .timeSeparatorInline {
@@ -316,8 +369,8 @@
 
 /* Visual Separator */
 .visualSeparator {
-  height: 40px;
   width: 1px;
+  height: 88px;
   background-color: #e6e9ef;
   margin: 0 4px;
   flex-shrink: 0;
@@ -325,11 +378,27 @@
 
 /* Duration */
 .durationWrapper {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  flex-shrink: 0;
-  width: 110px;
+    grid-column: 1 / -1;
+    grid-row: 2;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    width: 100%;
+    height: 40px;
+}
+
+.durationControl {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border: 1px solid #d0d4e4;
+    border-radius: 4px;
+    overflow: hidden;
+    background-color: #ffffff;
+    transition: all 0.2s;
+    height: 40px;
+    box-sizing: border-box;
+    width: 100%;
 }
 
 .durationInputInline {
@@ -363,24 +432,33 @@
 
 /* Notes */
 .notesWrapper {
-  flex: 1;
-  min-width: 0;
-  padding-top: 4px;
-  margin-bottom: 8px; /* הוספת ריווח בין תיבת הטקסט לגבול התחתון של השורה */
+  flex: 4 1 0;
+  min-width: 100px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  height: 88px; /* 2 rows × 40px + 8px gap */
+}
+
+.notesWrapper .timeLabelSmall {
+    display: none;
 }
 
 .notesInput {
   width: 100%;
+  min-width: 0;
   background-color: #fcfcfd;
   border: 1px solid #d0d4e4;
   border-radius: 4px;
   font-size: 0.85rem;
   color: #323338;
-  padding: 6px 10px;
+  padding: 8px 10px;
   transition: all 0.2s;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  overflow: hidden;
+  height: 88px;
+  box-sizing: border-box;
+  text-align: right;
+  resize: none;
+  font-family: inherit;
 }
 
 .notesInput:hover {
@@ -675,10 +753,11 @@
 
 /* Stage Buttons */
 .stageButtons {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 40px 40px;
+  gap: 8px;
+  height: 88px;
 }
 
 .stageButton {
@@ -687,11 +766,17 @@
   border-radius: 6px;
   background-color: #ffffff;
   color: #323338;
-  font-size: 13px; /* הגדלה קלה של הכתב */
-  font-weight: 500; /* הוספת עובי לכתב */
+  font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
   transition: all 0.15s ease;
   white-space: nowrap;
+  height: 40px;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
 }
 
 .stageButton:hover {
@@ -714,19 +799,7 @@
   color: #676879;
 }
 
-/* Duration Control with Plus/Minus */
-.durationControl {
-  display: flex;
-  align-items: center;
-  gap: 0;
-  border: 1px solid #d0d4e4;
-  border-radius: 4px;
-  overflow: hidden;
-  background-color: #ffffff;
-  transition: all 0.2s;
-  height: 36px; /* עדכון ל-36px להתאמה מושלמת */
-}
-
+/* Duration Control hover state */
 .durationControl:hover {
   border-color: #0073ea;
 }
@@ -760,4 +833,15 @@
   font-weight: 600;
   color: #323338;
   padding: 0 4px;
+}
+
+/* TimeSelect override for uniform 40px height */
+.timeFieldWrapper :global(.trigger) {
+  height: 40px;
+  box-sizing: border-box;
+}
+
+.timeFieldWrapper :global(.container) {
+  width: 100%;
+  min-width: 0;
 }
