@@ -23,7 +23,8 @@
     "date-fns": "^4.1.0",
     "lucide-react": "^0.555.0",
     "monday-sdk-js": "^0.5.5",
-    "react-big-calendar": "^1.19.4"
+    "react-big-calendar": "^1.19.4",
+    "react-swipeable": "^7.0.2"
   },
   "eslintConfig": {
     "extends": "react-app"

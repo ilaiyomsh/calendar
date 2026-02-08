@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { FileText, Plus, Minus, Trash2, X, Clock, Calendar } from 'lucide-react';
 import { differenceInDays } from 'date-fns';
 import { useSettings, STRUCTURE_MODES } from '../../contexts/SettingsContext';
+import { useMobile } from '../../contexts/MobileContext';
 import { useProjects } from '../../hooks/useProjects';
 import { useTasksMultiple } from '../../hooks/useTasksMultiple';
 import { useStageOptions } from '../../hooks/useStageOptions';
@@ -29,7 +30,16 @@ export default function AllDayEventModal({
     context = null
 }) {
     const { customSettings } = useSettings();
+    const isMobile = useMobile();
     const { projects, loading: loadingProjects, refetch: refetchProjects } = useProjects();
+
+    // Body scroll lock on mobile
+    useEffect(() => {
+        if (isOpen && isMobile) {
+            document.body.style.overflow = 'hidden';
+            return () => { document.body.style.overflow = ''; };
+        }
+    }, [isOpen, isMobile]);
     const { createTask, fetchForProject, tasks: tasksByProject } = useTasksMultiple();
     
     // יצירת רשימת זמנים לפי טווח שעות העבודה

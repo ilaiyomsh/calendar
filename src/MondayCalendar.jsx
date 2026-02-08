@@ -8,7 +8,8 @@ import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
 import './styles/calendar/index.css';
 
 // קבועים והגדרות
-import { localizer, hebrewMessages, formats, roundToNearest15Minutes, WorkWeekView, CALENDAR_DEFAULTS } from './constants/calendarConfig';
+import { localizer, hebrewMessages, formats, roundToNearest15Minutes, WorkWeekView, ThreeDayView, CALENDAR_DEFAULTS } from './constants/calendarConfig';
+import { useSwipeable } from 'react-swipeable';
 
 // פונקציות עזר
 import { getColumnIds } from './utils/mondayColumns';
@@ -28,6 +29,7 @@ import SelectionActionBar from './components/SelectionActionBar';
 
 // Context
 import { useSettings } from './contexts/SettingsContext';
+import { useMobile } from './contexts/MobileContext';
 
 // Event Type Mapping
 import { createLegacyMapping } from './utils/eventTypeMapping';
@@ -73,6 +75,16 @@ const CustomDayHeader = ({ date, localizer }) => {
 export default function MondayCalendar({ monday, onOpenSettings }) {
     // גישה להגדרות מותאמות
     const { customSettings, updateSettings } = useSettings();
+    const isMobile = useMobile();
+
+    // תצוגות לוח שנה - מותאמות למובייל/דסקטופ
+    const calendarViews = useMemo(() =>
+        isMobile
+            ? { three_day: ThreeDayView, day: true, month: true }
+            : { month: true, week: true, work_week: WorkWeekView, day: true },
+        [isMobile]
+    );
+    const defaultView = isMobile ? 'three_day' : 'work_week';
     
     // פונקציית עזר ליצירת תאריך עם שעה ספציפית על בסיס היום הנוכחי
     const getTodayWithTime = (hours, minutes = 0) => {
@@ -94,6 +106,46 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
 
     // רפרנס לקונטיינר הלוח לגלילה ידנית
     const calendarContainerRef = useRef(null);
+
+    // State לניווט בלוח (נדרש לתמיכה בסווייפ)
+    const [calendarDate, setCalendarDate] = useState(new Date());
+    const [calendarView, setCalendarView] = useState(defaultView);
+
+    // עדכון תצוגת ברירת מחדל כשמשתנה isMobile
+    useEffect(() => {
+        setCalendarView(defaultView);
+    }, [defaultView]);
+
+    // Swipe navigation למובייל
+    const swipeHandlers = useSwipeable({
+        onSwipedLeft: () => {
+            if (isMobile) {
+                // RTL: swipe left = navigate next
+                const next = calendarView === 'three_day'
+                    ? new Date(calendarDate.getTime() + 3 * 86400000)
+                    : calendarView === 'day'
+                        ? new Date(calendarDate.getTime() + 86400000)
+                        : new Date(calendarDate.getFullYear(), calendarDate.getMonth() + 1, 1);
+                setCalendarDate(next);
+            }
+        },
+        onSwipedRight: () => {
+            if (isMobile) {
+                // RTL: swipe right = navigate previous
+                const prev = calendarView === 'three_day'
+                    ? new Date(calendarDate.getTime() - 3 * 86400000)
+                    : calendarView === 'day'
+                        ? new Date(calendarDate.getTime() - 86400000)
+                        : new Date(calendarDate.getFullYear(), calendarDate.getMonth() - 1, 1);
+                setCalendarDate(prev);
+            }
+        },
+        delta: 80, // סף גבוה יותר למניעת קונפליקט עם לחיצות וגרירת אירועים
+        preventScrollOnSwipe: false,
+        trackTouch: true,
+        trackMouse: false,
+        swipeDuration: 500, // מגביל רק לתנועות סוויפ מהירות
+    });
 
     // גלילה ידנית לשעה 8:00 - גרסה מבוססת טקסט (מדויקת יותר)
     useEffect(() => {
@@ -847,9 +899,9 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
     // פונקציה לקביעת גובה עמודות יום
     const dayPropGetter = useCallback(() => ({
         style: {
-            minHeight: '960px', // 24 שעות * 40px (גובה מינימלי לכל היום)
+            minHeight: isMobile ? '720px' : '960px',
         }
-    }), []);
+    }), [isMobile]);
 
     // Accessors לקביעה אילו אירועים ניתנים לגרירה ולשינוי גודל
     const draggableAccessor = useCallback((event) => {
@@ -919,7 +971,7 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
     }, [events]);
 
     return (
-        <div className="gcCalendarRoot" style={{ height: '100%', padding: '0 20px', direction: 'rtl', display: 'flex', flexDirection: 'column' }}>
+        <div className="gcCalendarRoot" style={{ height: '100%', padding: isMobile ? '0' : '0 20px', direction: 'rtl', display: 'flex', flexDirection: 'column' }} {...(isMobile ? swipeHandlers : {})}>
                 <DnDCalendar
                     localizer={localizer}
                     events={enrichedEvents}
@@ -931,13 +983,13 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
                     rtl={true}
                     messages={hebrewMessages}
                     formats={formats}
-                    defaultView="work_week"
-                    views={{
-                        month: true,
-                        week: true,
-                        work_week: WorkWeekView,
-                        day: true
-                    }}
+                    date={calendarDate}
+                    onNavigate={setCalendarDate}
+                    view={calendarView}
+                    onView={setCalendarView}
+                    defaultView={defaultView}
+                    views={calendarViews}
+                    touchDragDelay={isMobile ? 250 : 0}
                     min={minTime}
                     max={maxTime}
                     scrollToTime={CALENDAR_DEFAULTS.SCROLL_TO_TIME}
@@ -958,7 +1010,7 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
                     eventPropGetter={eventStyleGetter}
                     slotPropGetter={slotPropGetter}
                     dayPropGetter={dayPropGetter}
-                    drilldownView={null}
+                    drilldownView={isMobile ? 'day' : null}
                     components={{
                         toolbar: CustomToolbarWithProps,
                         event: CustomEvent,

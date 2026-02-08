@@ -481,7 +481,7 @@ export const createEventTypeStatusColumn = async (monday, boardId, columnTitle =
     logger.functionStart('createEventTypeStatusColumn', { boardId, columnTitle });
 
     // הגדרת הלייבלים בפורמט של Monday API
-    // צבעים: working_orange, stuck_red, grass_green, dark_blue, sunset
+    // צבעים: working_orange, stuck_red, grass_green, dark_blue, sunset, purple
     const mutation = `mutation {
         create_status_column(
             board_id: ${boardId}
@@ -493,6 +493,7 @@ export const createEventTypeStatusColumn = async (monday, boardId, columnTitle =
                     { color: grass_green, label: "מילואים", index: 2 }
                     { color: dark_blue, label: "שעתי", index: 3 }
                     { color: sunset, label: "לא לחיוב", index: 4 }
+                    { color: purple, label: "זמני", index: 5 }
                 ]
             }
         ) {
@@ -652,4 +653,226 @@ export const fetchItemsStatus = async (monday, itemIds, statusColumnId) => {
     
     logger.functionEnd('fetchItemsStatus', { mappedCount: statusMap.size });
     return statusMap;
+};
+
+/**
+ * שליפת הקצאות פעילות (Assignments) עבור המשתמש הנוכחי
+ * מחזירה רשימת פרויקטים מהקצאות שהתאריכים שלהם כוללים את היום
+ * @param {object} monday - Monday SDK instance
+ * @param {string} boardId - מזהה לוח ההקצאות
+ * @param {string} personColumnId - מזהה עמודת אנשים
+ * @param {string} startDateColumnId - מזהה עמודת תאריך התחלה
+ * @param {string} endDateColumnId - מזהה עמודת תאריך סיום
+ * @param {string} projectLinkColumnId - מזהה עמודת קישור לפרויקט
+ * @returns {Promise<Array<{id: string, name: string}>>} - רשימת פרויקטים ייחודיים
+ */
+export const fetchActiveAssignments = async (monday, boardId, personColumnId, startDateColumnId, endDateColumnId, projectLinkColumnId) => {
+    if (!boardId || !personColumnId || !startDateColumnId || !endDateColumnId || !projectLinkColumnId) {
+        logger.warn('fetchActiveAssignments', 'Missing required parameters');
+        return [];
+    }
+
+    logger.functionStart('fetchActiveAssignments', {
+        boardId,
+        personColumnId,
+        startDateColumnId,
+        endDateColumnId,
+        projectLinkColumnId
+    });
+
+    // בניית שאילתה עם 3 תנאים:
+    // 1. עמודת אנשים = המשתמש הנוכחי
+    // 2. תאריך התחלה <= היום
+    // 3. תאריך סיום >= היום
+    const query = `query {
+        boards(ids: [${boardId}]) {
+            items_page(
+                query_params: {
+                    operator: and,
+                    rules: [
+                        {
+                            column_id: "${personColumnId}",
+                            compare_value: ["assigned_to_me"],
+                            operator: any_of
+                        },
+                        {
+                            column_id: "${startDateColumnId}",
+                            compare_value: ["TODAY"],
+                            operator: lower_than_or_equal
+                        },
+                        {
+                            column_id: "${endDateColumnId}",
+                            compare_value: ["TODAY"],
+                            operator: greater_than_or_equals
+                        }
+                    ]
+                }
+            ) {
+                items {
+                    id
+                    column_values(ids: ["${projectLinkColumnId}"]) {
+                        ... on BoardRelationValue {
+                            linked_items {
+                                id
+                                name
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }`;
+
+    const apiRequest = { query, variables: null, operationName: extractOperationName(query) };
+    logger.api('fetchActiveAssignments', query);
+
+    const { response } = await wrapMondayApiCall('fetchActiveAssignments', apiRequest, () => monday.api(query));
+    const items = response.data?.boards?.[0]?.items_page?.items || [];
+
+    // חילוץ פרויקטים ייחודיים מההקצאות
+    const projectsMap = new Map();
+    items.forEach(item => {
+        const linkedItems = item.column_values?.[0]?.linked_items || [];
+        linkedItems.forEach(project => {
+            if (project.id && !projectsMap.has(project.id)) {
+                projectsMap.set(project.id, { 
+                    id: project.id, 
+                    name: project.name,
+                    assignmentId: item.id  // מזהה שורת ההקצאה בלוח ההקצאות
+                });
+            }
+        });
+    });
+
+    const projects = Array.from(projectsMap.values());
+    logger.functionEnd('fetchActiveAssignments', {
+        assignmentsCount: items.length,
+        uniqueProjectsCount: projects.length
+    });
+
+    return projects;
+};
+
+/**
+ * שליפת הגדרות עמודת Connect Boards לזיהוי הלוחות המקושרים
+ * @param {Object} monday - Monday SDK instance
+ * @param {string} boardId - מזהה הלוח
+ * @param {string} columnId - מזהה העמודה
+ * @returns {Promise<Array<{id: string, name: string}>>} רשימת הלוחות המקושרים
+ */
+export const fetchConnectedBoardsFromColumn = async (monday, boardId, columnId) => {
+    logger.functionStart('fetchConnectedBoardsFromColumn', { boardId, columnId });
+
+    const query = `query {
+        boards(ids: [${boardId}]) {
+            columns(ids: ["${columnId}"]) {
+                settings_str
+            }
+        }
+    }`;
+
+    const apiRequest = { query, variables: null, operationName: 'fetchConnectedBoardsFromColumn' };
+    logger.api('fetchConnectedBoardsFromColumn', query);
+
+    const { response } = await wrapMondayApiCall('fetchConnectedBoardsFromColumn', apiRequest, () => monday.api(query));
+    const settingsStr = response.data?.boards?.[0]?.columns?.[0]?.settings_str;
+
+    if (!settingsStr) {
+        logger.warn('fetchConnectedBoardsFromColumn', 'No settings found for column');
+        return [];
+    }
+
+    try {
+        const settings = JSON.parse(settingsStr);
+        const boardIds = settings.boardIds || [];
+
+        if (boardIds.length === 0) {
+            logger.warn('fetchConnectedBoardsFromColumn', 'No connected boards found');
+            return [];
+        }
+
+        // שליפת שמות הלוחות
+        const boardsQuery = `query {
+            boards(ids: [${boardIds.join(',')}]) {
+                id
+                name
+            }
+        }`;
+
+        const boardsResponse = await monday.api(boardsQuery);
+        const boards = boardsResponse.data?.boards || [];
+
+        logger.functionEnd('fetchConnectedBoardsFromColumn', { boardsCount: boards.length });
+        return boards.map(b => ({ id: b.id, name: b.name }));
+    } catch (error) {
+        logger.error('fetchConnectedBoardsFromColumn', 'Error parsing settings', error);
+        return [];
+    }
+};
+
+/**
+ * שליפת כל האנשים הייחודיים מעמודת People בלוח
+ * @param {Object} monday - Monday SDK instance
+ * @param {string} boardId - מזהה הלוח
+ * @param {string} columnId - מזהה עמודת ה-People
+ * @returns {Promise<Array<{id: string, name: string}>>} רשימת האנשים הייחודיים
+ */
+export const fetchUniquePeopleFromBoard = async (monday, boardId, columnId) => {
+    logger.functionStart('fetchUniquePeopleFromBoard', { boardId, columnId });
+
+    const query = `query {
+        boards(ids: [${boardId}]) {
+            items_page(limit: 500) {
+                cursor
+                items {
+                    column_values(ids: ["${columnId}"]) {
+                        ... on PeopleValue {
+                            persons_and_teams {
+                                id
+                                kind
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }`;
+
+    const apiRequest = { query, variables: null, operationName: 'fetchUniquePeopleFromBoard' };
+    logger.api('fetchUniquePeopleFromBoard', query);
+
+    const { response } = await wrapMondayApiCall('fetchUniquePeopleFromBoard', apiRequest, () => monday.api(query));
+    const items = response.data?.boards?.[0]?.items_page?.items || [];
+
+    // איסוף מזהי אנשים ייחודיים (רק persons, לא teams)
+    const personIds = new Set();
+    items.forEach(item => {
+        const peopleValue = item.column_values?.[0];
+        const personsAndTeams = peopleValue?.persons_and_teams || [];
+        personsAndTeams.forEach(p => {
+            if (p.kind === 'person') {
+                personIds.add(p.id);
+            }
+        });
+    });
+
+    if (personIds.size === 0) {
+        logger.warn('fetchUniquePeopleFromBoard', 'No people found in column');
+        return [];
+    }
+
+    // שליפת פרטי המשתמשים
+    const userIds = Array.from(personIds);
+    const usersQuery = `query {
+        users(ids: [${userIds.join(',')}]) {
+            id
+            name
+        }
+    }`;
+
+    const usersResponse = await monday.api(usersQuery);
+    const users = usersResponse.data?.users || [];
+
+    logger.functionEnd('fetchUniquePeopleFromBoard', { uniquePeopleCount: users.length });
+    return users.map(u => ({ id: u.id, name: u.name }));
 };

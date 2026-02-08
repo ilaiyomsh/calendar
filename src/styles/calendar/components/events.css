@@ -77,6 +77,7 @@
     margin-bottom: 1px;
     text-align: right; /* חזרה ליישור ימין לאירועים ארוכים */
     color: white !important;
+    font-variant-numeric: tabular-nums;
 }
 
 .gc-event-notes {
@@ -326,4 +327,100 @@
 .gc-event-holiday .rbc-addons-dnd-resize-ns-anchor,
 .gc-event-holiday .rbc-addons-dnd-resize-ew-anchor {
     display: none !important;
+}
+
+/* ===== Temporary/Planned Events Styling ===== */
+
+/* אירועים מתוכננים - עיצוב חלול (hollow) עם גבול צבעוני */
+.gc-event-wrapper.gc-event-temporary {
+    background: transparent !important;
+    border: 2px solid var(--event-color, #0073ea) !important;
+    border-radius: 8px;
+}
+
+/* טקסט באירועים מתוכננים - צבע האירוע במקום לבן */
+.gc-event-temporary .gc-event-title,
+.gc-event-temporary .gc-event-time,
+.gc-event-temporary .gc-event-notes {
+    color: var(--event-color, #0073ea) !important;
+}
+
+/* הסרת הצל מאירועים מתוכננים */
+.gc-event-wrapper.gc-event-temporary {
+    box-shadow: none !important;
+}
+
+/* Hover state לאירועים מתוכננים */
+.rbc-event:hover .gc-event-wrapper.gc-event-temporary {
+    background: rgba(var(--event-color-rgb, 0, 115, 234), 0.1) !important;
+    filter: none;
+}
+
+/* ===== Mobile Responsive ===== */
+@media (max-width: 768px) {
+    /* Event wrapper - compact on mobile */
+    .gc-event-wrapper {
+        padding: 2px 6px;
+        border-radius: 6px;
+        border-width: 1px;
+    }
+
+    .gc-event-title {
+        font-size: 12px;
+        line-height: 1.1;
+    }
+
+    .gc-event-time {
+        font-size: 10px;
+    }
+
+    /* Hide notes on mobile - too small to read */
+    .gc-event-notes {
+        display: none;
+    }
+
+    /* Short events on mobile */
+    .gc-event-wrapper.gc-event-short {
+        padding: 1px 6px;
+        gap: 4px;
+    }
+
+    .gc-event-wrapper.gc-event-short .gc-event-title {
+        font-size: 11px;
+    }
+
+    .gc-event-wrapper.gc-event-short .gc-event-time {
+        font-size: 10px;
+    }
+
+    /* All-day events */
+    .gc-event-wrapper.gc-event-allday {
+        height: 20px !important;
+        line-height: 20px !important;
+        font-size: 11px !important;
+        padding: 0 6px !important;
+    }
+
+    /* Resize handles - larger for touch */
+    .rbc-addons-dnd-resize-ns-anchor {
+        height: 16px !important;
+    }
+
+    /* Touch-friendly event interaction */
+    .rbc-event {
+        -webkit-touch-callout: none;
+        user-select: none;
+    }
+
+    /* Dragged event feedback */
+    .rbc-addons-dnd-dragged-event .gc-event-wrapper {
+        opacity: 0.7;
+        transform: scale(1.03);
+    }
+
+    /* Month view events */
+    .rbc-month-view .gc-event-wrapper {
+        padding: 1px 4px;
+        font-size: 11px;
+    }
 }

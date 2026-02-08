@@ -3,6 +3,7 @@ import "./App.css";
 import mondaySdk from "monday-sdk-js";
 import MondayCalendar from "./MondayCalendar";
 import { SettingsProvider, useSettings } from "./contexts/SettingsContext";
+import { MobileProvider, useMobile } from "./contexts/MobileContext";
 import SettingsDialog from "./components/SettingsDialog/SettingsDialog";
 import ErrorBoundary from "./components/ErrorBoundary/ErrorBoundary";
 import { useToast } from "./hooks/useToast";
@@ -15,6 +16,7 @@ const monday = mondaySdk();
 // רכיב פנימי שמשתמש ב-Settings Context
 const AppContent = () => {
   const { customSettings, isLoading } = useSettings();
+  const isMobile = useMobile();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [context, setContext] = useState(null);
   const dialogRef = useRef(null);
@@ -71,8 +73,8 @@ const AppContent = () => {
           errorDetails={errorDetailsModal}
         />
         
-        {/* דיאלוג ההגדרות - מרונדר רק כשפתוח */}
-        {isSettingsOpen && (
+        {/* דיאלוג ההגדרות - מרונדר רק כשפתוח, מוסתר במובייל */}
+        {!isMobile && isSettingsOpen ? (
         <div style={{
           position: 'fixed',
           top: 0,
@@ -143,7 +145,7 @@ const AppContent = () => {
             />
           </dialog>
         </div>
-      )}
+      ) : null}
 
       {/* רכיב הלוח */}
       <main className="app-main">
@@ -160,9 +162,11 @@ const AppContent = () => {
 // רכיב App הראשי שעוטף הכל ב-SettingsProvider
 const App = () => {
   return (
-    <SettingsProvider monday={monday}>
-      <AppContent />
-    </SettingsProvider>
+    <MobileProvider>
+      <SettingsProvider monday={monday}>
+        <AppContent />
+      </SettingsProvider>
+    </MobileProvider>
   );
 };
 

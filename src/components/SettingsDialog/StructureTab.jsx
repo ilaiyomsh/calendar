@@ -71,11 +71,9 @@ const StructureTab = ({ settings, onChange }) => {
         <div className={styles.notesContent}>
           <span className={styles.notesTitle}>
             <FileText size={20} className={styles.notesIcon} />
-            אפשר הוספת מלל חופשי (הערות)
+             הוספת מלל חופשי
           </span>
-          <span className={styles.notesDescription}>
-            הוסף שדה טקסט חופשי לטופס הדיווח, המאפשר למשתמשים לפרט על העבודה שבוצעה.
-          </span>
+         
         </div>
       </label>
 
@@ -92,9 +90,7 @@ const StructureTab = ({ settings, onChange }) => {
             <Calendar size={20} className={styles.notesIcon} />
             הצג חגים ישראליים
           </span>
-          <span className={styles.notesDescription}>
-            הצג חגים ומועדים ישראליים (יום העצמאות, ראש השנה, פורים ועוד) כאירועים בלוח השנה.
-          </span>
+          
         </div>
       </label>
     </div>

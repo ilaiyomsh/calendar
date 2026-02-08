@@ -48,10 +48,42 @@ WorkWeekView.title = (date) => {
     return format(date, 'MMMM yyyy', { locale: he });
 };
 
+/**
+ * תצוגת 3 ימים למובייל - היום במרכז
+ */
+export const ThreeDayView = (props) => {
+    const { date } = props;
+    const range = ThreeDayView.range(date);
+    return <TimeGrid {...props} range={range} eventOffset={15} />;
+};
+
+ThreeDayView.range = (date) => {
+    // אתמול, היום, מחר
+    return [-1, 0, 1].map(i => addDays(date, i));
+};
+
+ThreeDayView.navigate = (date, action) => {
+    switch (action) {
+        case Navigate.PREVIOUS:
+            return addDays(date, -3);
+        case Navigate.NEXT:
+            return addDays(date, 3);
+        case Navigate.TODAY:
+            return new Date();
+        default:
+            return date;
+    }
+};
+
+ThreeDayView.title = (date) => {
+    return format(date, 'MMMM yyyy', { locale: he });
+};
+
 // תרגום תוויות לעברית
 export const hebrewMessages = {
     week: 'שבוע',
     work_week: 'שבוע עבודה',
+    three_day: '3 ימים',
     day: 'יום',
     month: 'חודש',
     previous: 'קודם',

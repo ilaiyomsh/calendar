@@ -75,7 +75,7 @@ const Toast = ({ message, type = 'info', duration = 5000, errorDetails = null, o
  */
 export const ToastContainer = ({ toasts, onRemove, onShowErrorDetails }) => {
     return (
-        <div className={styles.toastContainer}>
+        <div className={styles.toastContainer} aria-live="polite" aria-relevant="additions removals">
             {toasts.map((toast) => (
                 <Toast
                     key={toast.id}

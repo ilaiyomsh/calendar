@@ -58,7 +58,22 @@
   --gc-shadow-hover: 0 2px 6px rgba(0, 0, 0, 0.15);
   --gc-shadow-drag: 0 6px 10px rgba(0, 0, 0, 0.14);
   
-  /* Transitions */
-  --gc-transition: all 0.2s ease-in-out;
+  /* Transitions - list specific properties instead of 'all' */
+  --gc-transition: background-color 0.2s ease-in-out, color 0.2s ease-in-out, border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out, transform 0.2s ease-in-out, opacity 0.2s ease-in-out;
+
+  /* Mobile touch targets */
+  --gc-mobile-touch-target: 44px;
+  --gc-mobile-header-height: 40px;
+}
+
+/* Mobile overrides */
+@media (max-width: 768px) {
+  :root {
+    --gc-gutter-width: 45px;
+    --gc-font-size-event: 12px;
+    --gc-font-size-header: 10px;
+    --gc-event-padding: 2px 6px;
+    --gc-event-radius: 6px;
+  }
 }
 

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import mondaySdk from 'monday-sdk-js';
 import { useSettings } from '../contexts/SettingsContext';
-import { fetchItemsStatus } from '../utils/mondayApi';
+import { fetchItemsStatus, fetchActiveAssignments } from '../utils/mondayApi';
 import logger from '../utils/logger';
 
 const monday = mondaySdk();
@@ -17,7 +17,49 @@ export const useProjects = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
 
+    // בדיקה אם מצב הקצאות מופעל (Assignments Mode)
+    const isAssignmentsMode = !!customSettings.useAssignmentsMode;
+
     const fetchProjects = useCallback(async () => {
+        // מצב הקצאות - שימוש ב-fetchActiveAssignments
+        if (isAssignmentsMode) {
+            logger.functionStart('useProjects.fetchProjects (assignments mode)', {
+                boardId: customSettings.assignmentsBoardId,
+                personColumnId: customSettings.assignmentPersonColumnId,
+                startDateColumnId: customSettings.assignmentStartDateColumnId,
+                endDateColumnId: customSettings.assignmentEndDateColumnId,
+                projectLinkColumnId: customSettings.assignmentProjectLinkColumnId
+            });
+
+            setLoading(true);
+            setError(null);
+
+            try {
+                const projects = await fetchActiveAssignments(
+                    monday,
+                    customSettings.assignmentsBoardId,
+                    customSettings.assignmentPersonColumnId,
+                    customSettings.assignmentStartDateColumnId,
+                    customSettings.assignmentEndDateColumnId,
+                    customSettings.assignmentProjectLinkColumnId
+                );
+
+                setProjects(projects);
+                logger.functionEnd('useProjects.fetchProjects (assignments mode)', {
+                    count: projects.length
+                });
+            } catch (err) {
+                logger.apiError('fetchProjects (assignments mode)', err);
+                logger.error('useProjects', 'Error fetching projects from assignments', err);
+                setError("שגיאה בטעינת הנתונים מהקצאות");
+                setProjects([]);
+            } finally {
+                setLoading(false);
+            }
+            return;
+        }
+
+        // מצב רגיל - שימוש ב-peopleColumnIds (תאימות לאחור)
         if (!customSettings.connectedBoardId || !customSettings.peopleColumnIds || customSettings.peopleColumnIds.length === 0) {
             logger.warn('useProjects', 'Missing settings: connectedBoardId or peopleColumnIds');
             setError("חסרות הגדרות לוח");
@@ -48,7 +90,7 @@ export const useProjects = () => {
                 operator: "any_of"
             }));
 
-            const rulesString = rules.map(rule => 
+            const rulesString = rules.map(rule =>
                 `{
                     column_id: "${rule.column_id}",
                     compare_value: ${JSON.stringify(rule.compare_value)},
@@ -82,7 +124,7 @@ export const useProjects = () => {
 
             if (res.data && res.data.boards && res.data.boards[0]) {
                 let items = res.data.boards[0].items_page.items || [];
-                
+
                 // סינון לפי סטטוס (אם מופעל)
                 if (statusFilterEnabled && items.length > 0) {
                     logger.debug('useProjects', 'Applying status filter', {
@@ -90,26 +132,26 @@ export const useProjects = () => {
                         statusColumnId: customSettings.projectStatusColumnId,
                         activeValues: customSettings.projectActiveStatusValues
                     });
-                    
+
                     const itemIds = items.map(item => item.id);
                     const statusMap = await fetchItemsStatus(
                         monday,
                         itemIds,
                         customSettings.projectStatusColumnId
                     );
-                    
+
                     // סינון לפי ערכי הסטטוס הפעילים
                     items = items.filter(item => {
                         const itemStatus = statusMap.get(item.id.toString());
                         return customSettings.projectActiveStatusValues.includes(itemStatus);
                     });
-                    
+
                     logger.debug('useProjects', 'Status filter applied', {
                         beforeCount: itemIds.length,
                         afterCount: items.length
                     });
                 }
-                
+
                 // עיבוד הנתונים - רק פרויקטים, ללא משימות (משימות ייטענו מאוחר יותר)
                 const processedProjects = items.map(item => ({
                     id: item.id,
@@ -117,7 +159,7 @@ export const useProjects = () => {
                 }));
 
                 setProjects(processedProjects);
-                logger.functionEnd('useProjects.fetchProjects', { 
+                logger.functionEnd('useProjects.fetchProjects', {
                     count: processedProjects.length,
                     statusFilterApplied: statusFilterEnabled
                 });
@@ -134,7 +176,13 @@ export const useProjects = () => {
             setLoading(false);
         }
     }, [
-        customSettings.connectedBoardId, 
+        isAssignmentsMode,
+        customSettings.assignmentsBoardId,
+        customSettings.assignmentPersonColumnId,
+        customSettings.assignmentStartDateColumnId,
+        customSettings.assignmentEndDateColumnId,
+        customSettings.assignmentProjectLinkColumnId,
+        customSettings.connectedBoardId,
         customSettings.peopleColumnIds,
         customSettings.projectStatusFilterEnabled,
         customSettings.projectStatusColumnId,
@@ -142,10 +190,16 @@ export const useProjects = () => {
     ]);
 
     useEffect(() => {
+        // טעינה במצב הקצאות אם כל ההגדרות קיימות
+        if (isAssignmentsMode) {
+            fetchProjects();
+            return;
+        }
+        // טעינה במצב רגיל אם ההגדרות הבסיסיות קיימות
         if (customSettings.connectedBoardId && customSettings.peopleColumnIds && customSettings.peopleColumnIds.length > 0) {
             fetchProjects();
         }
-    }, [fetchProjects]);
+    }, [fetchProjects, isAssignmentsMode]);
 
     return {
         projects,

@@ -46,7 +46,7 @@
     align-items: center;
     justify-content: center;
     border-radius: 50%;
-    transition: all 0.2s;
+    transition: background-color 0.2s, color 0.2s;
 }
 
 /* Today indicator */
@@ -84,7 +84,7 @@
     height: 32px;
     line-height: 32px;
     border-radius: 50%;
-    transition: all 0.2s;
+    transition: background-color 0.2s, color 0.2s;
     font-size: 14px;
 }
 
@@ -217,17 +217,59 @@
 
 /* Responsive adjustments */
 @media (max-width: 768px) {
+    .rbc-header {
+        min-height: 60px !important;
+        padding: 2px 0 0 0 !important;
+    }
+
     .rbc-header-day {
-        font-size: 16px;
+        font-size: 11px;
     }
-    
+
     .rbc-header-date {
-        font-size: 20px;
-        width: 36px;
-        height: 36px;
+        font-size: 18px;
+        width: 32px;
+        height: 32px;
     }
-    
+
+    .rbc-row.rbc-time-header-cell {
+        height: 56px !important;
+    }
+
     .rbc-allday-cell {
-        min-height: 40px !important;
+        min-height: 22px !important;
+    }
+
+    /* All-day events smaller on mobile */
+    .rbc-allday-cell .rbc-event {
+        height: 20px !important;
+    }
+
+    .rbc-time-gutter .rbc-header {
+        min-height: 90px !important;
+    }
+
+    /* Month view - compact dates */
+    .rbc-date-cell {
+        padding: 4px;
+    }
+
+    .rbc-date-cell > a {
+        width: 26px;
+        height: 26px;
+        line-height: 26px;
+        font-size: 12px;
+        pointer-events: auto !important;
+        cursor: pointer !important;
+    }
+
+    /* Enable drilldown on mobile month view */
+    .rbc-month-view .rbc-header {
+        pointer-events: auto !important;
+    }
+
+    .rbc-month-view .rbc-header a {
+        pointer-events: auto !important;
+        cursor: pointer !important;
     }
 }

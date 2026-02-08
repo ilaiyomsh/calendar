@@ -31,13 +31,48 @@ index.html → src/index.jsx → src/init.js (Monday SDK) → App.jsx → Monday
 ### Key Files by Size
 | File | Lines | Responsibility |
 |------|-------|----------------|
-| `MondayCalendar.jsx` | 1551 | Main calendar, drag-drop, modals, handlers |
-| `mondayApi.js` | 1037 | All GraphQL queries/mutations |
-| `useMondayEvents.js` | 721 | Event CRUD, pagination, column building |
-| `EventModal.jsx` | 496 | Timed event create/edit modal |
+| `components/SettingsDialog/MappingTab.jsx` | 1103 | Settings column mapping dialog |
+| `MondayCalendar.jsx` | 993 | Main calendar, drag-drop, modals, handlers |
+| `components/AllDayEventModal/AllDayEventModal.jsx` | 954 | All-day event create/edit/bulk modal |
+| `utils/mondayApi.js` | 878 | All GraphQL queries/mutations |
+| `hooks/useMondayEvents.js` | 819 | Event CRUD, pagination, filter rules |
+| `components/EventModal/EventModal.jsx` | 552 | Timed event create/edit modal |
+| `hooks/useAllDayEvents.js` | 508 | All-day event handlers (separated) |
+| `utils/settingsValidator.js` | 348 | Settings validation on startup |
+| `utils/errorHandler.js` | 347 | Error processing & logging |
+| `components/SettingsDialog/SettingsDialog.jsx` | 303 | Settings dialog with 3 tabs |
+| `utils/logger.js` | 298 | Structured logging system |
+| `components/SettingsDialog/FiltersTab.jsx` | 277 | Filter source configuration |
+| `components/FilterBar/FilterBar.jsx` | 248 | Reporter/project filter dropdowns |
+| `hooks/useFilterOptions.js` | 232 | Fetch reporters & projects for filters |
+| `hooks/useEventDataLoader.js` | 231 | Lazy load event details for editing |
+| `contexts/SettingsContext.jsx` | ~220 | Global settings via React Context |
+| `components/SettingsDialog/StructureTab.jsx` | ~200 | Structure mode configuration |
+| `components/CalendarToolbar.jsx` | 141 | Toolbar with filter bar integration |
+| `hooks/useCalendarFilter.js` | 107 | Filter state & GraphQL rule builder |
+
+### Component Tree
+```
+App.jsx
+├─ SettingsProvider
+│  └─ AppContent
+│     ├─ MondayCalendar
+│     │  ├─ CalendarToolbar
+│     │  │  └─ FilterBar
+│     │  ├─ DnDCalendar (react-big-calendar)
+│     │  ├─ EventModal (timed events)
+│     │  ├─ AllDayEventModal (vacations/sick/reserves)
+│     │  └─ CustomEvent (event tooltip renderer)
+│     ├─ SettingsDialog
+│     │  ├─ StructureTab
+│     │  ├─ MappingTab
+│     │  └─ FiltersTab
+│     ├─ ToastContainer
+│     └─ ErrorDetailsModal
+```
 
 ### State Management
-- **SettingsContext** - Global settings via React Context
+- **SettingsContext** - Global settings via React Context, persisted to monday.storage.instance
 - **monday.storage.instance** - Persistent settings storage
 - **Component state** - Local useState (no Redux/Zustand)
 
@@ -49,18 +84,27 @@ The app handles two event categories:
 - Regular work hour reports
 - Have start time, end time, duration in hours
 - Billable (לחיוב) or Non-billable (לא לחיוב)
+- Temporary (זמני) - placeholder events
 - Created via `EventModal`
 
 ### All-Day Events (יומי)
 - Special types: חופשה (vacation), מחלה (sick), מילואים (reserves)
 - Duration in days (not hours)
 - No time component, just date
+- Supports bulk reporting (multiple days at once)
 - Created via `AllDayEventModal`
 
 ```javascript
 // Check event type
 import { isAllDayEventType, ALL_DAY_EVENT_TYPES } from './utils/durationUtils';
 // ALL_DAY_EVENT_TYPES = ['חופשה', 'מחלה', 'מילואים']
+```
+
+### Event Type Labels
+```javascript
+import { REQUIRED_EVENT_TYPE_LABELS, TEMPORARY_EVENT_LABEL } from './utils/eventTypeValidation';
+// REQUIRED_EVENT_TYPE_LABELS = ['חופשה', 'מחלה', 'מילואים', 'שעתי', 'לא לחיוב', 'זמני']
+// TEMPORARY_EVENT_LABEL = 'זמני'
 ```
 
 ## Structure Modes
@@ -76,26 +120,86 @@ STRUCTURE_MODES.PROJECT_WITH_TASKS        // Projects + linked tasks board
 STRUCTURE_MODES.PROJECT_WITH_TASKS_AND_STAGE  // Full: Projects + Tasks + Stage
 ```
 
+## Board ID Resolution
+
+The app supports flexible board targeting via `boardIdResolver.js`:
+
+```javascript
+import { getEffectiveBoardId, hasValidReportingBoard, isCustomObjectMode } from './utils/boardIdResolver';
+
+// Logic:
+// 1. useCurrentBoardForReporting=true AND context.boardId exists → context.boardId
+// 2. timeReportingBoardId is set → timeReportingBoardId
+// 3. Fallback → context.boardId (backward compatibility)
+```
+
 ## Key Hooks
 
 ### useMondayEvents
 ```javascript
 const {
-    events,           // Current events array
-    loading,          // Loading state
-    loadEvents,       // (startDate, endDate) => void
-    createEvent,      // (eventData, start, end) => Promise
-    updateEvent,      // (id, eventData, start, end) => Promise
-    deleteEvent,      // (id) => Promise
+    events,               // Current events array
+    loading,              // Loading state
+    loadEvents,           // (startDate, endDate) => void
+    createEvent,          // (eventData, start, end) => Promise
+    updateEvent,          // (id, eventData, start, end) => Promise
+    deleteEvent,          // (id) => Promise
     updateEventPosition,  // (event, newStart, newEnd) => Promise (drag/resize)
-    addEvent          // (event) => void - optimistic add to state
+    addEvent              // (event) => void - optimistic add to state
 } = useMondayEvents(monday, context);
+// Supports custom filter rules from useCalendarFilter
+// Pagination with cursor handling
+// Filter rule conversion: rulesToGraphQL()
+```
+
+### useAllDayEvents
+```javascript
+const {
+    handleCreateAllDayEvent,   // Create vacation/sick/reserves
+    handleUpdateAllDayEvent,   // Update existing all-day event
+    handleDeleteAllDayEvent    // Delete all-day event
+} = useAllDayEvents(/* dependencies */);
+// Handles bulk reporting (multiple days at once)
+// Uses calculateEndDateFromDays() for day-based duration
+```
+
+### useCalendarFilter
+```javascript
+const {
+    selectedReporterIds,       // Selected reporter user IDs
+    selectedProjectIds,        // Selected project IDs
+    setSelectedReporterIds,    // Update reporter filter
+    setSelectedProjectIds,     // Update project filter
+    filterRules,               // GraphQL-ready filter rules
+    hasActiveFilter             // Boolean: any filter active?
+} = useCalendarFilter();
+```
+
+### useFilterOptions
+```javascript
+const {
+    reporters,          // Available reporters for filter
+    filterProjects,     // Available projects for filter
+    loadingReporters,   // Loading state
+    loadingProjects     // Loading state
+} = useFilterOptions();
+// Fetches from employees board or reporting board
+// Supports deduplication and pagination
+```
+
+### useEventDataLoader
+```javascript
+const { loadEventData } = useEventDataLoader();
+// Lazy loads full event data when editing
+// Extracts: project, task, notes, stage, billing info
+// Uses linked_items with fallback to parsed values
 ```
 
 ### useProjects
 ```javascript
 const { projects, loading, error, refetch } = useProjects();
 // Returns projects filtered by peopleColumnIds (assigned to current user)
+// Supports assignments mode (useAssignmentsMode setting)
 ```
 
 ### useTasks
@@ -103,6 +207,26 @@ const { projects, loading, error, refetch } = useProjects();
 const { tasks, loading, fetchForProject, createTask } = useTasks();
 // fetchForProject(projectId) - loads tasks linked to project
 // createTask(projectId, taskName) - creates new task
+```
+
+### useNonBillableOptions
+```javascript
+const { nonBillableOptions, loading } = useNonBillableOptions();
+// Loads billable sub-type options from status column
+```
+
+### useStageOptions
+```javascript
+const { stageOptions, loading } = useStageOptions();
+// Loads stage/classification options from status column
+```
+
+### useEventModals
+```javascript
+const {
+    // Modal states and handlers for EventModal and AllDayEventModal
+    // Handles convert mode for temporary events
+} = useEventModals();
 ```
 
 ### useToast
@@ -129,8 +253,13 @@ import {
     updateItemColumnValues,
     fetchProjectsForUser,
     fetchItemById,
+    fetchProjectById,
     fetchCurrentUser,
-    MondayApiError  // Custom error class
+    fetchActiveAssignments,        // For assignments mode
+    fetchConnectedBoardsFromColumn, // Dynamic board discovery
+    fetchUniquePeopleFromBoard,    // People extraction for filters
+    fetchItemsStatus,              // Batch status fetching
+    MondayApiError                 // Custom error class
 } from './utils/mondayApi';
 ```
 
@@ -150,6 +279,57 @@ Errors are wrapped in `MondayApiError` with:
 - `errorCode` - Monday error code
 - `functionName` - Where error occurred
 - `duration` - Request duration ms
+
+### API Wrapper
+```javascript
+// All API calls use this wrapper for consistent error handling
+wrapMondayApiCall(functionName, apiRequest, apiCall)
+```
+
+## Settings
+
+### Board Configuration
+```javascript
+connectedBoardId              // Projects board (Level 1)
+tasksBoardId                  // Tasks/products board (Level 2)
+useCurrentBoardForReporting   // Use board context vs custom board ID
+timeReportingBoardId          // Custom reporting board (if not using context)
+useAssignmentsMode            // Alternative: fetch from assignments board
+assignmentsBoardId            // Assignments board
+assignmentPersonColumnId      // Person column in assignments
+assignmentStartDateColumnId   // Start date in assignments
+assignmentEndDateColumnId     // End date in assignments
+assignmentProjectLinkColumnId // Project link column in assignments
+```
+
+### Filter Configuration
+```javascript
+filterProjectsBoardId         // Board to load projects from (for filter)
+filterEmployeesBoardId        // Optional: dedicated employees board
+filterEmployeesColumnId       // People column in employees board
+```
+
+### Column Mappings
+| Setting Key | Column Type | Purpose |
+|-------------|-------------|---------|
+| `dateColumnId` | date | Event date + time |
+| `durationColumnId` | numbers | Hours (timed) or days (all-day) |
+| `projectColumnId` | board_relation | Link to projects board |
+| `taskColumnId` | board_relation | Link to tasks board |
+| `reporterColumnId` | people | User who reported |
+| `eventTypeStatusColumnId` | status | שעתי/לא לחיוב/חופשה/מחלה/מילואים/זמני |
+| `nonBillableStatusColumnId` | status | Non-billable sub-types |
+| `stageColumnId` | status | Stage/classification |
+| `notesColumnId` | text | Free-text notes |
+| `endTimeColumnId` | date | End time for events |
+
+### Validation
+```javascript
+import { validateEventTypeColumn, getRequiredSettings } from './utils/settingsValidator';
+
+validateEventTypeColumn(settings)                      // Checks for all 6 required labels
+getRequiredSettings(structureMode, useAssignmentsMode) // Dynamic requirements
+```
 
 ## Logging
 
@@ -203,22 +383,6 @@ return (
 );
 ```
 
-## Monday Column Types
-
-The app maps to these column types in settings:
-
-| Setting Key | Column Type | Purpose |
-|-------------|-------------|---------|
-| `dateColumnId` | date | Event date + time |
-| `durationColumnId` | numbers | Hours (timed) or days (all-day) |
-| `projectColumnId` | board_relation | Link to projects board |
-| `taskColumnId` | board_relation | Link to tasks board |
-| `reporterColumnId` | people | User who reported |
-| `eventTypeStatusColumnId` | status | שעתי/לא לחיוב/חופשה/מחלה/מילואים |
-| `nonBillableStatusColumnId` | status | Non-billable sub-types |
-| `stageColumnId` | status | Stage/classification |
-| `notesColumnId` | text | Free-text notes |
-
 ## Calendar Configuration
 
 Located in `src/constants/calendarConfig.jsx`:
@@ -246,6 +410,41 @@ import {
 } from './utils/durationUtils';
 ```
 
+## Data Flow
+
+```
+MondayCalendar.jsx
+├─ useSettings() → customSettings (global)
+├─ useProjects() → projects list (regular or assignments mode)
+├─ useCalendarFilter() → filter state + GraphQL rules
+├─ useFilterOptions() → reporters + filterProjects for dropdowns
+├─ useMondayEvents(settings + filterRules) → events
+│  └─ Applies filters internally via GraphQL rules
+├─ useEventModals() → modal states
+├─ useAllDayEvents() → all-day event handlers
+├─ useEventDataLoader() → lazy load event details on edit
+│
+└─ CalendarToolbar
+   └─ FilterBar
+      ├─ reporters (from useFilterOptions)
+      ├─ filterProjects (from useFilterOptions)
+      └─ onReporterChange, onProjectChange callbacks
+```
+
+### Hook Dependency Graph
+```
+useCalendarFilter (independent)
+    ↓
+useMondayEvents (consumes filter rules)
+    ↓
+EventModal / AllDayEventModal (consume events)
+
+useFilterOptions → FilterBar (filter dropdowns)
+useEventDataLoader → edit modals (lazy data loading)
+useProjects → EventModal (project selector)
+useNonBillableOptions / useStageOptions → EventModal (dropdown options)
+```
+
 ## Common Pitfalls
 
 1. **Don't use console.log** - Use `logger` instead
@@ -253,17 +452,25 @@ import {
 3. **Validate structure mode** - Before accessing task/stage fields
 4. **UTC vs Local time** - Monday API expects UTC for date columns
 5. **Exclusive end dates** - react-big-calendar uses exclusive end for all-day events
+6. **Board ID resolution** - Always use `getEffectiveBoardId()` instead of hardcoding board IDs
+7. **Assignments mode** - Check `useAssignmentsMode` before assuming project source
+8. **Event type labels** - All 6 required labels must exist in the status column
 
 ## Testing Changes
 
 1. Load calendar, navigate between weeks
 2. Create timed event (with project/task/stage based on structure mode)
 3. Create all-day event (חופשה/מחלה/מילואים)
-4. Edit existing event
-5. Drag event to new time
-6. Resize event
-7. Delete event
-8. Open settings, change settings, verify changes apply
+4. Create bulk all-day events (multiple days)
+5. Edit existing event (verify lazy loading of event data)
+6. Drag event to new time
+7. Resize event
+8. Delete event
+9. Use filter bar - filter by reporter, by project
+10. Open settings, change settings, verify changes apply
+11. Test structure mode changes in Settings > Structure tab
+12. Test column mapping in Settings > Mapping tab
+13. Test filter configuration in Settings > Filters tab
 
 ## Files to Know
 
@@ -273,7 +480,11 @@ import {
 | Main view | `MondayCalendar.jsx` |
 | Settings | `SettingsDialog/`, `SettingsContext.jsx` |
 | Event forms | `EventModal/`, `AllDayEventModal/` |
+| Filtering | `FilterBar/`, `hooks/useCalendarFilter.js`, `hooks/useFilterOptions.js` |
 | API calls | `utils/mondayApi.js` |
-| Hooks | `hooks/useMondayEvents.js`, `hooks/useProjects.js` |
+| Board resolution | `utils/boardIdResolver.js` |
+| Event hooks | `hooks/useMondayEvents.js`, `hooks/useAllDayEvents.js`, `hooks/useEventDataLoader.js` |
+| Data hooks | `hooks/useProjects.js`, `hooks/useNonBillableOptions.js`, `hooks/useStageOptions.js` |
+| Validation | `utils/settingsValidator.js`, `utils/eventTypeValidation.js` |
 | Utilities | `utils/durationUtils.js`, `utils/errorHandler.js` |
 | Config | `constants/calendarConfig.jsx` |

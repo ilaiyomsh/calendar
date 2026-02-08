@@ -33,6 +33,9 @@ export const useEventModals = () => {
     const [eventToEdit, setEventToEdit] = useState(null);
     const [isEditMode, setIsEditMode] = useState(false);
     const [isLoadingEventData, setIsLoadingEventData] = useState(false);
+
+    // State - Convert mode (for temporary/planned events)
+    const [isConvertMode, setIsConvertMode] = useState(false);
     
     // State - All-day events
     const [isAllDayModalOpen, setIsAllDayModalOpen] = useState(false);
@@ -87,6 +90,30 @@ export const useEventModals = () => {
     }, []);
 
     /**
+     * פתיחת מודל להמרת אירוע מתוכנן (Temporary) לאירוע רגיל
+     * הזמנים נעולים, הכותרת נמחקת, ההערות כוללות את הכותרת המקורית
+     */
+    const openEventModalForConvert = useCallback((event) => {
+        logger.debug('useEventModals', 'Opening event modal for convert', { eventId: event?.id, title: event?.title });
+        setPendingSlot({ start: event.start, end: event.end });
+        // הכותרת נמחקת - המשתמש חייב לבחור פרויקט
+        setNewEventTitle('');
+        setSelectedItem(null);
+        setIsModalOpen(true);
+        setIsEditMode(true);
+        setIsConvertMode(true);
+        // שמירת האירוע המקורי עם הערות שכוללות את הכותרת המקורית
+        setEventToEdit({
+            ...event,
+            originalTitle: event.title,
+            // הוספת הכותרת המקורית להערות
+            notes: event.title
+                ? `אירוע מקורי: ${event.title}\n\n${event.notes || ''}`
+                : event.notes || ''
+        });
+    }, []);
+
+    /**
      * סגירת כל המודלים
      */
     const closeAllModals = useCallback(() => {
@@ -98,8 +125,9 @@ export const useEventModals = () => {
         setSelectedItem(null);
         setEventToEdit(null);
         setIsEditMode(false);
+        setIsConvertMode(false);
         setIsLoadingEventData(false);
-        
+
         // סגירת מודל יומי
         setIsAllDayModalOpen(false);
         setPendingAllDayDate(null);
@@ -118,6 +146,7 @@ export const useEventModals = () => {
         setSelectedItem(null);
         setEventToEdit(null);
         setIsEditMode(false);
+        setIsConvertMode(false);
         setIsLoadingEventData(false);
     }, []);
 
@@ -139,6 +168,7 @@ export const useEventModals = () => {
             pendingSlot,
             eventToEdit,
             isEditMode,
+            isConvertMode,
             isLoading: isLoadingEventData,
             newEventTitle,
             selectedItem
@@ -154,6 +184,7 @@ export const useEventModals = () => {
         openEventModal,
         openAllDayModal,
         openEventModalForEdit,
+        openEventModalForConvert,
         openAllDayModalForEdit,
         closeAllModals,
         closeEventModal,
@@ -165,6 +196,7 @@ export const useEventModals = () => {
         setSelectedItem,
         setEventToEdit,
         setIsEditMode,
+        setIsConvertMode,
         setIsLoadingEventData,
         setIsAllDayModalOpen,
         setPendingAllDayDate,

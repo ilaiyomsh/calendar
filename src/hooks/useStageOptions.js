@@ -36,33 +36,51 @@ export const useStageOptions = (monday, boardId, columnId) => {
                         }
                     }
                 }`;
-                
+
                 const res = await monday.api(query);
-                
+
                 if (res.data?.boards?.[0]?.columns?.[0]) {
                     const column = res.data.boards[0].columns[0];
                     const options = [];
-                    
+
                     try {
-                        // שימוש ב-settings ישירות (Monday API מחזיר את זה כבר כאובייקט)
-                        const settings = column.settings || {};
-                        
+                        // settings הוא JSON type - יכול להגיע כאובייקט או כמחרוזת
+                        let settings = column.settings || {};
+                        if (typeof settings === 'string') {
+                            settings = JSON.parse(settings);
+                        }
+
+                        logger.debug('useStageOptions', 'Column settings', { type: column.type, settings });
+
                         if (column.type === 'status' || column.type === 'dropdown') {
-                            // עמודת status או dropdown - labels נמצאים ב-settings.labels
-                            if (settings.labels && Array.isArray(settings.labels)) {
-                                settings.labels.forEach((label) => {
-                                    // רק labels שלא מושבתים ושיש להם טקסט
+                            // עמודת status - labels יכולים להיות מערך או אובייקט
+                            const labels = settings.labels || {};
+
+                            if (Array.isArray(labels)) {
+                                // פורמט מערך
+                                labels.forEach((label) => {
                                     if (!label.is_deactivated && label.label && label.label.trim() !== '') {
                                         options.push({
-                                            id: label.id?.toString() || label.label,
+                                            id: label.id?.toString() || String(label.index) || label.label,
                                             value: label.label,
                                             label: label.label
                                         });
                                     }
                                 });
+                            } else if (typeof labels === 'object') {
+                                // פורמט אובייקט - { "0": "Label1", "1": "Label2" }
+                                Object.entries(labels).forEach(([index, labelText]) => {
+                                    if (labelText && typeof labelText === 'string' && labelText.trim() !== '') {
+                                        options.push({
+                                            id: index,
+                                            value: labelText,
+                                            label: labelText
+                                        });
+                                    }
+                                });
                             }
                         }
-                        
+
                         setStageOptions(options);
                         logger.functionEnd('useStageOptions.fetchStageOptions', { count: options.length });
                     } catch (parseError) {

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useSettings, STRUCTURE_MODES } from '../../contexts/SettingsContext';
+import { useMobile } from '../../contexts/MobileContext';
 import { useProjects } from '../../hooks/useProjects';
 import { useTasks } from '../../hooks/useTasks';
 import { useStageOptions } from '../../hooks/useStageOptions';
@@ -28,8 +29,17 @@ export default function EventModal({
     context = null
 }) {
     const { customSettings } = useSettings();
+    const isMobile = useMobile();
     const { projects, loading: loadingProjects, error: projectsError, refetch: refetchProjects } = useProjects();
     const { createTask, fetchForProject, tasks, loading: loadingTasks } = useTasks();
+
+    // Body scroll lock on mobile
+    useEffect(() => {
+        if (isOpen && isMobile) {
+            document.body.style.overflow = 'hidden';
+            return () => { document.body.style.overflow = ''; };
+        }
+    }, [isOpen, isMobile]);
     
     // State - משתמש ב-prop אם קיים, אחרת state פנימי
     const [internalSelectedItem, setInternalSelectedItem] = useState(null);
@@ -351,7 +361,7 @@ export default function EventModal({
                         </h2>
                         <span className={styles.subtitle}>{dateStr}</span>
                     </div>
-                    <button className={styles.closeBtn} onClick={onClose}>✕</button>
+                    <button className={styles.closeBtn} onClick={onClose} aria-label="סגור">{isMobile ? '→' : '✕'}</button>
                 </div>
 
                 <div className={styles.content} style={{ position: 'relative' }}>
@@ -508,6 +518,7 @@ export default function EventModal({
                                 value={notes}
                                 onChange={(e) => setNotes(e.target.value)}
                                 placeholder="הוסף הערות כאן..."
+                                autoComplete="off"
                             />
                         </div>
                     )}

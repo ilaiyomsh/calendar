@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { X, Layout, Database, ChevronLeft, Save, AlertTriangle } from 'lucide-react';
+import { X, Layout, Database, Filter, ChevronLeft, Save, AlertTriangle } from 'lucide-react';
 import { useSettings, STRUCTURE_MODES } from '../../contexts/SettingsContext';
 import StructureTab from './StructureTab';
 import MappingTab from './MappingTab';
+import FiltersTab from './FiltersTab';
 import { useSettingsValidation } from './useSettingsValidation';
 import { useToast } from '../../hooks/useToast';
 import { ToastContainer } from '../Toast';
@@ -79,12 +80,20 @@ export default function SettingsDialog({ monday, onClose, context }) {
 
   // מעבר לטאב הבא
   const handleNextTab = () => {
-    setActiveTab('mapping');
+    if (activeTab === 'structure') {
+      setActiveTab('mapping');
+    } else if (activeTab === 'mapping') {
+      setActiveTab('filters');
+    }
   };
 
   // חזרה לטאב הקודם
   const handlePrevTab = () => {
-    setActiveTab('structure');
+    if (activeTab === 'mapping') {
+      setActiveTab('structure');
+    } else if (activeTab === 'filters') {
+      setActiveTab('mapping');
+    }
   };
 
   // שמירה סופית
@@ -157,33 +166,40 @@ export default function SettingsDialog({ monday, onClose, context }) {
 
         {/* Tabs */}
         <div className={styles.tabs}>
-          <TabHeader 
+          <TabHeader
             id="structure"
             label="1. מבנה הדיווח"
             icon={Layout}
             isActive={activeTab === 'structure'}
             onClick={() => setActiveTab('structure')}
           />
-          <TabHeader 
+          <TabHeader
             id="mapping"
             label="2. מיפוי נתונים"
             icon={Database}
             isActive={activeTab === 'mapping'}
             onClick={() => setActiveTab('mapping')}
           />
+          <TabHeader
+            id="filters"
+            label="3. מקורות פילטר"
+            icon={Filter}
+            isActive={activeTab === 'filters'}
+            onClick={() => setActiveTab('filters')}
+          />
         </div>
 
         {/* Content */}
         <div className={styles.content}>
           {activeTab === 'structure' && (
-            <StructureTab 
+            <StructureTab
               settings={tempSettings}
               onChange={handleSettingsChange}
             />
           )}
-          
+
           {activeTab === 'mapping' && (
-            <MappingTab 
+            <MappingTab
               settings={tempSettings}
               onChange={handleSettingsChange}
               monday={monday}
@@ -193,19 +209,30 @@ export default function SettingsDialog({ monday, onClose, context }) {
               showErrorWithDetails={showErrorWithDetails}
             />
           )}
+
+          {activeTab === 'filters' && (
+            <FiltersTab
+              settings={tempSettings}
+              onChange={handleSettingsChange}
+              monday={monday}
+              boards={boards}
+              loadingBoards={loadingBoards}
+              showErrorWithDetails={showErrorWithDetails}
+            />
+          )}
         </div>
 
         {/* Footer */}
         <div className={styles.footer}>
-          {activeTab === 'structure' ? (
+          {activeTab === 'structure' && (
             <>
-              <button 
+              <button
                 className={styles.buttonSecondary}
                 onClick={onClose}
               >
                 ביטול
               </button>
-              <button 
+              <button
                 className={styles.buttonPrimary}
                 onClick={handleNextTab}
               >
@@ -213,15 +240,35 @@ export default function SettingsDialog({ monday, onClose, context }) {
                 <ChevronLeft size={18} />
               </button>
             </>
-          ) : (
+          )}
+
+          {activeTab === 'mapping' && (
             <>
-              <button 
+              <button
                 className={styles.buttonSecondary}
                 onClick={handlePrevTab}
               >
                 חזרה למבנה
               </button>
-              <button 
+              <button
+                className={styles.buttonPrimary}
+                onClick={handleNextTab}
+              >
+                הבא: מקורות פילטר
+                <ChevronLeft size={18} />
+              </button>
+            </>
+          )}
+
+          {activeTab === 'filters' && (
+            <>
+              <button
+                className={styles.buttonSecondary}
+                onClick={handlePrevTab}
+              >
+                חזרה למיפוי
+              </button>
+              <button
                 className={`${styles.buttonPrimary} ${styles.buttonSave}`}
                 onClick={handleSave}
               >
