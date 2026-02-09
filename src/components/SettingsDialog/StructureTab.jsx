@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Briefcase, Tag, ListTodo, FileText, Calendar, ShieldCheck, X } from 'lucide-react';
+import { Briefcase, Tag, ListTodo, FileText, Calendar, ShieldCheck, Lock, X } from 'lucide-react';
 import StructureOption from './StructureOption';
 import { STRUCTURE_MODES } from '../../contexts/SettingsContext';
+import { EDIT_LOCK_MODES, EDIT_LOCK_LABELS } from '../../utils/editLockUtils';
 import logger from '../../utils/logger';
 import styles from './StructureTab.module.css';
 
@@ -222,6 +223,33 @@ const StructureTab = ({ settings, onChange, monday }) => {
           </div>
         </div>
       )}
+
+      {/* נעילת עריכה */}
+      <div className={styles.editLockSection}>
+        <div className={styles.editLockHeader}>
+          <Lock size={20} className={styles.notesIcon} />
+          <span className={styles.editLockTitle}>נעילת עריכת דיווחים</span>
+        </div>
+        <div className={styles.editLockOptions}>
+          {Object.entries(EDIT_LOCK_LABELS).map(([mode, label]) => (
+            <label key={mode} className={styles.editLockOption}>
+              <input
+                type="radio"
+                name="editLockMode"
+                value={mode}
+                checked={(settings.editLockMode || EDIT_LOCK_MODES.NONE) === mode}
+                onChange={() => onChange({ editLockMode: mode })}
+              />
+              <span>{label}</span>
+            </label>
+          ))}
+        </div>
+        {settings.enableApproval && (settings.editLockMode || 'none') !== 'none' && (
+          <div className={styles.editLockNote}>
+            מנהלים מורשים פטורים מנעילת עריכה
+          </div>
+        )}
+      </div>
     </div>
   );
 };

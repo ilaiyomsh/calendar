@@ -235,6 +235,15 @@
     transform: translateY(-1px);
 }
 
+.lockMessage {
+    font-size: 13px;
+    color: #676879;
+    margin-right: auto;
+    padding: 4px 8px;
+    background: #f5f6f8;
+    border-radius: 6px;
+}
+
 .btnDanger {
     background-color: white;
     color: #e2445c;

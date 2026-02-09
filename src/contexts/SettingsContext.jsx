@@ -80,7 +80,10 @@ const DEFAULT_SETTINGS = {
   // --- Filter Configuration ---
   filterProjectsBoardId: null,   // לוח שממנו נטען רשימת הפרויקטים לפילטר
   filterEmployeesBoardId: null,  // לוח שממנו נטען רשימת העובדים לפילטר
-  filterEmployeesColumnId: null  // עמודת People בלוח העובדים
+  filterEmployeesColumnId: null, // עמודת People בלוח העובדים
+
+  // --- נעילת עריכה ---
+  editLockMode: 'none'           // none | two_days | current_week | current_month
 };
 
 // Provider Component

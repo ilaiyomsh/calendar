@@ -15,6 +15,7 @@ import { useSwipeable } from 'react-swipeable';
 import { getColumnIds } from './utils/mondayColumns';
 import { validateSettings } from './utils/settingsValidator';
 import { getEffectiveBoardId } from './utils/boardIdResolver';
+import { isEventLocked } from './utils/editLockUtils';
 import logger from './utils/logger';
 
 // רכיבים
@@ -978,12 +979,23 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
     // מאחד אירועים רגילים עם חגים (אם מופעל)
     // מסנן אירועים מתוכננים אם הטוגל כבוי
     const enrichedEvents = useMemo(() => {
-        let regularEvents = events.map(ev => ({
-            ...ev,
-            isSelected: multiSelect.isSelected(ev.id),
-            isInApprovalSelection: approvalSelection.isSelectionMode && ev.isPending,
-            isApprovalSelected: approvalSelection.isSelected(ev.id)
-        }));
+        // חישוב נעילה - מנהלים פטורים
+        const lockMode = customSettings.editLockMode || 'none';
+        const managerBypass = approval.isManager;
+
+        let regularEvents = events.map(ev => {
+            const lockResult = (!managerBypass && lockMode !== 'none')
+                ? isEventLocked(ev, lockMode)
+                : { locked: false, reason: '' };
+            return {
+                ...ev,
+                isSelected: multiSelect.isSelected(ev.id),
+                isInApprovalSelection: approvalSelection.isSelectionMode && ev.isPending,
+                isApprovalSelected: approvalSelection.isSelected(ev.id),
+                isLocked: lockResult.locked,
+                lockReason: lockResult.reason
+            };
+        });
 
         // סינון אירועים מתוכננים אם הטוגל כבוי
         if (!showTemporaryEvents) {
@@ -996,7 +1008,7 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
         }
 
         return regularEvents;
-    }, [events, multiSelect, approvalSelection, holidays, customSettings.showHolidays, showTemporaryEvents]);
+    }, [events, multiSelect, approvalSelection, holidays, customSettings.showHolidays, customSettings.editLockMode, approval.isManager, showTemporaryEvents]);
 
     // פונקציה לקביעת גובה משבצות זמן (כדי לדרוס חישובי inline של BCR)
     const slotPropGetter = useCallback(() => ({
@@ -1014,18 +1026,14 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
 
     // Accessors לקביעה אילו אירועים ניתנים לגרירה ולשינוי גודל
     const draggableAccessor = useCallback((event) => {
-        // חגים אינם ניתנים לגרירה
         if (event.isHoliday) return false;
-        // כל שאר האירועים ניתנים לגרירה
+        if (event.isLocked) return false;
         return true;
     }, []);
 
     const resizableAccessor = useCallback((event) => {
-        // חגים אינם ניתנים לשינוי גודל
         if (event.isHoliday) return false;
-        // כל שאר האירועים ניתנים לשינוי גודל:
-        // - אירועים יומיים: הרחבה אופקית על פני מספר ימים
-        // - אירועים שעתיים: הרחבה אנכית (שינוי משך)
+        if (event.isLocked) return false;
         return true;
     }, []);
 
@@ -1154,8 +1162,10 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
                 isApprovalEnabled={approval.isApprovalEnabled}
                 onApprove={handleApproveEvent}
                 onReject={handleRejectEvent}
+                isLocked={modals.eventModal.eventToEdit?.isLocked || false}
+                lockReason={modals.eventModal.eventToEdit?.lockReason || ''}
             />
-            
+
             <AllDayEventModal
                 monday={monday}
                 context={context}
@@ -1171,6 +1181,8 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
                 isApprovalEnabled={approval.isApprovalEnabled}
                 onApprove={handleApproveEvent}
                 onReject={handleRejectEvent}
+                isLocked={modals.allDayModal.eventToEdit?.isLocked || false}
+                lockReason={modals.allDayModal.eventToEdit?.lockReason || ''}
             />
 
             {/* Toast Notifications */}

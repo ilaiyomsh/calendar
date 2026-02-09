@@ -60,6 +60,12 @@ export const useCalendarHandlers = ({
      */
     const onEventDrop = useCallback(async ({ event, start, end, isAllDay }) => {
         try {
+            // אירוע נעול - חסימת גרירה
+            if (event.isLocked) {
+                showWarning(event.lockReason || 'הדיווח נעול לעריכה');
+                return;
+            }
+
             // אירוע יומי שנשאר יומי - עדכון תאריכים בלבד (גרירה אופקית)
             if (event.allDay && isAllDay) {
                 logger.debug('onEventDrop', 'All-day event moved horizontally', { 
@@ -106,6 +112,12 @@ export const useCalendarHandlers = ({
      */
     const onEventResize = useCallback(async ({ event, start, end }) => {
         try {
+            // אירוע נעול - חסימת שינוי גודל
+            if (event.isLocked) {
+                showWarning(event.lockReason || 'הדיווח נעול לעריכה');
+                return;
+            }
+
             // לאירועים יומיים - חישוב מספר הימים החדש (הרחבה אופקית)
             if (event.allDay) {
                 const days = Math.ceil((end - start) / (1000 * 60 * 60 * 24));

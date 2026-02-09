@@ -188,3 +188,65 @@
 .managerDropdownItem:hover {
   background-color: #f3f4f6;
 }
+
+/* === נעילת עריכה === */
+
+.editLockSection {
+  margin-top: 18px;
+  padding: 16px 18px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background-color: #ffffff;
+}
+
+.editLockHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.editLockTitle {
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.editLockOptions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.editLockOption {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #374151;
+  transition: background-color 0.15s;
+}
+
+.editLockOption:hover {
+  background-color: #f9fafb;
+}
+
+.editLockOption input[type="radio"] {
+  width: 18px;
+  height: 18px;
+  accent-color: #2563eb;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.editLockNote {
+  margin-top: 10px;
+  font-size: 13px;
+  color: #6b7280;
+  padding: 6px 10px;
+  background-color: #f9fafb;
+  border-radius: 6px;
+}
