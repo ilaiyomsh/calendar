@@ -460,7 +460,7 @@ export const useMondayEvents = (monday, context) => {
 
             if (typeIndex != null) {
                 columnValues[customSettings.eventTypeStatusColumnId] = {
-                    index: parseInt(typeIndex)
+                    index: parseInt(typeIndex, 10)
                 };
             }
 
@@ -538,7 +538,7 @@ export const useMondayEvents = (monday, context) => {
                     mondayItemId: createdItem.id,
                     notes: eventData.notes,
                     projectId: eventData.itemId || null,
-                    eventType: getLabelText(newTypeIndex, customSettings.eventTypeLabelMeta),
+                    eventType: getLabelText(newTypeIndex, customSettings.eventTypeLabelMeta) || 'שעתי',
                     eventTypeIndex: newTypeIndex
                 };
 
@@ -578,7 +578,7 @@ export const useMondayEvents = (monday, context) => {
             // קביעת eventType לפי isBillable - שעתי או לא לחיוב
             const isBillable = eventData.isBillable !== false;
             const newTypeIndex = getTimedEventIndex(isBillable, customSettings.eventTypeMapping);
-            const newEventType = getLabelText(newTypeIndex, customSettings.eventTypeLabelMeta);
+            const newEventType = getLabelText(newTypeIndex, customSettings.eventTypeLabelMeta) || 'שעתי';
 
             setEvents(prev => prev.map(ev =>
                 ev.id === eventId

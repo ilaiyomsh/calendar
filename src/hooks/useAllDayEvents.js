@@ -128,7 +128,7 @@ export const useAllDayEvents = ({
             // הוספת סטטוס לפי אינדקס
             if (customSettings.eventTypeStatusColumnId && typeIndex != null) {
                 columnValues[customSettings.eventTypeStatusColumnId] = {
-                    index: parseInt(typeIndex)
+                    index: parseInt(typeIndex, 10)
                 };
             }
 
@@ -325,6 +325,10 @@ async function createSingleAllDayEvent({
     // allDayData.type הוא כעת אינדקס הלייבל
     const typeIndex = allDayData.type;
     const eventName = getLabelText(typeIndex, customSettings.eventTypeLabelMeta);
+    if (!eventName) {
+        logger.error('createSingleAllDayEvent', 'Missing label text for type index', { typeIndex });
+        return;
+    }
     const itemName = `${eventName} - ${reporterName}`;
 
     // מספר הימים (ברירת מחדל: 1)
@@ -351,7 +355,7 @@ async function createSingleAllDayEvent({
 
     if (customSettings.eventTypeStatusColumnId && typeIndex != null) {
         columnValues[customSettings.eventTypeStatusColumnId] = {
-            index: parseInt(typeIndex)
+            index: parseInt(typeIndex, 10)
         };
     }
 
@@ -453,7 +457,7 @@ function buildReportColumnValues({
 
         if (typeIndex != null) {
             columnValues[customSettings.eventTypeStatusColumnId] = {
-                index: parseInt(typeIndex)
+                index: parseInt(typeIndex, 10)
             };
         }
 

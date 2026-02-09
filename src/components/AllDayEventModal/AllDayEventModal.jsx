@@ -88,6 +88,12 @@ export default function AllDayEventModal({
         customSettings.stageColumnId
     );
 
+    // תווית תצוגה ל"לא לחיוב" - חישוב פעם אחת
+    const nonBillableDisplayLabel = React.useMemo(() => {
+        const nbIndexes = getNonBillableIndexes(customSettings.eventTypeMapping);
+        return (nbIndexes.length > 0 && getLabelText(nbIndexes[0], customSettings.eventTypeLabelMeta)) || 'לא לחיוב';
+    }, [customSettings.eventTypeMapping, customSettings.eventTypeLabelMeta]);
+
     const { nonBillableOptions, loading: loadingNonBillable } = useNonBillableOptions(
         monday,
         customSettings.nonBillableStatusColumnId && boardId ? boardId : null,
@@ -222,10 +228,7 @@ export default function AllDayEventModal({
         setAddedReports(prev => [...prev, {
             id: Date.now(),
             projectId: null,
-            projectName: (() => {
-                const nbIndexes = getNonBillableIndexes(customSettings.eventTypeMapping);
-                return nbIndexes.length > 0 ? getLabelText(nbIndexes[0], customSettings.eventTypeLabelMeta) : 'לא לחיוב';
-            })(),
+            projectName: nonBillableDisplayLabel,
             tasks: [],
             hours: hours,
             startTime: startTime,
@@ -809,10 +812,7 @@ export default function AllDayEventModal({
                         onClick={addNonBillableReportRow}
                         title="הוסף דיווח לא לחיוב"
                     >
-                        <span>{(() => {
-                            const nbIndexes = getNonBillableIndexes(customSettings.eventTypeMapping);
-                            return nbIndexes.length > 0 ? getLabelText(nbIndexes[0], customSettings.eventTypeLabelMeta) : 'לא לחיוב';
-                        })()}</span>
+                        <span>{nonBillableDisplayLabel}</span>
                         <Plus size={14} color="#0073ea" />
                     </div>
                     <input type="text" placeholder="חיפוש פרויקט..." className={styles.searchBox} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} autoFocus />
