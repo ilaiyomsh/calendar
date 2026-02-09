@@ -279,7 +279,7 @@ async function createMultipleReports({
             report,
             reporterName,
             customSettings
-        });
+        }) || 'ללא שם';
 
         // יצירת אירוע
         const createdItem = await createBoardItem(
@@ -482,8 +482,9 @@ function buildItemName({ report, reporterName, customSettings }) {
         if (structureMode === STRUCTURE_MODES.PROJECT_ONLY) {
             return projectName || 'ללא פרויקט';
         } else if (structureMode === STRUCTURE_MODES.PROJECT_WITH_STAGE) {
+            const projectDisplay = projectName || 'ללא פרויקט';
             const stageLabel = report.stageId || '';
-            return stageLabel ? `${projectName} - ${stageLabel}` : projectName;
+            return stageLabel ? `${projectDisplay} - ${stageLabel}` : projectDisplay;
         } else if (structureMode === STRUCTURE_MODES.PROJECT_WITH_TASKS) {
             const taskName = report.taskName || 'ללא משימה';
             return projectName ? `${projectName} - ${taskName}` : taskName;
