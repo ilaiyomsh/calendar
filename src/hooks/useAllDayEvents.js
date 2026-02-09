@@ -299,7 +299,10 @@ async function createMultipleReports({
                 end: eventEnd,
                 allDay: isSpecialEventType,
                 notes: report.notes,
-                mondayItemId: createdItem.id
+                mondayItemId: createdItem.id,
+                isPending: !!customSettings.enableApproval,
+                isApproved: false,
+                isRejected: false
             };
             addEvent(newEvent);
         }
@@ -395,7 +398,10 @@ async function createSingleAllDayEvent({
             mondayItemId: createdItem.id,
             eventType: eventName,
             eventTypeIndex: String(typeIndex),
-            durationDays: durationDays
+            durationDays: durationDays,
+            isPending: !!customSettings.enableApproval,
+            isApproved: false,
+            isRejected: false
         };
         addEvent(newEvent);
         logger.functionEnd('createSingleAllDayEvent', { type: allDayData.type, eventId: createdItem.id, durationDays });

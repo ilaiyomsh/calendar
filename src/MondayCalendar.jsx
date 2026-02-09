@@ -981,7 +981,7 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
         let regularEvents = events.map(ev => ({
             ...ev,
             isSelected: multiSelect.isSelected(ev.id),
-            isInApprovalSelection: approvalSelection.isSelectionMode,
+            isInApprovalSelection: approvalSelection.isSelectionMode && ev.isPending,
             isApprovalSelected: approvalSelection.isSelected(ev.id)
         }));
 
