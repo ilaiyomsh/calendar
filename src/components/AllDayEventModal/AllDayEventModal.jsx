@@ -27,7 +27,12 @@ export default function AllDayEventModal({
     onUpdate = null,
     onDelete = null,
     monday,
-    context = null
+    context = null,
+    // Approval props
+    isManager = false,
+    isApprovalEnabled = false,
+    onApprove = null,
+    onReject = null
 }) {
     const { customSettings } = useSettings();
     const isMobile = useMobile();
@@ -930,6 +935,12 @@ export default function AllDayEventModal({
                 <div className={`${styles.content} ${viewMode === 'days-selection' ? styles.contentVisible : ''} ${viewMode === 'form' ? styles.contentForm : ''}`}>{getModalContent()}</div>
                 <div className={styles.footer}>
                     {isEditMode && onDelete && <button className={`${styles.button} ${styles.deleteBtn}`} onClick={() => setShowDeleteConfirm(true)}>מחק</button>}
+                    {isEditMode && isManager && isApprovalEnabled && eventToEdit?.isPending && (
+                        <>
+                            <button className={`${styles.button} ${styles.approveBtn}`} onClick={() => { if (onApprove) onApprove(eventToEdit); onClose(); }}>אשר</button>
+                            <button className={`${styles.button} ${styles.rejectBtn}`} onClick={() => { if (onReject) onReject(eventToEdit); onClose(); }}>דחה</button>
+                        </>
+                    )}
                     {viewMode === 'form' && addedReports.length > 0 && (
                         <div className={styles.totalHours}>
                             <span className={styles.totalHoursLabel}>סה"כ שעות</span>

@@ -595,6 +595,26 @@
   background-color: #fff0f2;
 }
 
+.approveBtn {
+  background-color: #0d7c3f;
+  color: white;
+  border: 1px solid #0d7c3f;
+}
+
+.approveBtn:hover {
+  background-color: #0a6633;
+}
+
+.rejectBtn {
+  background-color: white;
+  color: #e2445c;
+  border: 1px solid #e2445c;
+}
+
+.rejectBtn:hover {
+  background-color: #fff0f2;
+}
+
 .emptyState {
   text-align: center;
   color: #676879;

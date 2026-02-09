@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Briefcase, ListTodo, Table, ChevronDown, ChevronUp, AlertTriangle, CalendarCheck, Filter, Clock } from 'lucide-react';
+import { Briefcase, ListTodo, Table, ChevronDown, ChevronUp, AlertTriangle, CalendarCheck, Filter, Clock, ShieldCheck } from 'lucide-react';
 import SearchableSelect from './SearchableSelect';
 import MultiSelect from './MultiSelect';
 import { STRUCTURE_MODES } from '../../contexts/SettingsContext';
 import { fetchStatusColumnsFromBoard, parseStatusLabels, createEventTypeStatusColumn } from '../../utils/mondayApi';
 import { parseStatusColumnLabels } from '../../utils/eventTypeValidation';
 import { EVENT_CATEGORIES, CATEGORY_LABELS, UNMAPPED, UNMAPPED_LABEL, validateMapping, createLegacyMapping } from '../../utils/eventTypeMapping';
+import { APPROVAL_CATEGORIES, APPROVAL_CATEGORY_LABELS, APPROVAL_UNMAPPED, APPROVAL_UNMAPPED_LABEL, validateApprovalMapping, createAutoApprovalMapping } from '../../utils/approvalMapping';
 import { getEffectiveBoardId } from '../../utils/boardIdResolver';
 import logger from '../../utils/logger';
 import styles from './MappingTab.module.css';
@@ -68,6 +69,10 @@ const MappingTab = ({
 
   // State - לייבלים של עמודת סוג דיווח (לשימוש ב-Planned vs Actual)
   const [eventTypeStatusLabels, setEventTypeStatusLabels] = useState([]);
+
+  // State - עמודת סטטוס אישור מנהל
+  const [approvalStatusLabels, setApprovalStatusLabels] = useState([]);
+  const [approvalValidation, setApprovalValidation] = useState({ isValid: true, errors: [] });
 
   // בדיקה אם מצב כולל משימות
   const hasTasks = structureMode === STRUCTURE_MODES.PROJECT_WITH_TASKS;
@@ -600,6 +605,86 @@ const MappingTab = ({
     const validation = validateMapping(currentMapping);
     setEventTypeValidation({ isValid: validation.isValid, missingLabels: validation.errors });
   };
+
+  // === Approval Status Column Handlers ===
+
+  const handleApprovalColumnChange = (newColumnId) => {
+    onChange({ approvalStatusColumnId: newColumnId });
+
+    if (newColumnId) {
+      const selectedCol = statusColumnsWithSettings.find(col => col.id === newColumnId);
+      if (selectedCol?.settings_str) {
+        const labels = parseStatusColumnLabels(selectedCol.settings_str);
+        setApprovalStatusLabels(labels.map(l => ({ id: String(l.index), name: l.label, color: l.color || '' })));
+
+        // ניסיון מיגרציה אוטומטית אם אין מיפוי
+        if (!settings.approvalStatusMapping) {
+          const result = createAutoApprovalMapping(labels);
+          if (result) {
+            onChange({
+              approvalStatusColumnId: newColumnId,
+              approvalStatusMapping: result.mapping,
+              approvalStatusLabelMeta: result.labelMeta
+            });
+            setApprovalValidation(validateApprovalMapping(result.mapping));
+            return;
+          }
+        }
+
+        if (settings.approvalStatusMapping) {
+          setApprovalValidation(validateApprovalMapping(settings.approvalStatusMapping));
+        } else {
+          setApprovalValidation({ isValid: false, errors: ['יש להגדיר מיפוי סטטוס אישור'] });
+        }
+      } else {
+        setApprovalStatusLabels([]);
+        setApprovalValidation({ isValid: true, errors: [] });
+      }
+    } else {
+      setApprovalStatusLabels([]);
+      setApprovalValidation({ isValid: true, errors: [] });
+      onChange({ approvalStatusColumnId: null, approvalStatusMapping: null, approvalStatusLabelMeta: null });
+    }
+  };
+
+  const handleApprovalMappingLabelChange = (labelIndex, category) => {
+    const currentMapping = { ...(settings.approvalStatusMapping || {}) };
+    const currentMeta = { ...(settings.approvalStatusLabelMeta || {}) };
+
+    if (category === APPROVAL_UNMAPPED) {
+      delete currentMapping[labelIndex];
+      delete currentMeta[labelIndex];
+    } else {
+      currentMapping[labelIndex] = category;
+      const labelObj = approvalStatusLabels.find(l => l.id === labelIndex);
+      if (labelObj) {
+        currentMeta[labelIndex] = { label: labelObj.name, color: labelObj.color || '' };
+      }
+    }
+
+    onChange({ approvalStatusMapping: currentMapping, approvalStatusLabelMeta: currentMeta });
+    setApprovalValidation(validateApprovalMapping(currentMapping));
+  };
+
+  const isApprovalCategoryTaken = (category) => {
+    if (!settings.approvalStatusMapping) return false;
+    // כל הקטגוריות הן חד-פעמיות
+    return Object.values(settings.approvalStatusMapping).filter(c => c === category).length >= 1;
+  };
+
+  // טעינת לייבלים של עמודת אישור בעת טעינה ראשונית
+  useEffect(() => {
+    if (settings.approvalStatusColumnId && statusColumnsWithSettings.length > 0) {
+      const selectedCol = statusColumnsWithSettings.find(col => col.id === settings.approvalStatusColumnId);
+      if (selectedCol?.settings_str) {
+        const labels = parseStatusColumnLabels(selectedCol.settings_str);
+        setApprovalStatusLabels(labels.map(l => ({ id: String(l.index), name: l.label, color: l.color || '' })));
+        if (settings.approvalStatusMapping) {
+          setApprovalValidation(validateApprovalMapping(settings.approvalStatusMapping));
+        }
+      }
+    }
+  }, [settings.approvalStatusColumnId, statusColumnsWithSettings]);
 
   // בדיקה אם קטגוריה חד-פעמית כבר תפוסה
   const isCategoryTaken = (category) => {
@@ -1164,7 +1249,69 @@ const MappingTab = ({
         )}
       </AccordionSection>
 
-      {/* סקשן 5: אירועים זמניים */}
+      {/* סקשן 5: אישור מנהל (מותנה) */}
+      {settings.enableApproval && (
+        <AccordionSection id="approval" title="סטטוס אישור מנהל" icon={ShieldCheck}>
+          <FieldWrapper label="עמודת סטטוס אישור" required>
+            <div className={!effectiveBoardId ? styles.disabled : ''}>
+              <SearchableSelect
+                options={statusColumns}
+                value={settings.approvalStatusColumnId}
+                onChange={handleApprovalColumnChange}
+                placeholder="בחר עמודת סטטוס אישור..."
+                isLoading={loadingCurrentBoardColumns}
+                showSearch={false}
+              />
+            </div>
+            {/* מיפוי סטטוסי אישור */}
+            {settings.approvalStatusColumnId && approvalStatusLabels.length > 0 && (
+              <div className={styles.mappingSection}>
+                <div className={styles.mappingSectionTitle}>מיפוי סטטוסי אישור</div>
+                <small className={styles.mappingSectionDesc}>שייך כל לייבל לקטגוריה</small>
+                {approvalStatusLabels.map(labelObj => {
+                  const currentCategory = (settings.approvalStatusMapping || {})[labelObj.id] || APPROVAL_UNMAPPED;
+                  return (
+                    <div key={labelObj.id} className={styles.mappingRow}>
+                      <span className={styles.mappingColorDot} style={{ backgroundColor: labelObj.color || '#ccc' }} />
+                      <span className={styles.mappingLabelText}>{labelObj.name}</span>
+                      <select
+                        className={styles.mappingSelect}
+                        value={currentCategory}
+                        onChange={(e) => handleApprovalMappingLabelChange(labelObj.id, e.target.value)}
+                      >
+                        <option value={APPROVAL_UNMAPPED}>{APPROVAL_UNMAPPED_LABEL}</option>
+                        {Object.entries(APPROVAL_CATEGORY_LABELS).map(([cat, catLabel]) => (
+                          <option
+                            key={cat}
+                            value={cat}
+                            disabled={isApprovalCategoryTaken(cat) && currentCategory !== cat}
+                          >
+                            {catLabel}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  );
+                })}
+                {approvalValidation.isValid ? (
+                  <div className={styles.mappingValid}>&#10003; מיפוי תקין</div>
+                ) : (
+                  <div className={styles.mappingErrors}>
+                    <AlertTriangle size={14} />
+                    <div>
+                      {approvalValidation.errors.map((err, i) => (
+                        <div key={i}>{err}</div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </FieldWrapper>
+        </AccordionSection>
+      )}
+
+      {/* סקשן 6: אירועים זמניים */}
       <AccordionSection id="plannedVsActual" title="אירועים זמניים" icon={Clock}>
         <p className={styles.fieldDescription} style={{ marginBottom: '16px' }}>
           אירועים עם סטטוס <strong>"זמני"</strong> יוצגו בעיצוב חלול (hollow).

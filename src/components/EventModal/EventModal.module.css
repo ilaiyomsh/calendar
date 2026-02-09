@@ -246,6 +246,26 @@
     background-color: #fff0f2;
 }
 
+.btnApprove {
+    background-color: #0d7c3f;
+    color: white;
+    border: 1px solid #0d7c3f;
+}
+
+.btnApprove:hover {
+    background-color: #0a6633;
+}
+
+.btnReject {
+    background-color: white;
+    color: #e2445c;
+    border: 1px solid #e2445c;
+}
+
+.btnReject:hover {
+    background-color: #fff0f2;
+}
+
 .loading {
     grid-column: 1 / -1;
     text-align: center;

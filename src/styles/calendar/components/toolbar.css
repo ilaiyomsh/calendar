@@ -214,6 +214,65 @@
     white-space: nowrap;
 }
 
+/* ===== Approval Manager Buttons ===== */
+
+.rbc-approval-btn {
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px;
+    background: white !important;
+    border: 1px solid #0d7c3f !important;
+    padding: 6px 14px !important;
+    border-radius: 20px !important;
+    color: #0d7c3f !important;
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s, color 0.2s;
+}
+
+.rbc-approval-btn:hover {
+    background-color: #e8f5ee !important;
+}
+
+.rbc-approval-btn.active {
+    background-color: #0d7c3f !important;
+    color: white !important;
+}
+
+.rbc-approve-all-btn {
+    background-color: #0d7c3f !important;
+    color: white !important;
+}
+
+.rbc-approve-all-btn:hover {
+    background-color: #0a6633 !important;
+}
+
+/* כפתור אישור מובייל */
+.rbc-approval-btn-mobile {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 36px !important;
+    height: 36px !important;
+    padding: 0 !important;
+    border: 1px solid #0d7c3f !important;
+    border-radius: 50% !important;
+    background: white !important;
+    color: #0d7c3f !important;
+    font-size: 16px !important;
+    font-weight: 600 !important;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.rbc-approval-btn-mobile.active {
+    background-color: #0d7c3f !important;
+    color: white !important;
+}
+
 /* ===== Mobile Toolbar ===== */
 
 /* Mobile toolbar - single compact row */

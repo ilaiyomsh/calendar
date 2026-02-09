@@ -4,6 +4,7 @@ import { createBoardItem, deleteItem, updateItemColumnValues } from '../utils/mo
 import { getColumnIds, mapItemToEvent } from '../utils/mondayColumns';
 import { isAllDayEventType, parseDuration, calculateEndDateFromDays, calculateDaysDiff, formatDurationForSave } from '../utils/durationUtils';
 import { isTemporaryIndex, getTimedEventIndex, getLabelText } from '../utils/eventTypeMapping';
+import { isPendingIndex, isApprovedIndex, isRejectedIndex, getPendingIndex } from '../utils/approvalMapping';
 import { toMondayDateFormat, toMondayTimeFormat, toLocalDateFormat } from '../utils/dateFormatters';
 import { getEffectiveBoardId } from '../utils/boardIdResolver';
 import logger from '../utils/logger';
@@ -351,6 +352,15 @@ export const useMondayEvents = (monday, context) => {
                 // בדיקה אם זה אירוע זמני/מתוכנן
                 const isTemporary = isTemporaryIndex(eventTypeIndex, customSettings.eventTypeMapping);
 
+                // סטטוס אישור מנהל
+                const approvalColumn = customSettings.approvalStatusColumnId
+                    ? columnValues.find(c => c.id === customSettings.approvalStatusColumnId)
+                    : null;
+                const approvalStatusIndex = approvalColumn?.index ?? null;
+                const isPending = customSettings.enableApproval && isPendingIndex(approvalStatusIndex, customSettings.approvalStatusMapping);
+                const isApproved = customSettings.enableApproval && isApprovedIndex(approvalStatusIndex, customSettings.approvalStatusMapping);
+                const isRejected = customSettings.enableApproval && isRejectedIndex(approvalStatusIndex, customSettings.approvalStatusMapping);
+
                 return {
                     id: item.id,
                     title: item.name,
@@ -364,7 +374,11 @@ export const useMondayEvents = (monday, context) => {
                     eventTypeIndex,
                     eventTypeColor,
                     durationDays: isAllDay ? duration.value : null, // שמירת מספר הימים לשימוש ב-Resize
-                    isTemporary // האם זה אירוע מתוכנן (Planned/Temporary)
+                    isTemporary, // האם זה אירוע מתוכנן (Planned/Temporary)
+                    approvalStatusIndex,
+                    isPending,
+                    isApproved,
+                    isRejected
                 };
             }).filter(Boolean);
 
@@ -487,6 +501,16 @@ export const useMondayEvents = (monday, context) => {
             };
         }
 
+        // סטטוס אישור - כתיבת "ממתין" ביצירת אירוע חדש
+        if (customSettings.enableApproval && customSettings.approvalStatusColumnId) {
+            const pendingIdx = getPendingIndex(customSettings.approvalStatusMapping);
+            if (pendingIdx != null) {
+                columnValues[customSettings.approvalStatusColumnId] = {
+                    index: parseInt(pendingIdx)
+                };
+            }
+        }
+
         return columnValues;
     }, [customSettings]);
 
@@ -539,7 +563,10 @@ export const useMondayEvents = (monday, context) => {
                     notes: eventData.notes,
                     projectId: eventData.itemId || null,
                     eventType: getLabelText(newTypeIndex, customSettings.eventTypeLabelMeta),
-                    eventTypeIndex: newTypeIndex
+                    eventTypeIndex: newTypeIndex,
+                    isPending: !!customSettings.enableApproval,
+                    isApproved: false,
+                    isRejected: false
                 };
 
                 setEvents(prev => [...prev, newEvent]);

@@ -70,6 +70,13 @@ const DEFAULT_SETTINGS = {
   eventTypeMapping: null,          // { index: 'category', ... } - מיפוי אינדקס לייבל לקטגוריה
   eventTypeLabelMeta: null,        // { index: { label, color }, ... } - מטא-דאטה של לייבלים
 
+  // --- אישור מנהל ---
+  enableApproval: false,              // הפעלה/השבתה של פיצ'ר אישור מנהל
+  approvalStatusColumnId: null,       // מזהה עמודת Status לאישור
+  approvalStatusMapping: null,        // { index: 'pending'|'approved'|'rejected' }
+  approvalStatusLabelMeta: null,      // { index: { label, color } }
+  approvedManagerIds: [],             // רשימת מזהי משתמשים מנהלים
+
   // --- Filter Configuration ---
   filterProjectsBoardId: null,   // לוח שממנו נטען רשימת הפרויקטים לפילטר
   filterEmployeesBoardId: null,  // לוח שממנו נטען רשימת העובדים לפילטר

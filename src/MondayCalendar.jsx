@@ -26,6 +26,7 @@ import { ToastContainer } from './components/Toast';
 import ErrorDetailsModal from './components/ErrorDetailsModal/ErrorDetailsModal';
 import SettingsValidationDialog from './components/SettingsValidationDialog';
 import SelectionActionBar from './components/SelectionActionBar';
+import ApprovalActionBar from './components/ApprovalActionBar';
 
 // Context
 import { useSettings } from './contexts/SettingsContext';
@@ -48,6 +49,8 @@ import { useAllDayEvents } from './hooks/useAllDayEvents';
 import { useEventDataLoader } from './hooks/useEventDataLoader';
 import { useCalendarFilter } from './hooks/useCalendarFilter';
 import { useFilterOptions } from './hooks/useFilterOptions';
+import { useApproval } from './hooks/useApproval';
+import { useEventSelection } from './hooks/useEventSelection';
 
 // עטיפת הלוח ברכיב Drag and Drop
 const DnDCalendar = withDragAndDrop(Calendar);
@@ -184,7 +187,16 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
     
     // Hook לניהול בחירה מרובה של אירועים
     const multiSelect = useMultiSelect();
-    
+
+    // Hook לבחירה מרובה לאישור מנהל
+    const approvalSelection = useEventSelection();
+
+    // Hook לאישור מנהל
+    const approval = useApproval({ monday, context });
+
+    // State לעיבוד אישור מנהל
+    const [isProcessingApproval, setIsProcessingApproval] = useState(false);
+
     // Hook לניהול פרויקטים
     const { projects, loading: isLoadingProjects } = useProjects();
     
@@ -454,6 +466,12 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
             return;
         }
 
+        // מצב בחירה לאישור מנהל - בחירת אירועים ממתינים
+        if (approvalSelection.isSelectionMode && event.isPending) {
+            approvalSelection.toggleSelection(event.id);
+            return;
+        }
+
         // בחירה מרובה עם CTRL/CMD - רק לאירועים שעתיים (לא יומיים)
         const isAllDayEvent = event.allDay;
 
@@ -485,7 +503,7 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
 
         // טעינת נתוני האירוע לעריכה ברקע
         loadEventDataForEdit(event);
-    }, [loadEventDataForEdit, multiSelect, modals]);
+    }, [loadEventDataForEdit, multiSelect, modals, approvalSelection]);
 
     // לחיצה על סלוט ריק או גרירה - פתיחת Modal
     const onSelectSlot = useCallback(async ({ start, end, slots, allDay, action }) => {
@@ -704,6 +722,87 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
         }
     }, [multiSelect, deleteEvent, showSuccess, showErrorWithDetails]);
 
+    // --- Approval handlers ---
+
+    // אישור אירועים נבחרים
+    const handleApproveSelected = useCallback(async () => {
+        if (!approvalSelection.selectedCount) return;
+
+        setIsProcessingApproval(true);
+        try {
+            const selectedEvents = events.filter(e => approvalSelection.isSelected(e.id));
+            const result = await approval.approveMultiple(selectedEvents);
+
+            if (result.succeeded > 0) {
+                showSuccess(`${result.succeeded} דיווחים אושרו בהצלחה`);
+                if (currentViewRange) {
+                    loadEvents(currentViewRange.start, currentViewRange.end, calendarFilter.filterRules);
+                }
+            }
+            if (result.failed > 0) {
+                showError(`${result.failed} דיווחים נכשלו באישור`);
+            }
+
+            approvalSelection.clearSelection();
+        } catch (error) {
+            showErrorWithDetails(error, { functionName: 'handleApproveSelected' });
+        } finally {
+            setIsProcessingApproval(false);
+        }
+    }, [approvalSelection, events, approval, showSuccess, showError, showErrorWithDetails, currentViewRange, loadEvents, calendarFilter.filterRules]);
+
+    // אישור כל הממתינים בתצוגה הנוכחית
+    const handleApproveAllInWeek = useCallback(async () => {
+        setIsProcessingApproval(true);
+        try {
+            const result = await approval.approveAllPending(events);
+
+            if (result.succeeded > 0) {
+                showSuccess(`${result.succeeded} דיווחים אושרו בהצלחה`);
+                if (currentViewRange) {
+                    loadEvents(currentViewRange.start, currentViewRange.end, calendarFilter.filterRules);
+                }
+            } else {
+                showWarning('אין דיווחים ממתינים לאישור');
+            }
+            if (result.failed > 0) {
+                showError(`${result.failed} דיווחים נכשלו באישור`);
+            }
+
+            approvalSelection.clearSelection();
+        } catch (error) {
+            showErrorWithDetails(error, { functionName: 'handleApproveAllInWeek' });
+        } finally {
+            setIsProcessingApproval(false);
+        }
+    }, [approval, events, showSuccess, showWarning, showError, showErrorWithDetails, currentViewRange, loadEvents, calendarFilter.filterRules, approvalSelection]);
+
+    // אישור אירוע בודד מתוך מודל
+    const handleApproveEvent = useCallback(async (event) => {
+        try {
+            await approval.approveEvent(event);
+            showSuccess('הדיווח אושר בהצלחה');
+            if (currentViewRange) {
+                loadEvents(currentViewRange.start, currentViewRange.end, calendarFilter.filterRules);
+            }
+        } catch (error) {
+            showErrorWithDetails(error, { functionName: 'handleApproveEvent' });
+        }
+    }, [approval, showSuccess, showErrorWithDetails, currentViewRange, loadEvents, calendarFilter.filterRules]);
+
+    // דחיית אירוע בודד מתוך מודל
+    const handleRejectEvent = useCallback(async (event) => {
+        try {
+            await approval.rejectEvent(event);
+            showSuccess('הדיווח נדחה');
+            if (currentViewRange) {
+                loadEvents(currentViewRange.start, currentViewRange.end, calendarFilter.filterRules);
+            }
+        } catch (error) {
+            showErrorWithDetails(error, { functionName: 'handleRejectEvent' });
+        }
+    }, [approval, showSuccess, showErrorWithDetails, currentViewRange, loadEvents, calendarFilter.filterRules]);
+
     // עדכון שעת התחלה
     const handleStartTimeChange = (option) => {
         const pendingSlot = modals.eventModal.pendingSlot;
@@ -817,7 +916,10 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
         isOwner,
         showTemporaryEvents,
         handleToggleTemporaryEvents,
-        hasTemporaryEventsFeature
+        hasTemporaryEventsFeature,
+        approval,
+        approvalSelection,
+        handleApproveAllInWeek
     };
 
     // Custom Toolbar עם גישה ל-props
@@ -852,6 +954,11 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
                 showTemporaryEvents={data.showTemporaryEvents}
                 onToggleTemporaryEvents={data.handleToggleTemporaryEvents}
                 hasTemporaryEventsFeature={data.hasTemporaryEventsFeature}
+                isManager={data.approval.isManager}
+                isApprovalEnabled={data.approval.isApprovalEnabled}
+                isSelectionMode={data.approvalSelection.isSelectionMode}
+                onToggleSelectionMode={data.approvalSelection.toggleSelectionMode}
+                onApproveAllInWeek={data.handleApproveAllInWeek}
             />
         );
     }, []); // ללא dependencies - reference יציב, מונע re-mount של FilterBar
@@ -873,7 +980,9 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
     const enrichedEvents = useMemo(() => {
         let regularEvents = events.map(ev => ({
             ...ev,
-            isSelected: multiSelect.isSelected(ev.id)
+            isSelected: multiSelect.isSelected(ev.id),
+            isInApprovalSelection: approvalSelection.isSelectionMode,
+            isApprovalSelected: approvalSelection.isSelected(ev.id)
         }));
 
         // סינון אירועים מתוכננים אם הטוגל כבוי
@@ -887,7 +996,7 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
         }
 
         return regularEvents;
-    }, [events, multiSelect, holidays, customSettings.showHolidays, showTemporaryEvents]);
+    }, [events, multiSelect, approvalSelection, holidays, customSettings.showHolidays, showTemporaryEvents]);
 
     // פונקציה לקביעת גובה משבצות זמן (כדי לדרוס חישובי inline של BCR)
     const slotPropGetter = useCallback(() => ({
@@ -1041,6 +1150,10 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
                 onUpdate={handleUpdateEvent}
                 onDelete={handleDeleteEvent}
                 onConvert={handleConvertEvent}
+                isManager={approval.isManager}
+                isApprovalEnabled={approval.isApprovalEnabled}
+                onApprove={handleApproveEvent}
+                onReject={handleRejectEvent}
             />
             
             <AllDayEventModal
@@ -1054,6 +1167,10 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
                 isEditMode={modals.allDayModal.isEditMode}
                 onUpdate={allDayEvents.handleUpdateAllDayEvent}
                 onDelete={allDayEvents.handleDeleteAllDayEvent}
+                isManager={approval.isManager}
+                isApprovalEnabled={approval.isApprovalEnabled}
+                onApprove={handleApproveEvent}
+                onReject={handleRejectEvent}
             />
 
             {/* Toast Notifications */}
@@ -1085,6 +1202,14 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
                 onDelete={handleDeleteSelected}
                 onClear={multiSelect.clearSelection}
                 isProcessing={multiSelect.isProcessingBulk}
+            />
+
+            {/* Approval Action Bar - סרגל אישור מנהל לאירועים נבחרים */}
+            <ApprovalActionBar
+                selectedCount={approvalSelection.selectedCount}
+                onApprove={handleApproveSelected}
+                onClear={approvalSelection.clearSelection}
+                isProcessing={isProcessingApproval}
             />
         </div>
     );

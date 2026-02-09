@@ -20,7 +20,13 @@ const CalendarToolbar = ({
   // Temporary events toggle props
   showTemporaryEvents = true,
   onToggleTemporaryEvents = null,
-  hasTemporaryEventsFeature = false
+  hasTemporaryEventsFeature = false,
+  // Approval props
+  isManager = false,
+  isApprovalEnabled = false,
+  isSelectionMode = false,
+  onToggleSelectionMode = null,
+  onApproveAllInWeek = null
 }) => {
   const isMobile = useMobile();
   const [isViewMenuOpen, setIsViewMenuOpen] = useState(false);
@@ -98,6 +104,18 @@ const CalendarToolbar = ({
               </>
             ) : null}
           </div>
+        ) : null}
+
+        {/* כפתורי אישור מנהל - מובייל */}
+        {isManager && isApprovalEnabled && onToggleSelectionMode ? (
+          <button
+            type="button"
+            className={`rbc-approval-btn-mobile ${isSelectionMode ? 'active' : ''}`}
+            onClick={onToggleSelectionMode}
+            aria-label={isSelectionMode ? 'בטל בחירה' : 'בחירת דיווחים'}
+          >
+            {isSelectionMode ? '✕' : '✓'}
+          </button>
         ) : null}
 
         {/* טוגל מתוכננים - אייקון בלבד */}
@@ -183,6 +201,28 @@ const CalendarToolbar = ({
 
       {/* צד שמאל - תצוגות והגדרות */}
       <div className="rbc-toolbar-section rbc-toolbar-actions">
+        {/* כפתורי אישור מנהל */}
+        {isManager && isApprovalEnabled && onToggleSelectionMode ? (
+          <>
+            <button
+              type="button"
+              className={`rbc-approval-btn ${isSelectionMode ? 'active' : ''}`}
+              onClick={onToggleSelectionMode}
+              title={isSelectionMode ? 'בטל בחירה' : 'בחירת דיווחים לאישור'}
+            >
+              <span>{isSelectionMode ? 'בטל בחירה' : 'בחירת דיווחים'}</span>
+            </button>
+            <button
+              type="button"
+              className="rbc-approval-btn rbc-approve-all-btn"
+              onClick={onApproveAllInWeek}
+              title="אשר את כל הדיווחים הממתינים בתצוגה"
+            >
+              <span>אשר הכל</span>
+            </button>
+          </>
+        ) : null}
+
         {/* Dropdown תצוגות */}
         <div className="rbc-view-dropdown" ref={dropdownRef}>
           <button
