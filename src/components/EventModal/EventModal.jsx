@@ -31,7 +31,10 @@ export default function EventModal({
     isManager = false,
     isApprovalEnabled = false,
     onApprove = null,
-    onReject = null
+    onReject = null,
+    // Lock props
+    isLocked = false,
+    lockReason = ''
 }) {
     const { customSettings } = useSettings();
     const isMobile = useMobile();
@@ -532,7 +535,11 @@ export default function EventModal({
                 </div>
 
                 <div className={styles.footer}>
-                    {isEditMode && !isConvertMode && onDelete && (
+                    {/* הודעת נעילה */}
+                    {isEditMode && !isConvertMode && isLocked && (
+                        <span className={styles.lockMessage}>{lockReason}</span>
+                    )}
+                    {isEditMode && !isConvertMode && !isLocked && onDelete && (
                         <button className={`${styles.btn} ${styles.btnDanger}`} onClick={() => setShowDeleteConfirm(true)}>מחק</button>
                     )}
                     {/* כפתורי אישור/דחייה מנהל */}
@@ -552,7 +559,8 @@ export default function EventModal({
                             </button>
                         </>
                     )}
-                    <button className={`${styles.btn} ${styles.btnSecondary}`} onClick={onClose}>ביטול</button>
+                    <button className={`${styles.btn} ${styles.btnSecondary}`} onClick={onClose}>{isEditMode && isLocked ? 'סגור' : 'ביטול'}</button>
+                    {!(isEditMode && isLocked) && (
                     <button
                         className={`${styles.btn} ${formIsValid && !isLoadingEventData ? styles.btnPrimaryActive : styles.btnPrimary}`}
                         onClick={handleCreate}
@@ -565,6 +573,7 @@ export default function EventModal({
                                 : 'שמור'
                         }
                     </button>
+                    )}
                 </div>
             </div>
             

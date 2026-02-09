@@ -32,7 +32,10 @@ export default function AllDayEventModal({
     isManager = false,
     isApprovalEnabled = false,
     onApprove = null,
-    onReject = null
+    onReject = null,
+    // Lock props
+    isLocked = false,
+    lockReason = ''
 }) {
     const { customSettings } = useSettings();
     const isMobile = useMobile();
@@ -934,7 +937,8 @@ export default function AllDayEventModal({
                 </div>
                 <div className={`${styles.content} ${viewMode === 'days-selection' ? styles.contentVisible : ''} ${viewMode === 'form' ? styles.contentForm : ''}`}>{getModalContent()}</div>
                 <div className={styles.footer}>
-                    {isEditMode && onDelete && <button className={`${styles.button} ${styles.deleteBtn}`} onClick={() => setShowDeleteConfirm(true)}>מחק</button>}
+                    {isEditMode && isLocked && <span className={styles.lockMessage}>{lockReason}</span>}
+                    {isEditMode && !isLocked && onDelete && <button className={`${styles.button} ${styles.deleteBtn}`} onClick={() => setShowDeleteConfirm(true)}>מחק</button>}
                     {isEditMode && isManager && isApprovalEnabled && eventToEdit?.isPending && (
                         <>
                             <button className={`${styles.button} ${styles.approveBtn}`} onClick={() => { if (onApprove) onApprove(eventToEdit); onClose(); }}>אשר</button>
@@ -948,10 +952,10 @@ export default function AllDayEventModal({
                         </div>
                     )}
                     <button className={`${styles.button} ${styles.cancelBtn}`} onClick={handleCancelOrBack}>
-                        {viewMode === 'menu' ? 'ביטול' : 'חזרה'}
+                        {isEditMode && isLocked ? 'סגור' : viewMode === 'menu' ? 'ביטול' : 'חזרה'}
                     </button>
-                    {viewMode === 'form' && <button className={`${styles.button} ${styles.saveBtn}`} onClick={handleCreate}>שמור דיווחים</button>}
-                    {viewMode === 'days-selection' && (
+                    {!(isEditMode && isLocked) && viewMode === 'form' && <button className={`${styles.button} ${styles.saveBtn}`} onClick={handleCreate}>שמור דיווחים</button>}
+                    {!(isEditMode && isLocked) && viewMode === 'days-selection' && (
                         <button className={`${styles.button} ${styles.saveBtn}`} onClick={handleCreateAllDayWithDuration}>
                             צור אירוע
                         </button>

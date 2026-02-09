@@ -208,6 +208,7 @@ export const useMondayEvents = (monday, context) => {
                             items {
                                 id
                                 name
+                                created_at
                                 column_values {
                                     id
                                     value
@@ -375,6 +376,7 @@ export const useMondayEvents = (monday, context) => {
                     eventTypeColor,
                     durationDays: isAllDay ? duration.value : null, // שמירת מספר הימים לשימוש ב-Resize
                     isTemporary, // האם זה אירוע מתוכנן (Planned/Temporary)
+                    createdAt: item.created_at ? new Date(item.created_at) : null, // תאריך יצירה לנעילת עריכה
                     approvalStatusIndex,
                     isPending,
                     isApproved,
