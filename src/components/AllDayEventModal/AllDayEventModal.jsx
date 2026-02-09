@@ -8,7 +8,7 @@ import { useTasksMultiple } from '../../hooks/useTasksMultiple';
 import { useStageOptions } from '../../hooks/useStageOptions';
 import { useNonBillableOptions } from '../../hooks/useNonBillableOptions';
 import { getEffectiveBoardId } from '../../utils/boardIdResolver';
-import { getAllDayLabels, getNonBillableLabels } from '../../utils/eventTypeMapping';
+import { getAllDayIndexes, getNonBillableIndexes, getLabelText, getLabelColor, getLabelsByCategory, EVENT_CATEGORIES } from '../../utils/eventTypeMapping';
 import TaskSelect from '../TaskSelect';
 import TimeSelect from '../TimeSelect';
 import ConfirmDialog from '../ConfirmDialog';
@@ -119,12 +119,12 @@ export default function AllDayEventModal({
             logger.debug('AllDayEventModal', 'Modal opened - resetting state');
             
             if (isEditMode && eventToEdit) {
-                // זיהוי סוג אירוע יומי מתוך eventType (הלייבל ישירות)
-                const allDayLabels = getAllDayLabels(customSettings.eventTypeMapping);
-                const detectedType = allDayLabels.find(l => eventToEdit.eventType === l);
-                if (detectedType) {
-                    setSelectedType(detectedType);
-                    logger.debug('AllDayEventModal', `Edit mode - detected type: ${detectedType}`);
+                // זיהוי סוג אירוע יומי מתוך eventTypeIndex
+                const allDayIndexes = getAllDayIndexes(customSettings.eventTypeMapping);
+                const detectedIndex = allDayIndexes.find(idx => String(eventToEdit.eventTypeIndex) === idx);
+                if (detectedIndex) {
+                    setSelectedType(detectedIndex);
+                    logger.debug('AllDayEventModal', `Edit mode - detected type index: ${detectedIndex}`);
                 }
             } else {
                 setSelectedType(null);
@@ -222,7 +222,10 @@ export default function AllDayEventModal({
         setAddedReports(prev => [...prev, {
             id: Date.now(),
             projectId: null,
-            projectName: getNonBillableLabels(customSettings.eventTypeMapping)[0] || 'לא לחיוב',
+            projectName: (() => {
+                const nbIndexes = getNonBillableIndexes(customSettings.eventTypeMapping);
+                return nbIndexes.length > 0 ? getLabelText(nbIndexes[0], customSettings.eventTypeLabelMeta) : 'לא לחיוב';
+            })(),
             tasks: [],
             hours: hours,
             startTime: startTime,
@@ -612,23 +615,22 @@ export default function AllDayEventModal({
     
     if (!isOpen || !pendingDate) return null;
     
-    const allDayLabels = getAllDayLabels(customSettings.eventTypeMapping);
-    const labelColors = customSettings.eventTypeLabelColors || {};
+    const allDayItems = getLabelsByCategory(EVENT_CATEGORIES.ALL_DAY, customSettings.eventTypeMapping, customSettings.eventTypeLabelMeta);
 
     const renderMenu = () => (
         <div className={styles.menuContainer}>
             <div className={styles.menuTopRow}>
-                {allDayLabels.map(label => {
-                    const color = labelColors[label] || '#579bfc';
+                {allDayItems.map(item => {
+                    const color = item.color || '#579bfc';
                     return (
                         <button
-                            key={label}
-                            className={`${styles.menuButton} ${styles.btnAllDay} ${selectedType === label ? styles.selected : ''}`}
-                            onClick={() => handleSingleTypeSelect(label)}
+                            key={item.index}
+                            className={`${styles.menuButton} ${styles.btnAllDay} ${selectedType === item.index ? styles.selected : ''}`}
+                            onClick={() => handleSingleTypeSelect(item.index)}
                         >
                             <span className={styles.colorDot} style={{ backgroundColor: color }} />
-                            <span style={{ marginRight: '12px' }}>{label}</span>
-                            {isEditMode && selectedType === label && <span style={{ marginRight: 'auto', color, fontWeight: 600 }}>✓ נבחר</span>}
+                            <span style={{ marginRight: '12px' }}>{item.label}</span>
+                            {isEditMode && selectedType === item.index && <span style={{ marginRight: 'auto', color, fontWeight: 600 }}>✓ נבחר</span>}
                         </button>
                     );
                 })}
@@ -807,7 +809,10 @@ export default function AllDayEventModal({
                         onClick={addNonBillableReportRow}
                         title="הוסף דיווח לא לחיוב"
                     >
-                        <span>{getNonBillableLabels(customSettings.eventTypeMapping)[0] || 'לא לחיוב'}</span>
+                        <span>{(() => {
+                            const nbIndexes = getNonBillableIndexes(customSettings.eventTypeMapping);
+                            return nbIndexes.length > 0 ? getLabelText(nbIndexes[0], customSettings.eventTypeLabelMeta) : 'לא לחיוב';
+                        })()}</span>
                         <Plus size={14} color="#0073ea" />
                     </div>
                     <input type="text" placeholder="חיפוש פרויקט..." className={styles.searchBox} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} autoFocus />
@@ -828,7 +833,7 @@ export default function AllDayEventModal({
     
     // תצוגת בחירת תאריך סיום
     const renderDaysSelection = () => {
-        const typeColor = labelColors[selectedType] || '#579bfc';
+        const typeColor = getLabelColor(selectedType, customSettings.eventTypeLabelMeta) || '#579bfc';
 
         // חישוב מספר הימים לתצוגה
         const calculatedDays = endDate && pendingDate
@@ -840,7 +845,7 @@ export default function AllDayEventModal({
                 <div className={styles.daysSelectionHeader}>
                     <span className={styles.colorDotLarge} style={{ backgroundColor: typeColor }} />
                     <span style={{ marginRight: '10px', fontSize: '18px', fontWeight: 600 }}>
-                        {selectedType}
+                        {getLabelText(selectedType, customSettings.eventTypeLabelMeta)}
                     </span>
                 </div>
                 
@@ -900,7 +905,7 @@ export default function AllDayEventModal({
     const getModalTitle = () => {
         if (viewMode === 'menu') return 'סוג דיווח ליום זה';
         if (viewMode === 'days-selection') {
-            return `הגדרת ${selectedType}`;
+            return `הגדרת ${getLabelText(selectedType, customSettings.eventTypeLabelMeta)}`;
         }
         return 'דיווח שעות מרוכז';
     };

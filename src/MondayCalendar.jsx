@@ -393,7 +393,7 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
                 if (result) {
                     await updateSettings({
                         eventTypeMapping: result.mapping,
-                        eventTypeLabelColors: result.colors
+                        eventTypeLabelMeta: result.labelMeta
                     });
                     logger.info('MondayCalendar', 'Auto-migration completed successfully', result);
                 } else {

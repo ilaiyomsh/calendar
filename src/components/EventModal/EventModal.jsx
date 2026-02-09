@@ -6,7 +6,7 @@ import { useTasks } from '../../hooks/useTasks';
 import { useStageOptions } from '../../hooks/useStageOptions';
 import { useNonBillableOptions } from '../../hooks/useNonBillableOptions';
 import { getEffectiveBoardId } from '../../utils/boardIdResolver';
-import { getNonBillableLabels } from '../../utils/eventTypeMapping';
+import { getNonBillableIndexes, getLabelText } from '../../utils/eventTypeMapping';
 import TaskSelect from '../TaskSelect';
 import ConfirmDialog from '../ConfirmDialog';
 import styles from './EventModal.module.css';
@@ -263,7 +263,9 @@ export default function EventModal({
             }
         } else {
             // לא לחיוב: "סוג לא לחיוב - שם המדווח"
-            const nonBillableLabel = nonBillableOptions.find(opt => opt.label === selectedNonBillableType)?.label || selectedNonBillableType || getNonBillableLabels(customSettings.eventTypeMapping)[0] || 'לא לחיוב';
+            const nbIndexes = getNonBillableIndexes(customSettings.eventTypeMapping);
+            const defaultNbLabel = nbIndexes.length > 0 ? getLabelText(nbIndexes[0], customSettings.eventTypeLabelMeta) : 'לא לחיוב';
+            const nonBillableLabel = nonBillableOptions.find(opt => opt.label === selectedNonBillableType)?.label || selectedNonBillableType || defaultNbLabel;
             eventTitle = reporterName ? `${nonBillableLabel} - ${reporterName}` : nonBillableLabel;
         }
         

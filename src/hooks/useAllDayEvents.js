@@ -4,7 +4,7 @@ import { createBoardItem, fetchCurrentUser } from '../utils/mondayApi';
 import { calculateEndDateFromDays, formatDurationForSave } from '../utils/durationUtils';
 import { toLocalDateFormat, toLocalTimeFormat } from '../utils/dateFormatters';
 import { getEffectiveBoardId } from '../utils/boardIdResolver';
-import { isAllDayLabel, getTimedEventLabel } from '../utils/eventTypeMapping';
+import { getTimedEventIndex, getLabelText } from '../utils/eventTypeMapping';
 import logger from '../utils/logger';
 
 /**
@@ -109,8 +109,9 @@ export const useAllDayEvents = ({
         }
 
         try {
-            // newType הוא כעת מחרוזת הלייבל ישירות (לא קוד פנימי)
-            const typeName = newType;
+            // newType הוא כעת אינדקס הלייבל
+            const typeIndex = newType;
+            const typeName = getLabelText(typeIndex, customSettings.eventTypeLabelMeta);
             if (!typeName) {
                 showError('סוג אירוע לא תקין');
                 return;
@@ -124,10 +125,10 @@ export const useAllDayEvents = ({
             // עדכון שם האייטם וסטטוס בלבד - ללא שינוי תאריך או שעות
             const columnValues = {};
 
-            // הוספת סטטוס לפי סוג האירוע
-            if (customSettings.eventTypeStatusColumnId) {
+            // הוספת סטטוס לפי אינדקס
+            if (customSettings.eventTypeStatusColumnId && typeIndex != null) {
                 columnValues[customSettings.eventTypeStatusColumnId] = {
-                    label: typeName
+                    index: parseInt(typeIndex)
                 };
             }
 
@@ -252,8 +253,8 @@ async function createMultipleReports({
             eventEnd = new Date(eventStart.getTime() + durationMinutes * 60000);
         }
 
-        // בדיקה אם זמן ההתחלה הוא בעתיד - רק לאירועים שעתיים
-        const isSpecialEventType = isAllDayLabel(report.projectName, customSettings.eventTypeMapping);
+        // בדיקה אם זמן ההתחלה הוא בעתיד - דיווחים מרובים הם תמיד אירועים שעתיים
+        const isSpecialEventType = false;
         const now = new Date();
         if (!isSpecialEventType && eventStart > now) {
             showWarning(`לא ניתן לדווח שעות על זמן עתידי (${report.projectName || 'ללא פרויקט'})`);
@@ -321,8 +322,9 @@ async function createSingleAllDayEvent({
     effectiveBoardId,
     addEvent
 }) {
-    // allDayData.type הוא כעת מחרוזת הלייבל ישירות
-    const eventName = allDayData.type;
+    // allDayData.type הוא כעת אינדקס הלייבל
+    const typeIndex = allDayData.type;
+    const eventName = getLabelText(typeIndex, customSettings.eventTypeLabelMeta);
     const itemName = `${eventName} - ${reporterName}`;
 
     // מספר הימים (ברירת מחדל: 1)
@@ -336,7 +338,7 @@ async function createSingleAllDayEvent({
 
     // משך בימים - Duration פולימורפי
     if (customSettings.durationColumnId) {
-        columnValues[customSettings.durationColumnId] = formatDurationForSave(durationDays, eventName);
+        columnValues[customSettings.durationColumnId] = formatDurationForSave(durationDays, typeIndex, customSettings.eventTypeMapping);
     }
 
     if (customSettings.reporterColumnId && reporterId) {
@@ -347,9 +349,9 @@ async function createSingleAllDayEvent({
         };
     }
 
-    if (customSettings.eventTypeStatusColumnId) {
+    if (customSettings.eventTypeStatusColumnId && typeIndex != null) {
         columnValues[customSettings.eventTypeStatusColumnId] = {
-            label: eventName
+            index: parseInt(typeIndex)
         };
     }
 
@@ -377,6 +379,7 @@ async function createSingleAllDayEvent({
             allDay: true,
             mondayItemId: createdItem.id,
             eventType: eventName,
+            eventTypeIndex: String(typeIndex),
             durationDays: durationDays
         };
         addEvent(newEvent);
@@ -443,14 +446,16 @@ function buildReportColumnValues({
         };
     }
 
-    // הוספת סטטוס
+    // הוספת סטטוס לפי אינדקס
     if (customSettings.eventTypeStatusColumnId) {
         const isBillable = report.isBillable !== false;
-        columnValues[customSettings.eventTypeStatusColumnId] = {
-            label: isAllDayLabel(report.projectName, customSettings.eventTypeMapping)
-                ? report.projectName
-                : getTimedEventLabel(isBillable, customSettings.eventTypeMapping)
-        };
+        const typeIndex = getTimedEventIndex(isBillable, customSettings.eventTypeMapping);
+
+        if (typeIndex != null) {
+            columnValues[customSettings.eventTypeStatusColumnId] = {
+                index: parseInt(typeIndex)
+            };
+        }
 
         // אם זה לא לחיוב
         if (!isBillable && report.nonBillableType && customSettings.nonBillableStatusColumnId) {

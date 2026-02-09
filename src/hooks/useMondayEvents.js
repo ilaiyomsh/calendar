@@ -3,7 +3,7 @@ import { useSettings } from '../contexts/SettingsContext';
 import { createBoardItem, deleteItem, updateItemColumnValues } from '../utils/mondayApi';
 import { getColumnIds, mapItemToEvent } from '../utils/mondayColumns';
 import { isAllDayEventType, parseDuration, calculateEndDateFromDays, calculateDaysDiff, formatDurationForSave } from '../utils/durationUtils';
-import { isTemporaryLabel, getTimedEventLabel, getBillableLabel } from '../utils/eventTypeMapping';
+import { isTemporaryIndex, getTimedEventIndex, getLabelText } from '../utils/eventTypeMapping';
 import { toMondayDateFormat, toMondayTimeFormat, toLocalDateFormat } from '../utils/dateFormatters';
 import { getEffectiveBoardId } from '../utils/boardIdResolver';
 import logger from '../utils/logger';
@@ -315,15 +315,16 @@ export const useMondayEvents = (monday, context) => {
                     rawDuration = parseFloat(durationColumn.text) || 0;
                 }
 
-                // זיהוי סוג האירוע
+                // זיהוי סוג האירוע לפי אינדקס
+                const eventTypeIndex = typeColumn?.index ?? null;
                 const eventTypeText = typeColumn?.text || '';
-                const isAllDay = isAllDayEventType(eventTypeText, customSettings.eventTypeMapping);
+                const isAllDay = isAllDayEventType(eventTypeIndex, customSettings.eventTypeMapping);
 
                 // צבע הלייבל מ-Monday API
                 const eventTypeColor = typeColumn?.label_style?.color || null;
 
                 // פרסור Duration פולימורפי - שעות לשעתי, ימים ליומי
-                const duration = parseDuration(rawDuration, eventTypeText, customSettings.eventTypeMapping);
+                const duration = parseDuration(rawDuration, eventTypeIndex, customSettings.eventTypeMapping);
 
                 let end;
                 if (isAllDay) {
@@ -348,7 +349,7 @@ export const useMondayEvents = (monday, context) => {
                 }
 
                 // בדיקה אם זה אירוע זמני/מתוכנן
-                const isTemporary = isTemporaryLabel(eventTypeText, customSettings.eventTypeMapping);
+                const isTemporary = isTemporaryIndex(eventTypeIndex, customSettings.eventTypeMapping);
 
                 return {
                     id: item.id,
@@ -360,6 +361,7 @@ export const useMondayEvents = (monday, context) => {
                     notes: notesColumn?.text || '',
                     projectId,
                     eventType: eventTypeText,
+                    eventTypeIndex,
                     eventTypeColor,
                     durationDays: isAllDay ? duration.value : null, // שמירת מספר הימים לשימוש ב-Resize
                     isTemporary // האם זה אירוע מתוכנן (Planned/Temporary)
@@ -454,10 +456,13 @@ export const useMondayEvents = (monday, context) => {
         // קביעת סוג הדיווח (שעתי / לא לחיוב) וערך הסטטוס המתאים
         if (customSettings.eventTypeStatusColumnId) {
             const isBillable = eventData.isBillable !== false; // ברירת מחדל: true
+            const typeIndex = getTimedEventIndex(isBillable, customSettings.eventTypeMapping);
 
-            columnValues[customSettings.eventTypeStatusColumnId] = {
-                label: getTimedEventLabel(isBillable, customSettings.eventTypeMapping)
-            };
+            if (typeIndex != null) {
+                columnValues[customSettings.eventTypeStatusColumnId] = {
+                    index: parseInt(typeIndex)
+                };
+            }
 
             // אם זה לא לחיוב, נעדכן גם את עמודת הסטטוס של סוגי "לא לחיוב"
             if (!isBillable && eventData.nonBillableType && customSettings.nonBillableStatusColumnId) {
@@ -523,15 +528,18 @@ export const useMondayEvents = (monday, context) => {
             );
 
             if (createdItem) {
+                const isBillable = eventData.isBillable !== false;
+                const newTypeIndex = getTimedEventIndex(isBillable, customSettings.eventTypeMapping);
                 const newEvent = {
                     id: createdItem.id,
-                    title: itemName, 
+                    title: itemName,
                     start: startTime,
                     end: endTime,
                     mondayItemId: createdItem.id,
                     notes: eventData.notes,
                     projectId: eventData.itemId || null,
-                    eventType: getBillableLabel(customSettings.eventTypeMapping) || "שעתי"
+                    eventType: getLabelText(newTypeIndex, customSettings.eventTypeLabelMeta),
+                    eventTypeIndex: newTypeIndex
                 };
 
                 setEvents(prev => [...prev, newEvent]);
@@ -569,7 +577,8 @@ export const useMondayEvents = (monday, context) => {
             // Optimistic update
             // קביעת eventType לפי isBillable - שעתי או לא לחיוב
             const isBillable = eventData.isBillable !== false;
-            const newEventType = getTimedEventLabel(isBillable, customSettings.eventTypeMapping);
+            const newTypeIndex = getTimedEventIndex(isBillable, customSettings.eventTypeMapping);
+            const newEventType = getLabelText(newTypeIndex, customSettings.eventTypeLabelMeta);
 
             setEvents(prev => prev.map(ev =>
                 ev.id === eventId
@@ -581,6 +590,7 @@ export const useMondayEvents = (monday, context) => {
                         notes: eventData.notes,
                         projectId: eventData.itemId || ev.projectId,
                         eventType: ev.allDay ? ev.eventType : newEventType,
+                        eventTypeIndex: ev.allDay ? ev.eventTypeIndex : newTypeIndex,
                         isTemporary: false // לאחר עדכון/המרה - האירוע כבר לא מתוכנן
                     }
                     : ev
@@ -688,7 +698,7 @@ export const useMondayEvents = (monday, context) => {
 
                 // חישוב מספר הימים החדש (לתמיכה ב-Resize)
                 const newDurationDays = calculateDaysDiff(newStart, newEnd);
-                columnValues[customSettings.durationColumnId] = formatDurationForSave(newDurationDays, event.eventType);
+                columnValues[customSettings.durationColumnId] = formatDurationForSave(newDurationDays, event.eventTypeIndex, customSettings.eventTypeMapping);
 
                 // עדכון זמן סיום (אם מוגדר) - לאירועים יומיים רק תאריך
                 if (customSettings.endTimeColumnId) {

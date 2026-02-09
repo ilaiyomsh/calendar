@@ -1,5 +1,6 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import logger from '../utils/logger';
+import { isLegacyMapping } from '../utils/eventTypeMapping';
 
 // יצירת Context
 const SettingsContext = createContext(null);
@@ -66,8 +67,8 @@ const DEFAULT_SETTINGS = {
   showTemporaryEvents: true,     // האם להציג אירועים זמניים בלוח
 
   // --- מיפוי סוגי דיווח ---
-  eventTypeMapping: null,          // { 'labelName': 'category', ... } - מיפוי לייבלים לקטגוריות
-  eventTypeLabelColors: null,      // { 'labelName': '#hex', ... } - צבעי הלייבלים מ-Monday
+  eventTypeMapping: null,          // { index: 'category', ... } - מיפוי אינדקס לייבל לקטגוריה
+  eventTypeLabelMeta: null,        // { index: { label, color }, ... } - מטא-דאטה של לייבלים
 
   // --- Filter Configuration ---
   filterProjectsBoardId: null,   // לוח שממנו נטען רשימת הפרויקטים לפילטר
@@ -119,6 +120,17 @@ export function SettingsProvider({ monday, children }) {
           // אם אין משימות ואין stage, זה PROJECT_ONLY
         }
         
+        // מיגרציה של eventTypeMapping מפורמט ישן (טקסט) לפורמט חדש (אינדקס)
+        if (migratedSettings.eventTypeMapping && isLegacyMapping(migratedSettings.eventTypeMapping)) {
+          logger.info('SettingsContext', 'Detected legacy text-based eventTypeMapping, clearing for re-migration');
+          migratedSettings.eventTypeMapping = null;
+          migratedSettings.eventTypeLabelMeta = null;
+        }
+        // מיגרציה של eventTypeLabelColors ישן ל-eventTypeLabelMeta
+        if (migratedSettings.eventTypeLabelColors) {
+          delete migratedSettings.eventTypeLabelColors;
+        }
+
         // הסרת שדות ישנים שכבר לא בשימוש
         delete migratedSettings.useStageField;
         delete migratedSettings.useEmployeeCost;

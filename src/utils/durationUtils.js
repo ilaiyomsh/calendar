@@ -4,23 +4,22 @@
  * - אירועים יומיים: duration = ימים (מספר שלם)
  */
 
-import { isAllDayLabel } from './eventTypeMapping';
+import { isAllDayIndex } from './eventTypeMapping';
 
 // סוגי אירועים יומיים - legacy, לתאימות לאחור
 export const ALL_DAY_EVENT_TYPES = ['חופשה', 'מחלה', 'מילואים'];
 
 /**
  * בדיקה אם סוג האירוע הוא יומי (לא שעתי)
- * @param {string} eventType - סוג האירוע
+ * @param {number|string} eventTypeIndex - אינדקס הלייבל בעמודת Status
  * @param {Object} [mapping] - מיפוי סוגי דיווח (אופציונלי)
  * @returns {boolean}
  */
-export const isAllDayEventType = (eventType, mapping) => {
+export const isAllDayEventType = (eventTypeIndex, mapping) => {
     if (mapping) {
-        return isAllDayLabel(eventType, mapping);
+        return isAllDayIndex(eventTypeIndex, mapping);
     }
-    // fallback legacy
-    return ALL_DAY_EVENT_TYPES.includes(eventType);
+    return false;
 };
 
 /**

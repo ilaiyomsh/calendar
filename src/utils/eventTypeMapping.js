@@ -2,8 +2,9 @@
  * Event Type Mapping - מודול ליבה למיפוי סוגי דיווח
  * כל קובץ אחר מייבא מכאן את הפונקציות לזיהוי קטגוריית אירוע
  *
- * מבנה mapping: { 'labelName': 'category', ... }
- * דוגמה: { 'שעתי': 'billable', 'לא לחיוב': 'nonBillable', 'זמני': 'temporary', 'חופשה': 'allDay', 'מחלה': 'allDay', 'מילואים': 'allDay' }
+ * מבנה mapping: { index: 'category', ... }  (מפתח = אינדקס הלייבל בעמודת Status)
+ * מבנה labelMeta: { index: { label: string, color: string }, ... }
+ * דוגמה: mapping = { '3': 'billable', '0': 'allDay', '2': 'allDay', '6': 'allDay', '101': 'nonBillable' }
  */
 
 import logger from './logger';
@@ -32,84 +33,126 @@ export const UNMAPPED_LABEL = 'ללא מיפוי';
 // === Core Resolvers ===
 
 /**
- * מחזיר את הקטגוריה של לייבל
- * @param {string} label - שם הלייבל
- * @param {Object} mapping - מיפוי { label: category }
+ * מחזיר את הקטגוריה של אינדקס לייבל
+ * @param {number|string} index - אינדקס הלייבל
+ * @param {Object} mapping - מיפוי { index: category }
  * @returns {string|null} - קטגוריה או null
  */
-export const getCategory = (label, mapping) => {
-    if (!label || !mapping) return null;
-    return mapping[label] || null;
+export const getCategory = (index, mapping) => {
+    if (index == null || !mapping) return null;
+    return mapping[String(index)] || null;
 };
 
 /**
- * מחזיר את הלייבל של קטגוריית billable (בדיוק 1)
+ * מחזיר את האינדקס של קטגוריית billable (בדיוק 1)
  * @param {Object} mapping
- * @returns {string|null}
+ * @returns {string|null} - אינדקס כ-string או null
  */
-export const getBillableLabel = (mapping) => {
+export const getBillableIndex = (mapping) => {
     if (!mapping) return null;
     const entry = Object.entries(mapping).find(([, cat]) => cat === EVENT_CATEGORIES.BILLABLE);
     return entry ? entry[0] : null;
 };
 
 /**
- * מחזיר את הלייבל של קטגוריית temporary (בדיוק 1)
+ * מחזיר את האינדקס של קטגוריית temporary (בדיוק 1)
  * @param {Object} mapping
  * @returns {string|null}
  */
-export const getTemporaryLabel = (mapping) => {
+export const getTemporaryIndex = (mapping) => {
     if (!mapping) return null;
     const entry = Object.entries(mapping).find(([, cat]) => cat === EVENT_CATEGORIES.TEMPORARY);
     return entry ? entry[0] : null;
 };
 
 /**
- * מחזיר את כל הלייבלים של קטגוריית nonBillable
+ * מחזיר את כל האינדקסים של קטגוריית nonBillable
  * @param {Object} mapping
  * @returns {string[]}
  */
-export const getNonBillableLabels = (mapping) => {
+export const getNonBillableIndexes = (mapping) => {
     if (!mapping) return [];
     return Object.entries(mapping)
         .filter(([, cat]) => cat === EVENT_CATEGORIES.NON_BILLABLE)
-        .map(([label]) => label);
+        .map(([index]) => index);
 };
 
 /**
- * מחזיר את כל הלייבלים של קטגוריית allDay
+ * מחזיר את כל האינדקסים של קטגוריית allDay
  * @param {Object} mapping
  * @returns {string[]}
  */
-export const getAllDayLabels = (mapping) => {
+export const getAllDayIndexes = (mapping) => {
     if (!mapping) return [];
     return Object.entries(mapping)
         .filter(([, cat]) => cat === EVENT_CATEGORIES.ALL_DAY)
-        .map(([label]) => label);
+        .map(([index]) => index);
 };
 
-// === Boolean Checkers ===
+// === Boolean Checkers (by index) ===
 
-export const isBillableLabel = (label, mapping) => getCategory(label, mapping) === EVENT_CATEGORIES.BILLABLE;
-export const isNonBillableLabel = (label, mapping) => getCategory(label, mapping) === EVENT_CATEGORIES.NON_BILLABLE;
-export const isTemporaryLabel = (label, mapping) => getCategory(label, mapping) === EVENT_CATEGORIES.TEMPORARY;
-export const isAllDayLabel = (label, mapping) => getCategory(label, mapping) === EVENT_CATEGORIES.ALL_DAY;
+export const isBillableIndex = (index, mapping) => getCategory(index, mapping) === EVENT_CATEGORIES.BILLABLE;
+export const isNonBillableIndex = (index, mapping) => getCategory(index, mapping) === EVENT_CATEGORIES.NON_BILLABLE;
+export const isTemporaryIndex = (index, mapping) => getCategory(index, mapping) === EVENT_CATEGORIES.TEMPORARY;
+export const isAllDayIndex = (index, mapping) => getCategory(index, mapping) === EVENT_CATEGORIES.ALL_DAY;
+
+// === Label Meta Helpers ===
+
+/**
+ * שליפת טקסט הלייבל לפי אינדקס
+ * @param {number|string} index
+ * @param {Object} labelMeta - { index: { label, color } }
+ * @returns {string}
+ */
+export const getLabelText = (index, labelMeta) => {
+    if (index == null || !labelMeta) return '';
+    return labelMeta[String(index)]?.label || '';
+};
+
+/**
+ * שליפת צבע הלייבל לפי אינדקס
+ * @param {number|string} index
+ * @param {Object} labelMeta - { index: { label, color } }
+ * @returns {string}
+ */
+export const getLabelColor = (index, labelMeta) => {
+    if (index == null || !labelMeta) return '';
+    return labelMeta[String(index)]?.color || '';
+};
+
+/**
+ * שליפת טקסטים של כל הלייבלים בקטגוריה מסוימת
+ * @param {string} category - קטגוריה
+ * @param {Object} mapping
+ * @param {Object} labelMeta
+ * @returns {Array<{index: string, label: string, color: string}>}
+ */
+export const getLabelsByCategory = (category, mapping, labelMeta) => {
+    if (!mapping || !labelMeta) return [];
+    return Object.entries(mapping)
+        .filter(([, cat]) => cat === category)
+        .map(([index]) => ({
+            index,
+            label: getLabelText(index, labelMeta),
+            color: getLabelColor(index, labelMeta)
+        }));
+};
 
 // === Helpers ===
 
 /**
- * מחזיר את הלייבל המתאים לאירוע שעתי (לחיוב או לא)
+ * מחזיר את האינדקס המתאים לאירוע שעתי (לחיוב או לא)
  * @param {boolean} isBillable
  * @param {Object} mapping
- * @returns {string}
+ * @returns {string|null} - אינדקס או null אם אין mapping
  */
-export const getTimedEventLabel = (isBillable, mapping) => {
-    if (!mapping) return isBillable ? 'שעתי' : 'לא לחיוב'; // legacy fallback
+export const getTimedEventIndex = (isBillable, mapping) => {
+    if (!mapping) return null;
     if (isBillable) {
-        return getBillableLabel(mapping) || 'שעתי';
+        return getBillableIndex(mapping);
     }
-    const nbLabels = getNonBillableLabels(mapping);
-    return nbLabels[0] || 'לא לחיוב';
+    const nbIndexes = getNonBillableIndexes(mapping);
+    return nbIndexes[0] || null;
 };
 
 // === Validation ===
@@ -164,6 +207,7 @@ export const validateMapping = (mapping) => {
 // לייבלים ידועים בעברית למיפוי אוטומטי
 const KNOWN_HEBREW_LABELS = {
     'שעתי': EVENT_CATEGORIES.BILLABLE,
+    'חיוב': EVENT_CATEGORIES.BILLABLE,
     'לא לחיוב': EVENT_CATEGORIES.NON_BILLABLE,
     'זמני': EVENT_CATEGORIES.TEMPORARY,
     'חופשה': EVENT_CATEGORIES.ALL_DAY,
@@ -173,24 +217,28 @@ const KNOWN_HEBREW_LABELS = {
 
 /**
  * ניסיון מיפוי אוטומטי לפי לייבלים עבריים ידועים
- * @param {Array<{label: string, color: string}>} availableLabels - הלייבלים מהעמודה
- * @returns {{ mapping: Object, colors: Object }|null} - מיפוי או null אם לא הצליח
+ * שומר mapping לפי index (לא לפי טקסט)
+ * @param {Array<{label: string, color: string, index: number}>} availableLabels - הלייבלים מהעמודה
+ * @returns {{ mapping: Object, labelMeta: Object }|null} - מיפוי או null אם לא הצליח
  */
 export const createLegacyMapping = (availableLabels) => {
     if (!availableLabels || availableLabels.length === 0) return null;
 
     const mapping = {};
-    const colors = {};
+    const labelMeta = {};
     let matched = 0;
 
     for (const labelObj of availableLabels) {
         const labelName = labelObj.label;
+        const index = String(labelObj.index);
         const category = KNOWN_HEBREW_LABELS[labelName];
         if (category) {
-            mapping[labelName] = category;
-            if (labelObj.color) {
-                colors[labelName] = labelObj.color;
+            // בדיקה שלא כבר יש billable ממופה (כי 'שעתי' ו-'חיוב' שניהם BILLABLE)
+            if (category === EVENT_CATEGORIES.BILLABLE && Object.values(mapping).includes(EVENT_CATEGORIES.BILLABLE)) {
+                continue;
             }
+            mapping[index] = category;
+            labelMeta[index] = { label: labelName, color: labelObj.color || '' };
             matched++;
         }
     }
@@ -199,9 +247,22 @@ export const createLegacyMapping = (availableLabels) => {
     const validation = validateMapping(mapping);
     if (validation.isValid) {
         logger.info('eventTypeMapping', 'Auto-migration succeeded', { matched, total: availableLabels.length });
-        return { mapping, colors };
+        return { mapping, labelMeta };
     }
 
     logger.warn('eventTypeMapping', 'Auto-migration failed validation', { errors: validation.errors, matched });
     return null;
+};
+
+/**
+ * בדיקה אם mapping הוא בפורמט ישן (מפתחות הם טקסט ולא אינדקסים)
+ * @param {Object} mapping
+ * @returns {boolean}
+ */
+export const isLegacyMapping = (mapping) => {
+    if (!mapping || typeof mapping !== 'object') return false;
+    const keys = Object.keys(mapping);
+    if (keys.length === 0) return false;
+    // אם המפתח הראשון הוא לא מספר - זה פורמט ישן
+    return isNaN(Number(keys[0]));
 };

@@ -2,7 +2,7 @@ import { useCallback, useMemo } from 'react';
 import { useSettings } from '../contexts/SettingsContext';
 import { fetchItemById, fetchColumnSettings, fetchProjectById } from '../utils/mondayApi';
 import { getEffectiveBoardId } from '../utils/boardIdResolver';
-import { isBillableLabel, isNonBillableLabel } from '../utils/eventTypeMapping';
+import { isBillableIndex } from '../utils/eventTypeMapping';
 import logger from '../utils/logger';
 
 /**
@@ -217,9 +217,9 @@ function extractStageData(updatedEvent, item, customSettings) {
 function extractBillingData(updatedEvent, item, customSettings) {
     if (customSettings.eventTypeStatusColumnId) {
         const typeColumn = item.column_values.find(col => col.id === customSettings.eventTypeStatusColumnId);
-        const typeText = typeColumn?.text || typeColumn?.label || "";
-        // בדיקה מבוססת מיפוי: isBillable = הלייבל שייך לקטגוריית billable
-        updatedEvent.isBillable = isBillableLabel(typeText, customSettings.eventTypeMapping);
+        const typeIndex = typeColumn?.index ?? null;
+        // בדיקה מבוססת אינדקס: isBillable = האינדקס שייך לקטגוריית billable
+        updatedEvent.isBillable = isBillableIndex(typeIndex, customSettings.eventTypeMapping);
     }
 
     if (customSettings.nonBillableStatusColumnId) {

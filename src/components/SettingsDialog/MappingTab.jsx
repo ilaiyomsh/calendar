@@ -270,7 +270,7 @@ const MappingTab = ({
           const selectedCol = columns.find(col => col.id === settings.eventTypeStatusColumnId);
           if (selectedCol?.settings_str) {
             const labels = parseStatusColumnLabels(selectedCol.settings_str);
-            setEventTypeStatusLabels(labels.map(l => ({ id: l.label, name: l.label, color: l.color || '' })));
+            setEventTypeStatusLabels(labels.map(l => ({ id: String(l.index), name: l.label, color: l.color || '' })));
             // ולידציה של המיפוי הנוכחי
             if (settings.eventTypeMapping) {
               const validation = validateMapping(settings.eventTypeMapping);
@@ -508,7 +508,7 @@ const MappingTab = ({
       if (selectedCol?.settings_str) {
         // חילוץ לייבלים כולל צבעים
         const labels = parseStatusColumnLabels(selectedCol.settings_str);
-        setEventTypeStatusLabels(labels.map(l => ({ id: l.label, name: l.label, color: l.color || '' })));
+        setEventTypeStatusLabels(labels.map(l => ({ id: String(l.index), name: l.label, color: l.color || '' })));
 
         // ניסיון מיגרציה אוטומטית אם אין מיפוי קיים
         if (!settings.eventTypeMapping) {
@@ -517,7 +517,7 @@ const MappingTab = ({
             onChange({
               eventTypeStatusColumnId: newColumnId,
               eventTypeMapping: result.mapping,
-              eventTypeLabelColors: result.colors
+              eventTypeLabelMeta: result.labelMeta
             });
             const validation = validateMapping(result.mapping);
             setEventTypeValidation({ isValid: validation.isValid, missingLabels: validation.errors });
@@ -539,7 +539,7 @@ const MappingTab = ({
     } else {
       setEventTypeValidation({ isValid: true, missingLabels: [] });
       setEventTypeStatusLabels([]);
-      onChange({ eventTypeStatusColumnId: null, eventTypeMapping: null, eventTypeLabelColors: null });
+      onChange({ eventTypeStatusColumnId: null, eventTypeMapping: null, eventTypeLabelMeta: null });
     }
   };
 
@@ -549,7 +549,7 @@ const MappingTab = ({
       const selectedCol = statusColumnsWithSettings.find(col => col.id === settings.eventTypeStatusColumnId);
       if (selectedCol?.settings_str) {
         const labels = parseStatusColumnLabels(selectedCol.settings_str);
-        setEventTypeStatusLabels(labels.map(l => ({ id: l.label, name: l.label, color: l.color || '' })));
+        setEventTypeStatusLabels(labels.map(l => ({ id: String(l.index), name: l.label, color: l.color || '' })));
       }
     }
   }, [settings.eventTypeStatusColumnId, statusColumnsWithSettings]);
@@ -578,23 +578,23 @@ const MappingTab = ({
   };
 
   // טיפול בשינוי מיפוי של לייבל בודד
-  const handleMappingLabelChange = (labelName, category) => {
+  const handleMappingLabelChange = (labelIndex, category) => {
     const currentMapping = { ...(settings.eventTypeMapping || {}) };
-    const currentColors = { ...(settings.eventTypeLabelColors || {}) };
+    const currentMeta = { ...(settings.eventTypeLabelMeta || {}) };
 
     if (category === UNMAPPED) {
-      delete currentMapping[labelName];
+      delete currentMapping[labelIndex];
+      delete currentMeta[labelIndex];
     } else {
-      currentMapping[labelName] = category;
+      currentMapping[labelIndex] = category;
+      // עדכון מטא-דאטה
+      const labelObj = eventTypeStatusLabels.find(l => l.id === labelIndex);
+      if (labelObj) {
+        currentMeta[labelIndex] = { label: labelObj.name, color: labelObj.color || '' };
+      }
     }
 
-    // עדכון צבעים
-    const labelObj = eventTypeStatusLabels.find(l => l.name === labelName);
-    if (labelObj?.color) {
-      currentColors[labelName] = labelObj.color;
-    }
-
-    onChange({ eventTypeMapping: currentMapping, eventTypeLabelColors: currentColors });
+    onChange({ eventTypeMapping: currentMapping, eventTypeLabelMeta: currentMeta });
 
     // ולידציה
     const validation = validateMapping(currentMapping);
@@ -1070,15 +1070,15 @@ const MappingTab = ({
               <div className={styles.mappingSectionTitle}>מיפוי סוגי דיווח</div>
               <small className={styles.mappingSectionDesc}>שייך כל לייבל לקטגוריה</small>
               {eventTypeStatusLabels.map(labelObj => {
-                const currentCategory = (settings.eventTypeMapping || {})[labelObj.name] || UNMAPPED;
+                const currentCategory = (settings.eventTypeMapping || {})[labelObj.id] || UNMAPPED;
                 return (
-                  <div key={labelObj.name} className={styles.mappingRow}>
+                  <div key={labelObj.id} className={styles.mappingRow}>
                     <span className={styles.mappingColorDot} style={{ backgroundColor: labelObj.color || '#ccc' }} />
                     <span className={styles.mappingLabelText}>{labelObj.name}</span>
                     <select
                       className={styles.mappingSelect}
                       value={currentCategory}
-                      onChange={(e) => handleMappingLabelChange(labelObj.name, e.target.value)}
+                      onChange={(e) => handleMappingLabelChange(labelObj.id, e.target.value)}
                     >
                       <option value={UNMAPPED}>{UNMAPPED_LABEL}</option>
                       {Object.entries(CATEGORY_LABELS).map(([cat, catLabel]) => (
