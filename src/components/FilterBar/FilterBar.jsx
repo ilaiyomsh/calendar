@@ -49,7 +49,7 @@ const FilterBar = ({
     // סינון אנשים לפי חיפוש
     const filteredReporters = useMemo(() =>
         reporters.filter(r =>
-            r.name.toLowerCase().includes(reporterSearch.toLowerCase())
+            (r.name || '').toLowerCase().includes(reporterSearch.toLowerCase())
         ),
         [reporters, reporterSearch]
     );

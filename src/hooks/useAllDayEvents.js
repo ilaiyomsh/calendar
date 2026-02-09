@@ -248,7 +248,7 @@ async function createMultipleReports({
             }
         } else {
             // אחרת, משתמשים במשך הזמן
-            const durationMinutes = parseFloat(report.hours) * 60;
+            const durationMinutes = (parseFloat(report.hours) || 0) * 60;
             eventEnd = new Date(eventStart.getTime() + durationMinutes * 60000);
         }
 
