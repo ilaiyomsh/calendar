@@ -1,15 +1,67 @@
-import React from 'react';
-import { Briefcase, Tag, ListTodo, FileText, Calendar } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Briefcase, Tag, ListTodo, FileText, Calendar, ShieldCheck, X } from 'lucide-react';
 import StructureOption from './StructureOption';
 import { STRUCTURE_MODES } from '../../contexts/SettingsContext';
+import logger from '../../utils/logger';
 import styles from './StructureTab.module.css';
 
 /**
  * טאב בחירת מבנה הדיווח
  * מאפשר בחירה ויזואלית של סוג ההיררכיה
  */
-const StructureTab = ({ settings, onChange }) => {
+const StructureTab = ({ settings, onChange, monday }) => {
   const { structureMode, enableNotes, showHolidays } = settings;
+
+  // State - People picker למנהלים
+  const [accountUsers, setAccountUsers] = useState([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+
+  // טעינת משתמשי החשבון כש-approval מופעל
+  useEffect(() => {
+    if (settings.enableApproval && monday && accountUsers.length === 0) {
+      fetchAccountUsers();
+    }
+  }, [settings.enableApproval, monday]);
+
+  const fetchAccountUsers = async () => {
+    if (!monday) return;
+    setLoadingUsers(true);
+    try {
+      const res = await monday.api(`query { users(kind: non_guests) { id name photo_thumb_small } }`);
+      if (res.data?.users) {
+        setAccountUsers(res.data.users.map(u => ({
+          id: String(u.id),
+          name: u.name,
+          photo: u.photo_thumb_small
+        })));
+      }
+    } catch (err) {
+      logger.error('StructureTab', 'Error fetching account users', err);
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
+
+  const handleAddManager = (userId) => {
+    const current = settings.approvedManagerIds || [];
+    if (!current.includes(userId)) {
+      onChange({ approvedManagerIds: [...current, userId] });
+    }
+    setUserSearchQuery('');
+  };
+
+  const handleRemoveManager = (userId) => {
+    const current = settings.approvedManagerIds || [];
+    onChange({ approvedManagerIds: current.filter(id => id !== userId) });
+  };
+
+  const filteredUsers = accountUsers.filter(u => {
+    const managerIds = settings.approvedManagerIds || [];
+    if (managerIds.includes(u.id)) return false;
+    if (!userSearchQuery) return true;
+    return u.name.toLowerCase().includes(userSearchQuery.toLowerCase());
+  });
 
   const handleModeChange = (mode) => {
     onChange({ structureMode: mode });
@@ -73,7 +125,7 @@ const StructureTab = ({ settings, onChange }) => {
             <FileText size={20} className={styles.notesIcon} />
              הוספת מלל חופשי
           </span>
-         
+
         </div>
       </label>
 
@@ -90,9 +142,86 @@ const StructureTab = ({ settings, onChange }) => {
             <Calendar size={20} className={styles.notesIcon} />
             הצג חגים ישראליים
           </span>
-          
+
         </div>
       </label>
+
+      {/* אישור מנהל */}
+      <label className={styles.notesToggle}>
+        <div className={styles.notesCheckbox}>
+          <input
+            type="checkbox"
+            checked={settings.enableApproval || false}
+            onChange={() => onChange({ enableApproval: !settings.enableApproval })}
+          />
+        </div>
+        <div className={styles.notesContent}>
+          <span className={styles.notesTitle}>
+            <ShieldCheck size={20} className={styles.notesIcon} />
+            אישור מנהל על דיווחים
+          </span>
+        </div>
+      </label>
+
+      {settings.enableApproval && (
+        <div className={styles.approvalManagersSection}>
+          <label className={styles.approvalLabel}>מנהלים מורשים לאישור</label>
+
+          {/* רשימת מנהלים קיימים */}
+          {(settings.approvedManagerIds || []).length > 0 && (
+            <div className={styles.managersList}>
+              {(settings.approvedManagerIds || []).map(managerId => {
+                const user = accountUsers.find(u => u.id === managerId);
+                return (
+                  <div key={managerId} className={styles.managerChip}>
+                    {user?.photo && <img src={user.photo} alt="" className={styles.managerAvatar} />}
+                    <span>{user?.name || `משתמש ${managerId}`}</span>
+                    <button
+                      className={styles.managerRemoveBtn}
+                      onClick={() => handleRemoveManager(managerId)}
+                      type="button"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* חיפוש והוספת מנהל */}
+          <div className={styles.managerSearchWrapper}>
+            <input
+              type="text"
+              className={styles.managerSearchInput}
+              placeholder={loadingUsers ? 'טוען משתמשים...' : 'חפש משתמש להוספה...'}
+              value={userSearchQuery}
+              onChange={(e) => setUserSearchQuery(e.target.value)}
+              onFocus={() => {
+                if (accountUsers.length === 0 && !loadingUsers) {
+                  fetchAccountUsers();
+                }
+              }}
+              disabled={loadingUsers}
+            />
+            {userSearchQuery && filteredUsers.length > 0 && (
+              <div className={styles.managerDropdown}>
+                {filteredUsers.slice(0, 10).map(user => (
+                  <button
+                    key={user.id}
+                    className={styles.managerDropdownItem}
+                    onClick={() => handleAddManager(user.id)}
+                    type="button"
+                  >
+                    {user.photo && <img src={user.photo} alt="" className={styles.managerAvatar} />}
+                    <span>{user.name}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

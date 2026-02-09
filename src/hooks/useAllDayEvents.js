@@ -5,6 +5,7 @@ import { calculateEndDateFromDays, formatDurationForSave } from '../utils/durati
 import { toLocalDateFormat, toLocalTimeFormat } from '../utils/dateFormatters';
 import { getEffectiveBoardId } from '../utils/boardIdResolver';
 import { getTimedEventIndex, getLabelText } from '../utils/eventTypeMapping';
+import { getPendingIndex } from '../utils/approvalMapping';
 import logger from '../utils/logger';
 
 /**
@@ -359,6 +360,16 @@ async function createSingleAllDayEvent({
         };
     }
 
+    // סטטוס אישור - כתיבת "ממתין" ביצירת אירוע חדש
+    if (customSettings.enableApproval && customSettings.approvalStatusColumnId) {
+        const pendingIdx = getPendingIndex(customSettings.approvalStatusMapping);
+        if (pendingIdx != null) {
+            columnValues[customSettings.approvalStatusColumnId] = {
+                index: parseInt(pendingIdx)
+            };
+        }
+    }
+
     const columnValuesJson = JSON.stringify(columnValues);
 
     const createdItem = await createBoardItem(
@@ -474,6 +485,16 @@ function buildReportColumnValues({
         columnValues[customSettings.stageColumnId] = {
             label: report.stageId
         };
+    }
+
+    // סטטוס אישור - כתיבת "ממתין" ביצירת דיווח חדש
+    if (customSettings.enableApproval && customSettings.approvalStatusColumnId) {
+        const pendingIdx = getPendingIndex(customSettings.approvalStatusMapping);
+        if (pendingIdx != null) {
+            columnValues[customSettings.approvalStatusColumnId] = {
+                index: parseInt(pendingIdx)
+            };
+        }
     }
 
     return columnValues;

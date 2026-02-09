@@ -329,6 +329,23 @@
     display: none !important;
 }
 
+/* ===== Approval Selection Mode ===== */
+
+/* Checkbox באירועים במצב בחירה לאישור */
+.gc-event-approval-checkbox {
+    font-size: 14px;
+    line-height: 1;
+    margin-left: 4px;
+    flex-shrink: 0;
+    color: white;
+    opacity: 0.9;
+}
+
+/* אירוע שנבחר לאישור */
+.gc-event-wrapper.gc-event-approval-selected {
+    box-shadow: 0 0 0 2px #0d7c3f, 0 0 0 4px rgba(13, 124, 63, 0.3) !important;
+}
+
 /* ===== Temporary/Planned Events Styling ===== */
 
 /* אירועים מתוכננים - עיצוב חלול (hollow) עם גבול צבעוני */

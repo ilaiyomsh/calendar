@@ -26,7 +26,12 @@ export default function EventModal({
     selectedItem: propSelectedItem = null,
     setSelectedItem: setPropSelectedItem = null,
     monday,
-    context = null
+    context = null,
+    // Approval props
+    isManager = false,
+    isApprovalEnabled = false,
+    onApprove = null,
+    onReject = null
 }) {
     const { customSettings } = useSettings();
     const isMobile = useMobile();
@@ -529,6 +534,23 @@ export default function EventModal({
                 <div className={styles.footer}>
                     {isEditMode && !isConvertMode && onDelete && (
                         <button className={`${styles.btn} ${styles.btnDanger}`} onClick={() => setShowDeleteConfirm(true)}>מחק</button>
+                    )}
+                    {/* כפתורי אישור/דחייה מנהל */}
+                    {isEditMode && !isConvertMode && isManager && isApprovalEnabled && eventToEdit?.isPending && (
+                        <>
+                            <button
+                                className={`${styles.btn} ${styles.btnApprove}`}
+                                onClick={() => { if (onApprove) onApprove(eventToEdit); onClose(); }}
+                            >
+                                אשר
+                            </button>
+                            <button
+                                className={`${styles.btn} ${styles.btnReject}`}
+                                onClick={() => { if (onReject) onReject(eventToEdit); onClose(); }}
+                            >
+                                דחה
+                            </button>
+                        </>
                     )}
                     <button className={`${styles.btn} ${styles.btnSecondary}`} onClick={onClose}>ביטול</button>
                     <button

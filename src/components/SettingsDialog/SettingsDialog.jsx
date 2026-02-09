@@ -195,6 +195,7 @@ export default function SettingsDialog({ monday, onClose, context }) {
             <StructureTab
               settings={tempSettings}
               onChange={handleSettingsChange}
+              monday={monday}
             />
           )}
 

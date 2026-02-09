@@ -18,6 +18,14 @@ const CustomEvent = ({ event }) => {
     // בדיקה אם זה אירוע מתוכנן (Temporary/Planned)
     const isTemporary = event.isTemporary || false;
 
+    // בדיקה אם במצב בחירה לאישור
+    const isInApprovalSelection = event.isInApprovalSelection || false;
+    const isApprovalSelected = event.isApprovalSelected || false;
+
+    // סטטוס אישור
+    const isPending = event.isPending || false;
+    const isRejected = event.isRejected || false;
+
     // זיהוי אירוע קצר (30 דקות או פחות) - להציג כותרת ושעה באותה שורה
     const isShortEvent = !isAllDayEvent && event.start && event.end
         && differenceInMinutes(event.end, event.start) <= 30;
@@ -41,6 +49,11 @@ const CustomEvent = ({ event }) => {
     // טקסט לבן על רקע צבעוני, או צבע האירוע על רקע שקוף (מתוכנן)
     const textColor = isTemporary ? eventColor : '#ffffff';
 
+    // חישוב opacity לפי סטטוס אישור
+    let opacity = 1;
+    if (isPending) opacity = 0.5;
+    if (isRejected) opacity = 0.45;
+
     // בניית class names
     const wrapperClasses = [
         'gc-event-wrapper',
@@ -48,19 +61,31 @@ const CustomEvent = ({ event }) => {
         isShortEvent ? 'gc-event-short' : '',
         isSelected ? 'gc-event-selected' : '',
         isHoliday ? 'gc-event-holiday' : '',
-        isTemporary ? 'gc-event-temporary' : ''
+        isTemporary ? 'gc-event-temporary' : '',
+        isApprovalSelected ? 'gc-event-approval-selected' : ''
     ].filter(Boolean).join(' ');
-    
-    // סגנון מותאם - אירועים מתוכננים מקבלים גבול צבעוני במקום רקע
+
+    // סגנון מותאם
     const wrapperStyle = isTemporary
-        ? { backgroundColor, color: textColor, '--event-color': eventColor, borderColor: eventColor }
-        : { backgroundColor, color: textColor };
+        ? { backgroundColor, color: textColor, '--event-color': eventColor, borderColor: eventColor, opacity }
+        : {
+            backgroundColor,
+            color: textColor,
+            opacity,
+            ...(isRejected ? { borderRight: '3px solid #e44258' } : {})
+        };
 
     return (
         <div
             className={wrapperClasses}
             style={wrapperStyle}
         >
+            {/* Checkbox במצב בחירה לאישור */}
+            {isInApprovalSelection && (
+                <span className="gc-event-approval-checkbox">
+                    {isApprovalSelected ? '\u2611' : '\u2610'}
+                </span>
+            )}
             <div className="gc-event-title">
                 {event.title}
             </div>

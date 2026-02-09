@@ -3,6 +3,7 @@ import { useSettings } from '../contexts/SettingsContext';
 import { fetchItemById, fetchColumnSettings, fetchProjectById } from '../utils/mondayApi';
 import { getEffectiveBoardId } from '../utils/boardIdResolver';
 import { isBillableIndex } from '../utils/eventTypeMapping';
+import { isPendingIndex, isApprovedIndex, isRejectedIndex } from '../utils/approvalMapping';
 import logger from '../utils/logger';
 
 /**
@@ -64,6 +65,9 @@ export const useEventDataLoader = ({
 
             // חילוץ נתוני לחיוב / לא לחיוב
             extractBillingData(updatedEvent, item, customSettings);
+
+            // חילוץ נתוני אישור מנהל
+            extractApprovalData(updatedEvent, item, customSettings);
 
             modals.setEventToEdit(updatedEvent);
             logger.functionEnd('loadEventDataForEdit', { eventId: event.mondayItemId });
@@ -227,6 +231,20 @@ function extractBillingData(updatedEvent, item, customSettings) {
         if (nonBillableColumn) {
             updatedEvent.nonBillableType = nonBillableColumn.text || nonBillableColumn.label || "";
         }
+    }
+}
+
+/**
+ * חילוץ נתוני אישור מנהל מהאירוע
+ */
+function extractApprovalData(updatedEvent, item, customSettings) {
+    if (customSettings.enableApproval && customSettings.approvalStatusColumnId) {
+        const approvalCol = item.column_values.find(col => col.id === customSettings.approvalStatusColumnId);
+        const approvalIdx = approvalCol?.index ?? null;
+        updatedEvent.approvalStatusIndex = approvalIdx;
+        updatedEvent.isPending = isPendingIndex(approvalIdx, customSettings.approvalStatusMapping);
+        updatedEvent.isApproved = isApprovedIndex(approvalIdx, customSettings.approvalStatusMapping);
+        updatedEvent.isRejected = isRejectedIndex(approvalIdx, customSettings.approvalStatusMapping);
     }
 }
 
