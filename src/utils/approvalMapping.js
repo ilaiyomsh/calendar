@@ -1,6 +1,6 @@
 /**
  * Approval Mapping - מודול מיפוי לעמודת סטטוס אישור מנהל
- * דומה ל-eventTypeMapping.js אבל עם 3 קטגוריות: pending, approved, rejected
+ * 4 קטגוריות: pending, approved_billable, approved_unbillable, rejected
  *
  * מבנה mapping: { index: 'category', ... }
  * מבנה labelMeta: { index: { label, color }, ... }
@@ -11,14 +11,16 @@ import logger from './logger';
 // === קבועי קטגוריות ===
 
 export const APPROVAL_CATEGORIES = {
-    PENDING: 'pending',       // ממתין לאישור (בדיוק 1)
-    APPROVED: 'approved',     // מאושר (בדיוק 1)
-    REJECTED: 'rejected'      // לא מאושר (בדיוק 1)
+    PENDING: 'pending',                       // ממתין לאישור (בדיוק 1)
+    APPROVED_BILLABLE: 'approved_billable',   // מאושר - לחיוב (בדיוק 1)
+    APPROVED_UNBILLABLE: 'approved_unbillable', // מאושר - לא לחיוב (בדיוק 1)
+    REJECTED: 'rejected'                      // לא מאושר (בדיוק 1)
 };
 
 export const APPROVAL_CATEGORY_LABELS = {
     [APPROVAL_CATEGORIES.PENDING]: 'ממתין לאישור',
-    [APPROVAL_CATEGORIES.APPROVED]: 'מאושר',
+    [APPROVAL_CATEGORIES.APPROVED_BILLABLE]: 'מאושר - לחיוב',
+    [APPROVAL_CATEGORIES.APPROVED_UNBILLABLE]: 'מאושר - לא לחיוב',
     [APPROVAL_CATEGORIES.REJECTED]: 'לא מאושר'
 };
 
@@ -38,9 +40,15 @@ export const getPendingIndex = (mapping) => {
     return entry ? entry[0] : null;
 };
 
-export const getApprovedIndex = (mapping) => {
+export const getApprovedBillableIndex = (mapping) => {
     if (!mapping) return null;
-    const entry = Object.entries(mapping).find(([, cat]) => cat === APPROVAL_CATEGORIES.APPROVED);
+    const entry = Object.entries(mapping).find(([, cat]) => cat === APPROVAL_CATEGORIES.APPROVED_BILLABLE);
+    return entry ? entry[0] : null;
+};
+
+export const getApprovedUnbillableIndex = (mapping) => {
+    if (!mapping) return null;
+    const entry = Object.entries(mapping).find(([, cat]) => cat === APPROVAL_CATEGORIES.APPROVED_UNBILLABLE);
     return entry ? entry[0] : null;
 };
 
@@ -53,7 +61,13 @@ export const getRejectedIndex = (mapping) => {
 // === Boolean Checkers ===
 
 export const isPendingIndex = (index, mapping) => getApprovalCategory(index, mapping) === APPROVAL_CATEGORIES.PENDING;
-export const isApprovedIndex = (index, mapping) => getApprovalCategory(index, mapping) === APPROVAL_CATEGORIES.APPROVED;
+export const isApprovedBillableIndex = (index, mapping) => getApprovalCategory(index, mapping) === APPROVAL_CATEGORIES.APPROVED_BILLABLE;
+export const isApprovedUnbillableIndex = (index, mapping) => getApprovalCategory(index, mapping) === APPROVAL_CATEGORIES.APPROVED_UNBILLABLE;
+// Composite: true for BOTH approved types (for edit lock, opacity)
+export const isApprovedIndex = (index, mapping) => {
+    const cat = getApprovalCategory(index, mapping);
+    return cat === APPROVAL_CATEGORIES.APPROVED_BILLABLE || cat === APPROVAL_CATEGORIES.APPROVED_UNBILLABLE;
+};
 export const isRejectedIndex = (index, mapping) => getApprovalCategory(index, mapping) === APPROVAL_CATEGORIES.REJECTED;
 
 // === Label Meta Helpers ===
@@ -90,12 +104,20 @@ export const validateApprovalMapping = (mapping) => {
         errors.push('ניתן לשייך רק לייבל אחד לקטגוריית "ממתין לאישור"');
     }
 
-    // בדיקת approved - בדיוק 1
-    const approvedCount = entries.filter(([, cat]) => cat === APPROVAL_CATEGORIES.APPROVED).length;
-    if (approvedCount === 0) {
-        errors.push('חסר לייבל "מאושר" - יש לשייך בדיוק לייבל אחד');
-    } else if (approvedCount > 1) {
-        errors.push('ניתן לשייך רק לייבל אחד לקטגוריית "מאושר"');
+    // בדיקת approved_billable - בדיוק 1
+    const approvedBillableCount = entries.filter(([, cat]) => cat === APPROVAL_CATEGORIES.APPROVED_BILLABLE).length;
+    if (approvedBillableCount === 0) {
+        errors.push('חסר לייבל "מאושר - לחיוב" - יש לשייך בדיוק לייבל אחד');
+    } else if (approvedBillableCount > 1) {
+        errors.push('ניתן לשייך רק לייבל אחד לקטגוריית "מאושר - לחיוב"');
+    }
+
+    // בדיקת approved_unbillable - בדיוק 1
+    const approvedUnbillableCount = entries.filter(([, cat]) => cat === APPROVAL_CATEGORIES.APPROVED_UNBILLABLE).length;
+    if (approvedUnbillableCount === 0) {
+        errors.push('חסר לייבל "מאושר - לא לחיוב" - יש לשייך בדיוק לייבל אחד');
+    } else if (approvedUnbillableCount > 1) {
+        errors.push('ניתן לשייך רק לייבל אחד לקטגוריית "מאושר - לא לחיוב"');
     }
 
     // בדיקת rejected - בדיוק 1
@@ -118,8 +140,10 @@ const KNOWN_APPROVAL_LABELS = {
     'ממתין': APPROVAL_CATEGORIES.PENDING,
     'ממתין לאישור': APPROVAL_CATEGORIES.PENDING,
     'pending': APPROVAL_CATEGORIES.PENDING,
-    'מאושר': APPROVAL_CATEGORIES.APPROVED,
-    'approved': APPROVAL_CATEGORIES.APPROVED,
+    'מאושר': APPROVAL_CATEGORIES.APPROVED_BILLABLE,       // backward compat: old "מאושר" → billable
+    'מאושר - לחיוב': APPROVAL_CATEGORIES.APPROVED_BILLABLE,
+    'approved': APPROVAL_CATEGORIES.APPROVED_BILLABLE,
+    'מאושר - לא לחיוב': APPROVAL_CATEGORIES.APPROVED_UNBILLABLE,
     'לא מאושר': APPROVAL_CATEGORIES.REJECTED,
     'נדחה': APPROVAL_CATEGORIES.REJECTED,
     'rejected': APPROVAL_CATEGORIES.REJECTED
@@ -154,5 +178,32 @@ export const createAutoApprovalMapping = (availableLabels) => {
     }
 
     logger.warn('approvalMapping', 'Auto-mapping failed validation', { errors: validation.errors, matched });
+    return null;
+};
+
+/**
+ * מיגרציה של מיפוי ישן (3 קטגוריות) ל-4 קטגוריות
+ * ממיר 'approved' → 'approved_billable'
+ * @param {Object} mapping - מיפוי קיים
+ * @returns {Object|null} מיפוי מעודכן אם בוצע שינוי, null אם לא נדרש
+ */
+export const migrateApprovalMapping = (mapping) => {
+    if (!mapping || typeof mapping !== 'object') return null;
+
+    let changed = false;
+    const newMapping = { ...mapping };
+
+    for (const [index, category] of Object.entries(newMapping)) {
+        if (category === 'approved') {
+            newMapping[index] = APPROVAL_CATEGORIES.APPROVED_BILLABLE;
+            changed = true;
+            logger.info('approvalMapping', `Migrated index ${index} from 'approved' to 'approved_billable'`);
+        }
+    }
+
+    if (changed) {
+        return newMapping;
+    }
+
     return null;
 };

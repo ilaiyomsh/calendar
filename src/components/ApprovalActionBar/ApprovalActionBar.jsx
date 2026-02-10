@@ -8,7 +8,8 @@ import styles from './ApprovalActionBar.module.css';
  */
 const ApprovalActionBar = ({
     selectedCount,
-    onApprove,
+    onApproveBillable,
+    onApproveUnbillable,
     onClear,
     isProcessing
 }) => {
@@ -25,15 +26,24 @@ const ApprovalActionBar = ({
 
                 <div className={styles.actions}>
                     <button
-                        onClick={onApprove}
+                        onClick={onApproveBillable}
                         disabled={isProcessing}
                         className={styles.approveBtn}
-                        title="אשר דיווחים נבחרים"
+                        title="אשר נבחרים - לחיוב"
                     >
                         {isProcessing ? (
                             <Loader2 size={18} className={styles.spinner} />
                         ) : null}
-                        <span>{isProcessing ? 'מאשר...' : 'אשר נבחרים'}</span>
+                        <span>{isProcessing ? 'מאשר...' : 'אשר - לחיוב'}</span>
+                    </button>
+
+                    <button
+                        onClick={onApproveUnbillable}
+                        disabled={isProcessing}
+                        className={styles.approveUnbillableBtn}
+                        title="אשר נבחרים - לא לחיוב"
+                    >
+                        <span>אשר - לא לחיוב</span>
                     </button>
 
                     <button

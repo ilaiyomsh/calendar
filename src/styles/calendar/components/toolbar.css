@@ -249,6 +249,15 @@
     background-color: #0a6633 !important;
 }
 
+.rbc-approve-all-unbillable-btn {
+    background-color: #0073ea !important;
+    color: white !important;
+}
+
+.rbc-approve-all-unbillable-btn:hover {
+    background-color: #0060c2 !important;
+}
+
 /* כפתור אישור מובייל */
 .rbc-approval-btn-mobile {
     display: flex !important;

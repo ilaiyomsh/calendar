@@ -215,10 +215,18 @@ const CalendarToolbar = ({
             <button
               type="button"
               className="rbc-approval-btn rbc-approve-all-btn"
-              onClick={onApproveAllInWeek}
-              title="אשר את כל הדיווחים הממתינים בתצוגה"
+              onClick={() => onApproveAllInWeek('billable')}
+              title="אשר הכל - לחיוב"
             >
-              <span>אשר הכל</span>
+              <span>אשר הכל - לחיוב</span>
+            </button>
+            <button
+              type="button"
+              className="rbc-approval-btn rbc-approve-all-unbillable-btn"
+              onClick={() => onApproveAllInWeek('unbillable')}
+              title="אשר הכל - לא לחיוב"
+            >
+              <span>אשר הכל - לא לחיוב</span>
             </button>
           </>
         ) : null}

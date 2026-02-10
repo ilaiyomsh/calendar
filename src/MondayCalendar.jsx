@@ -36,6 +36,7 @@ import { useMobile } from './contexts/MobileContext';
 // Event Type Mapping
 import { createLegacyMapping } from './utils/eventTypeMapping';
 import { parseStatusColumnLabels } from './utils/eventTypeValidation';
+import { migrateApprovalMapping } from './utils/approvalMapping';
 
 // Hooks
 import { useMondayEvents } from './hooks/useMondayEvents';
@@ -183,9 +184,14 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
         };
     }, [minTime]);
 
+    // State - Monday context (חייב להיות לפני hooks שמשתמשים ב-context)
+    const [context, setContext] = useState(null);
+    const [settings, setSettings] = useState(null);
+    const [columnIds, setColumnIds] = useState(null); // מזהי העמודות
+
     // Hook לניהול מצב המודלים
     const modals = useEventModals();
-    
+
     // Hook לניהול בחירה מרובה של אירועים
     const multiSelect = useMultiSelect();
 
@@ -200,17 +206,12 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
 
     // Hook לניהול פרויקטים
     const { projects, loading: isLoadingProjects } = useProjects();
-    
+
     // Hook לבדיקת owner status
     const { isOwner, loading: ownerLoading } = useBoardOwner(monday);
 
     // Hook לניהול חגים ישראליים
     const { holidays, loadHolidays } = useIsraeliHolidays();
-
-    // State - Monday context (חייב להיות לפני hooks שמשתמשים ב-context)
-    const [context, setContext] = useState(null);
-    const [settings, setSettings] = useState(null);
-    const [columnIds, setColumnIds] = useState(null); // מזהי העמודות
 
     // חישוב לוח דיווחים אפקטיבי (חייב להיות לפני hooks שמשתמשים ב-effectiveBoardId)
     const effectiveBoardId = useMemo(() =>
@@ -419,6 +420,17 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
 
         migrateEventTypeMapping();
     }, [customSettings.eventTypeMapping, customSettings.eventTypeStatusColumnId, effectiveBoardId]);
+
+    // מיגרציה אוטומטית של מיפוי אישור (3 קטגוריות → 4)
+    useEffect(() => {
+        if (!customSettings.approvalStatusMapping || !customSettings.enableApproval) return;
+
+        const migratedMapping = migrateApprovalMapping(customSettings.approvalStatusMapping);
+        if (migratedMapping) {
+            logger.info('MondayCalendar', 'Migrating approval mapping from 3 to 4 categories');
+            updateSettings({ approvalStatusMapping: migratedMapping });
+        }
+    }, [customSettings.approvalStatusMapping, customSettings.enableApproval]);
 
     // --- Helper functions ---
 
@@ -726,13 +738,14 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
     // --- Approval handlers ---
 
     // אישור אירועים נבחרים
-    const handleApproveSelected = useCallback(async () => {
+    // @param {string} billableType - 'billable' | 'unbillable'
+    const handleApproveSelected = useCallback(async (billableType = 'billable') => {
         if (!approvalSelection.selectedCount) return;
 
         setIsProcessingApproval(true);
         try {
             const selectedEvents = events.filter(e => approvalSelection.isSelected(e.id));
-            const result = await approval.approveMultiple(selectedEvents);
+            const result = await approval.approveMultiple(selectedEvents, billableType);
 
             if (result.succeeded > 0) {
                 showSuccess(`${result.succeeded} דיווחים אושרו בהצלחה`);
@@ -753,10 +766,11 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
     }, [approvalSelection, events, approval, showSuccess, showError, showErrorWithDetails, currentViewRange, loadEvents, calendarFilter.filterRules]);
 
     // אישור כל הממתינים בתצוגה הנוכחית
-    const handleApproveAllInWeek = useCallback(async () => {
+    // @param {string} billableType - 'billable' | 'unbillable'
+    const handleApproveAllInWeek = useCallback(async (billableType = 'billable') => {
         setIsProcessingApproval(true);
         try {
-            const result = await approval.approveAllPending(events);
+            const result = await approval.approveAllPending(events, billableType);
 
             if (result.succeeded > 0) {
                 showSuccess(`${result.succeeded} דיווחים אושרו בהצלחה`);
@@ -779,9 +793,15 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
     }, [approval, events, showSuccess, showWarning, showError, showErrorWithDetails, currentViewRange, loadEvents, calendarFilter.filterRules, approvalSelection]);
 
     // אישור אירוע בודד מתוך מודל
-    const handleApproveEvent = useCallback(async (event) => {
+    // @param {Object} event - האירוע לאישור
+    // @param {string} billableType - 'billable' | 'unbillable'
+    const handleApproveEvent = useCallback(async (event, billableType = 'billable') => {
         try {
-            await approval.approveEvent(event);
+            if (billableType === 'unbillable') {
+                await approval.approveUnbillable(event);
+            } else {
+                await approval.approveBillable(event);
+            }
             showSuccess('הדיווח אושר בהצלחה');
             if (currentViewRange) {
                 loadEvents(currentViewRange.start, currentViewRange.end, calendarFilter.filterRules);
@@ -1219,7 +1239,8 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
             {/* Approval Action Bar - סרגל אישור מנהל לאירועים נבחרים */}
             <ApprovalActionBar
                 selectedCount={approvalSelection.selectedCount}
-                onApprove={handleApproveSelected}
+                onApproveBillable={() => handleApproveSelected('billable')}
+                onApproveUnbillable={() => handleApproveSelected('unbillable')}
                 onClear={approvalSelection.clearSelection}
                 isProcessing={isProcessingApproval}
             />

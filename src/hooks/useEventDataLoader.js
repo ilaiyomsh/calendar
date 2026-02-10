@@ -3,7 +3,7 @@ import { useSettings } from '../contexts/SettingsContext';
 import { fetchItemById, fetchColumnSettings, fetchProjectById } from '../utils/mondayApi';
 import { getEffectiveBoardId } from '../utils/boardIdResolver';
 import { isBillableIndex } from '../utils/eventTypeMapping';
-import { isPendingIndex, isApprovedIndex, isRejectedIndex } from '../utils/approvalMapping';
+import { isPendingIndex, isApprovedIndex, isApprovedBillableIndex, isApprovedUnbillableIndex, isRejectedIndex } from '../utils/approvalMapping';
 import logger from '../utils/logger';
 
 /**
@@ -244,6 +244,8 @@ function extractApprovalData(updatedEvent, item, customSettings) {
         updatedEvent.approvalStatusIndex = approvalIdx;
         updatedEvent.isPending = isPendingIndex(approvalIdx, customSettings.approvalStatusMapping);
         updatedEvent.isApproved = isApprovedIndex(approvalIdx, customSettings.approvalStatusMapping);
+        updatedEvent.isApprovedBillable = isApprovedBillableIndex(approvalIdx, customSettings.approvalStatusMapping);
+        updatedEvent.isApprovedUnbillable = isApprovedUnbillableIndex(approvalIdx, customSettings.approvalStatusMapping);
         updatedEvent.isRejected = isRejectedIndex(approvalIdx, customSettings.approvalStatusMapping);
     }
 }

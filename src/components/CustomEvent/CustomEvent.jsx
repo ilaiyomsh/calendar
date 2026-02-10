@@ -25,6 +25,8 @@ const CustomEvent = ({ event }) => {
     // סטטוס אישור
     const isPending = event.isPending || false;
     const isRejected = event.isRejected || false;
+    const isApprovedBillable = event.isApprovedBillable || false;
+    const isApprovedUnbillable = event.isApprovedUnbillable || false;
 
     // זיהוי אירוע קצר (30 דקות או פחות) - להציג כותרת ושעה באותה שורה
     const isShortEvent = !isAllDayEvent && event.start && event.end
@@ -49,10 +51,9 @@ const CustomEvent = ({ event }) => {
     // טקסט לבן על רקע צבעוני, או צבע האירוע על רקע שקוף (מתוכנן)
     const textColor = isTemporary ? eventColor : '#ffffff';
 
-    // חישוב opacity לפי סטטוס אישור
+    // חישוב opacity לפי סטטוס אישור: ממתין=חצי שקוף, מאושר/נדחה=מלא
     let opacity = 1;
     if (isPending) opacity = 0.5;
-    if (isRejected) opacity = 0.45;
 
     // בניית class names
     const wrapperClasses = [
@@ -65,14 +66,12 @@ const CustomEvent = ({ event }) => {
         isApprovalSelected ? 'gc-event-approval-selected' : ''
     ].filter(Boolean).join(' ');
 
-    // סגנון מותאם
     const wrapperStyle = isTemporary
         ? { backgroundColor, color: textColor, '--event-color': eventColor, borderColor: eventColor, opacity }
         : {
             backgroundColor,
             color: textColor,
-            opacity,
-            ...(isRejected ? { borderRight: '3px solid #e44258' } : {})
+            opacity
         };
 
     return (
@@ -80,6 +79,10 @@ const CustomEvent = ({ event }) => {
             className={wrapperClasses}
             style={wrapperStyle}
         >
+            {/* X קטן אדום בפינה השמאלית העליונה לאירועים שנדחו */}
+            {isRejected && (
+                <span className="gc-event-rejected-x">✕</span>
+            )}
             {/* Checkbox במצב בחירה לאישור */}
             {isInApprovalSelection && (
                 <span className="gc-event-approval-checkbox">

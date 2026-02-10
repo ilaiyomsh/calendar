@@ -941,7 +941,8 @@ export default function AllDayEventModal({
                     {isEditMode && !isLocked && onDelete && <button className={`${styles.button} ${styles.deleteBtn}`} onClick={() => setShowDeleteConfirm(true)}>מחק</button>}
                     {isEditMode && isManager && isApprovalEnabled && eventToEdit?.isPending && (
                         <>
-                            <button className={`${styles.button} ${styles.approveBtn}`} onClick={() => { if (onApprove) onApprove(eventToEdit); onClose(); }}>אשר</button>
+                            <button className={`${styles.button} ${styles.approveBtn}`} onClick={() => { if (onApprove) onApprove(eventToEdit, 'billable'); onClose(); }}>אשר - לחיוב</button>
+                            <button className={`${styles.button} ${styles.approveUnbillableBtn}`} onClick={() => { if (onApprove) onApprove(eventToEdit, 'unbillable'); onClose(); }}>אשר - לא לחיוב</button>
                             <button className={`${styles.button} ${styles.rejectBtn}`} onClick={() => { if (onReject) onReject(eventToEdit); onClose(); }}>דחה</button>
                         </>
                     )}

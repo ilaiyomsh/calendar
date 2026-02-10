@@ -614,6 +614,16 @@
   background-color: #0a6633;
 }
 
+.approveUnbillableBtn {
+  background-color: #0073ea;
+  color: white;
+  border: 1px solid #0073ea;
+}
+
+.approveUnbillableBtn:hover {
+  background-color: #0060c2;
+}
+
 .rejectBtn {
   background-color: white;
   color: #e2445c;

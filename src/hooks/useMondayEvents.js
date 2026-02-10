@@ -4,7 +4,7 @@ import { createBoardItem, deleteItem, updateItemColumnValues } from '../utils/mo
 import { getColumnIds, mapItemToEvent } from '../utils/mondayColumns';
 import { isAllDayEventType, parseDuration, calculateEndDateFromDays, calculateDaysDiff, formatDurationForSave } from '../utils/durationUtils';
 import { isTemporaryIndex, getTimedEventIndex, getLabelText } from '../utils/eventTypeMapping';
-import { isPendingIndex, isApprovedIndex, isRejectedIndex, getPendingIndex } from '../utils/approvalMapping';
+import { isPendingIndex, isApprovedIndex, isApprovedBillableIndex, isApprovedUnbillableIndex, isRejectedIndex, getPendingIndex } from '../utils/approvalMapping';
 import { toMondayDateFormat, toMondayTimeFormat, toLocalDateFormat } from '../utils/dateFormatters';
 import { getEffectiveBoardId } from '../utils/boardIdResolver';
 import logger from '../utils/logger';
@@ -355,11 +355,13 @@ export const useMondayEvents = (monday, context) => {
 
                 // סטטוס אישור מנהל
                 const approvalColumn = customSettings.approvalStatusColumnId
-                    ? columnValues.find(c => c.id === customSettings.approvalStatusColumnId)
+                    ? item.column_values.find(c => c.id === customSettings.approvalStatusColumnId)
                     : null;
                 const approvalStatusIndex = approvalColumn?.index ?? null;
                 const isPending = customSettings.enableApproval && isPendingIndex(approvalStatusIndex, customSettings.approvalStatusMapping);
                 const isApproved = customSettings.enableApproval && isApprovedIndex(approvalStatusIndex, customSettings.approvalStatusMapping);
+                const isApprovedBillable = customSettings.enableApproval && isApprovedBillableIndex(approvalStatusIndex, customSettings.approvalStatusMapping);
+                const isApprovedUnbillable = customSettings.enableApproval && isApprovedUnbillableIndex(approvalStatusIndex, customSettings.approvalStatusMapping);
                 const isRejected = customSettings.enableApproval && isRejectedIndex(approvalStatusIndex, customSettings.approvalStatusMapping);
 
                 return {
@@ -380,6 +382,8 @@ export const useMondayEvents = (monday, context) => {
                     approvalStatusIndex,
                     isPending,
                     isApproved,
+                    isApprovedBillable,
+                    isApprovedUnbillable,
                     isRejected
                 };
             }).filter(Boolean);
@@ -568,6 +572,8 @@ export const useMondayEvents = (monday, context) => {
                     eventTypeIndex: newTypeIndex,
                     isPending: !!customSettings.enableApproval,
                     isApproved: false,
+                    isApprovedBillable: false,
+                    isApprovedUnbillable: false,
                     isRejected: false
                 };
 

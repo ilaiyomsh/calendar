@@ -547,9 +547,15 @@ export default function EventModal({
                         <>
                             <button
                                 className={`${styles.btn} ${styles.btnApprove}`}
-                                onClick={() => { if (onApprove) onApprove(eventToEdit); onClose(); }}
+                                onClick={() => { if (onApprove) onApprove(eventToEdit, 'billable'); onClose(); }}
                             >
-                                אשר
+                                אשר - לחיוב
+                            </button>
+                            <button
+                                className={`${styles.btn} ${styles.btnApproveUnbillable}`}
+                                onClick={() => { if (onApprove) onApprove(eventToEdit, 'unbillable'); onClose(); }}
+                            >
+                                אשר - לא לחיוב
                             </button>
                             <button
                                 className={`${styles.btn} ${styles.btnReject}`}

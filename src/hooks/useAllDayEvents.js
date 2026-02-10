@@ -302,6 +302,8 @@ async function createMultipleReports({
                 mondayItemId: createdItem.id,
                 isPending: !!customSettings.enableApproval,
                 isApproved: false,
+                isApprovedBillable: false,
+                isApprovedUnbillable: false,
                 isRejected: false
             };
             addEvent(newEvent);

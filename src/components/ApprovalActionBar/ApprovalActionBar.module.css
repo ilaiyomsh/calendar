@@ -69,6 +69,30 @@
     cursor: not-allowed;
 }
 
+.approveUnbillableBtn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 8px;
+    background: rgba(0, 115, 234, 0.6);
+    color: white;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.approveUnbillableBtn:hover:not(:disabled) {
+    background: rgba(0, 115, 234, 0.8);
+}
+
+.approveUnbillableBtn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
 .clearBtn {
     display: flex;
     align-items: center;
