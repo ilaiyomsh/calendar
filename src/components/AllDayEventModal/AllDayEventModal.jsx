@@ -935,9 +935,11 @@ export default function AllDayEventModal({
                     <h2>{getModalTitle()}{pendingDate && ` - ${pendingDate.toLocaleDateString('he-IL')}`}</h2>
                     <button className={styles.closeButton} onClick={handleCloseAttempt}><X size={24} /></button>
                 </div>
+                {isEditMode && isLocked && (
+                    <div className={styles.lockBanner}>{lockReason}</div>
+                )}
                 <div className={`${styles.content} ${viewMode === 'days-selection' ? styles.contentVisible : ''} ${viewMode === 'form' ? styles.contentForm : ''}`}>{getModalContent()}</div>
                 <div className={styles.footer}>
-                    {isEditMode && isLocked && <span className={styles.lockMessage}>{lockReason}</span>}
                     {isEditMode && !isLocked && onDelete && <button className={`${styles.button} ${styles.deleteBtn}`} onClick={() => setShowDeleteConfirm(true)}>מחק</button>}
                     {isEditMode && isManager && isApprovalEnabled && eventToEdit?.isPending && (
                         <>

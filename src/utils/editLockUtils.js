@@ -17,7 +17,7 @@ export const EDIT_LOCK_MODES = {
 
 export const EDIT_LOCK_LABELS = {
     [EDIT_LOCK_MODES.NONE]: 'ללא הגבלה',
-    [EDIT_LOCK_MODES.TWO_DAYS]: 'עד יומיים אחרי יצירת הדיווח',
+    [EDIT_LOCK_MODES.TWO_DAYS]: 'עד יומיים מתאריך הדיווח',
     [EDIT_LOCK_MODES.CURRENT_WEEK]: 'שבוע נוכחי בלבד',
     [EDIT_LOCK_MODES.CURRENT_MONTH]: 'חודש נוכחי בלבד'
 };
@@ -37,18 +37,21 @@ export function isEventLocked(event, lockMode) {
 
     switch (lockMode) {
         case EDIT_LOCK_MODES.TWO_DAYS: {
-            // נעילה אם עברו יותר מ-48 שעות מיצירת הדיווח
-            const createdAt = event.createdAt;
-            if (!createdAt) {
-                // אם אין תאריך יצירה - לא נועלים (backward compatible)
+            // נעילה אם עברו 2 ימים קלנדריים מתאריך הדיווח
+            const eventDate = event.start;
+            if (!eventDate) {
                 return { locked: false, reason: '' };
             }
-            const twoDaysMs = 48 * 60 * 60 * 1000;
-            const elapsed = now.getTime() - createdAt.getTime();
-            if (elapsed > twoDaysMs) {
+            // חישוב לפי ימים קלנדריים
+            const eventDay = new Date(eventDate);
+            eventDay.setHours(0, 0, 0, 0);
+            const today = new Date(now);
+            today.setHours(0, 0, 0, 0);
+            const daysDiff = Math.floor((today - eventDay) / (24 * 60 * 60 * 1000));
+            if (daysDiff >= 2) {
                 return {
                     locked: true,
-                    reason: 'הדיווח נעול - עברו יותר מיומיים מיצירתו'
+                    reason: 'הדיווח נעול - עברו יותר מיומיים מתאריך הדיווח'
                 };
             }
             return { locked: false, reason: '' };

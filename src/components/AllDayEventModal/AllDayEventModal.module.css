@@ -542,6 +542,15 @@
   border-radius: 6px;
 }
 
+.lockBanner {
+  background: #fff3cd;
+  color: #856404;
+  padding: 10px 20px;
+  font-size: 14px;
+  text-align: center;
+  border-bottom: 1px solid #ffc107;
+}
+
 .totalHours {
   display: flex;
   align-items: flex-end;

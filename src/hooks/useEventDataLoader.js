@@ -39,42 +39,23 @@ export const useEventDataLoader = ({
 
         try {
             logger.functionStart('loadEventDataForEdit', { eventId: event.mondayItemId });
-            modals.setIsLoadingEventData(true);
 
-            // שימוש ב-query ממוקד לפי ID
-            const item = await fetchItemById(monday, effectiveBoardId, event.mondayItemId);
-
-            if (!item) {
-                logger.warn('loadEventDataForEdit', `Item not found: ${event.mondayItemId}`);
-                return;
+            // הנתונים כבר נטענו ב-loadEvents - שימוש ישיר ללא API call
+            // עדכון selectedItem ו-selectedTaskData ממידע שכבר קיים על האירוע
+            if (event.projectId && event.projectName) {
+                modals.setSelectedItem({ id: event.projectId, name: event.projectName });
             }
 
             const updatedEvent = { ...event };
 
-            // חילוץ פרויקט
-            await extractProjectData(updatedEvent, item, customSettings, settings, effectiveBoardId, monday, modals);
-
-            // חילוץ משימה
-            extractTaskData(updatedEvent, item, customSettings);
-
-            // חילוץ הערות
-            extractNotesData(updatedEvent, item, customSettings);
-
-            // חילוץ שלב
-            extractStageData(updatedEvent, item, customSettings);
-
-            // חילוץ נתוני לחיוב / לא לחיוב
-            extractBillingData(updatedEvent, item, customSettings);
-
-            // חילוץ נתוני אישור מנהל
-            extractApprovalData(updatedEvent, item, customSettings);
+            if (event.taskId && event.taskName) {
+                updatedEvent.selectedTaskData = { id: event.taskId, name: event.taskName };
+            }
 
             modals.setEventToEdit(updatedEvent);
             logger.functionEnd('loadEventDataForEdit', { eventId: event.mondayItemId });
         } catch (error) {
             logger.error('loadEventDataForEdit', 'Error loading event data for edit', error);
-        } finally {
-            modals.setIsLoadingEventData(false);
         }
     }, [effectiveBoardId, customSettings, monday, settings, modals]);
 
@@ -222,8 +203,11 @@ function extractBillingData(updatedEvent, item, customSettings) {
     if (customSettings.eventTypeStatusColumnId) {
         const typeColumn = item.column_values.find(col => col.id === customSettings.eventTypeStatusColumnId);
         const typeIndex = typeColumn?.index ?? null;
-        // בדיקה מבוססת אינדקס: isBillable = האינדקס שייך לקטגוריית billable
-        updatedEvent.isBillable = isBillableIndex(typeIndex, customSettings.eventTypeMapping);
+        // fetchItemById לא כולל ... on StatusValue { index } ולכן index יהיה null
+        // במקרה זה לא נדרוס את הנתונים שכבר נטענו מ-loadEvents
+        if (typeIndex != null) {
+            updatedEvent.isBillable = isBillableIndex(typeIndex, customSettings.eventTypeMapping);
+        }
     }
 
     if (customSettings.nonBillableStatusColumnId) {
@@ -241,6 +225,11 @@ function extractApprovalData(updatedEvent, item, customSettings) {
     if (customSettings.enableApproval && customSettings.approvalStatusColumnId) {
         const approvalCol = item.column_values.find(col => col.id === customSettings.approvalStatusColumnId);
         const approvalIdx = approvalCol?.index ?? null;
+
+        // fetchItemById לא כולל ... on StatusValue { index } ולכן index יהיה null
+        // במקרה זה לא נדרוס את הנתונים שכבר נטענו מ-loadEvents
+        if (approvalIdx == null) return;
+
         updatedEvent.approvalStatusIndex = approvalIdx;
         updatedEvent.isPending = isPendingIndex(approvalIdx, customSettings.approvalStatusMapping);
         updatedEvent.isApproved = isApprovedIndex(approvalIdx, customSettings.approvalStatusMapping);

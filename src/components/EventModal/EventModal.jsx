@@ -374,6 +374,11 @@ export default function EventModal({
                     <button className={styles.closeBtn} onClick={onClose} aria-label="סגור">{isMobile ? '→' : '✕'}</button>
                 </div>
 
+                {/* הודעת נעילה בראש המודל */}
+                {isEditMode && !isConvertMode && isLocked && (
+                    <div className={styles.lockBanner}>{lockReason}</div>
+                )}
+
                 <div className={styles.content} style={{ position: 'relative' }}>
                     {isLoadingEventData && (
                         <div className={styles.loadingOverlay}>
@@ -535,10 +540,6 @@ export default function EventModal({
                 </div>
 
                 <div className={styles.footer}>
-                    {/* הודעת נעילה */}
-                    {isEditMode && !isConvertMode && isLocked && (
-                        <span className={styles.lockMessage}>{lockReason}</span>
-                    )}
                     {isEditMode && !isConvertMode && !isLocked && onDelete && (
                         <button className={`${styles.btn} ${styles.btnDanger}`} onClick={() => setShowDeleteConfirm(true)}>מחק</button>
                     )}

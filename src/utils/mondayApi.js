@@ -430,6 +430,14 @@ export const fetchItemById = async (monday, boardId, itemId) => {
                 ... on TextValue {
                     text
                 }
+                ... on StatusValue {
+                    index
+                    label
+                    text
+                    label_style {
+                        color
+                    }
+                }
             }
         }
     }`;

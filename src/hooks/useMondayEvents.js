@@ -3,7 +3,7 @@ import { useSettings } from '../contexts/SettingsContext';
 import { createBoardItem, deleteItem, updateItemColumnValues } from '../utils/mondayApi';
 import { getColumnIds, mapItemToEvent } from '../utils/mondayColumns';
 import { isAllDayEventType, parseDuration, calculateEndDateFromDays, calculateDaysDiff, formatDurationForSave } from '../utils/durationUtils';
-import { isTemporaryIndex, getTimedEventIndex, getLabelText } from '../utils/eventTypeMapping';
+import { isTemporaryIndex, getTimedEventIndex, getLabelText, isBillableIndex } from '../utils/eventTypeMapping';
 import { isPendingIndex, isApprovedIndex, isApprovedBillableIndex, isApprovedUnbillableIndex, isRejectedIndex, getPendingIndex } from '../utils/approvalMapping';
 import { toMondayDateFormat, toMondayTimeFormat, toLocalDateFormat } from '../utils/dateFormatters';
 import { getEffectiveBoardId } from '../utils/boardIdResolver';
@@ -281,10 +281,30 @@ export const useMondayEvents = (monday, context) => {
                     ? item.column_values.find(col => col.id === customSettings.eventTypeStatusColumnId)
                     : null;
                 // חילוץ פרויקט מקושר
-                const projectColumn = customSettings.projectColumnId 
+                const projectColumn = customSettings.projectColumnId
                     ? item.column_values.find(col => col.id === customSettings.projectColumnId)
                     : null;
                 const projectId = projectColumn?.linked_items?.[0]?.id || null;
+                const projectName = projectColumn?.linked_items?.[0]?.name || null;
+
+                // חילוץ משימה מקושרת
+                const taskColumn = customSettings.taskColumnId
+                    ? item.column_values.find(col => col.id === customSettings.taskColumnId)
+                    : null;
+                const taskId = taskColumn?.linked_items?.[0]?.id || null;
+                const taskName = taskColumn?.linked_items?.[0]?.name || null;
+
+                // חילוץ שלב (stage)
+                const stageColumn = customSettings.stageColumnId
+                    ? item.column_values.find(col => col.id === customSettings.stageColumnId)
+                    : null;
+                const stageId = stageColumn?.label || null;
+
+                // חילוץ סוג לא לחיוב
+                const nonBillableColumn = customSettings.nonBillableStatusColumnId
+                    ? item.column_values.find(col => col.id === customSettings.nonBillableStatusColumnId)
+                    : null;
+                const nonBillableType = nonBillableColumn?.text || nonBillableColumn?.label || '';
 
                 // חילוץ התחלה
                 let start = null;
@@ -373,12 +393,18 @@ export const useMondayEvents = (monday, context) => {
                     mondayItemId: item.id,
                     notes: notesColumn?.text || '',
                     projectId,
+                    projectName,
+                    taskId,
+                    taskName,
+                    stageId,
+                    isBillable: isBillableIndex(eventTypeIndex, customSettings.eventTypeMapping),
+                    nonBillableType,
                     eventType: eventTypeText,
                     eventTypeIndex,
                     eventTypeColor,
-                    durationDays: isAllDay ? duration.value : null, // שמירת מספר הימים לשימוש ב-Resize
-                    isTemporary, // האם זה אירוע מתוכנן (Planned/Temporary)
-                    createdAt: item.created_at ? new Date(item.created_at) : null, // תאריך יצירה לנעילת עריכה
+                    durationDays: isAllDay ? duration.value : null,
+                    isTemporary,
+                    createdAt: item.created_at ? new Date(item.created_at) : null,
                     approvalStatusIndex,
                     isPending,
                     isApproved,
