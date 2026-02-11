@@ -175,27 +175,31 @@ export const getHolidayColor = (holidayType) => {
 
 /**
  * מחזיר צבע לאירוע לפי סוג האירוע או מזהה הפרויקט
+ * אירועים יומיים (חופשה/מחלה/מילואים) - צבע לפי סוג האירוע
+ * אירועים שעתיים - צבע לפי פרויקט (כדי להבדיל בין פרויקטים שונים)
  * @param {string} eventType - סוג האירוע (חופשה/מחלה/מילואים/שעתי)
  * @param {string} projectId - מזהה הפרויקט
  * @param {string} [eventTypeColor] - צבע הלייבל מ-Monday API (label_style.color)
+ * @param {boolean} [isAllDay] - האם אירוע יומי
  * @returns {string} - צבע בפורמט HSL או HEX
  */
-export const getEventColor = (eventType, projectId, eventTypeColor) => {
-    // 1. צבע מ-Monday API (מיפוי דינאמי)
-    if (eventTypeColor) {
-        return ensureDarkEnough(eventTypeColor);
+export const getEventColor = (eventType, projectId, eventTypeColor, isAllDay) => {
+    // אירועים יומיים - צבע לפי סוג האירוע (חופשה=כתום, מחלה=אדום וכו')
+    if (isAllDay) {
+        if (eventTypeColor) return ensureDarkEnough(eventTypeColor);
+        if (eventType && EVENT_TYPE_COLORS[eventType]) return ensureDarkEnough(EVENT_TYPE_COLORS[eventType]);
     }
 
-    // 2. אירועים יומיים - צבע קבוע legacy (מוודא שהוא כהה מספיק)
-    if (eventType && EVENT_TYPE_COLORS[eventType]) {
-        return ensureDarkEnough(EVENT_TYPE_COLORS[eventType]);
-    }
-
-    // 3. אירועים עם פרויקט - צבע דינאמי לפי מזהה הפרויקט (כבר עטוף ב-stringToColor)
+    // אירועים שעתיים - צבע לפי פרויקט (כל פרויקט צבע ייחודי)
     if (projectId) {
         return stringToColor(projectId.toString());
     }
 
-    // 4. ברירת מחדל
+    // fallback: צבע סוג אירוע אם אין פרויקט
+    if (eventTypeColor) {
+        return ensureDarkEnough(eventTypeColor);
+    }
+
+    // ברירת מחדל
     return ensureDarkEnough('#3174ad');
 };

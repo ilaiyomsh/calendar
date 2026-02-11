@@ -37,7 +37,7 @@ const CustomEvent = ({ event }) => {
     // אירועים מתוכננים מקבלים רקע שקוף (hollow)
     const eventColor = isHoliday
         ? getHolidayColor(event.holidayType)
-        : getEventColor(event.eventType, event.projectId, event.eventTypeColor);
+        : getEventColor(event.eventType, event.projectId, event.eventTypeColor, isAllDayEvent);
 
     // אירועים מתוכננים - שקופים עם גבול צבעוני
     const backgroundColor = isTemporary ? 'transparent' : eventColor;
