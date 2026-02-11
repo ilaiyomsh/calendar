@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { X, Layout, Database, Filter, ChevronLeft, Save, AlertTriangle } from 'lucide-react';
 import { useSettings, STRUCTURE_MODES } from '../../contexts/SettingsContext';
 import StructureTab from './StructureTab';
@@ -11,6 +11,38 @@ import ErrorDetailsModal from '../ErrorDetailsModal/ErrorDetailsModal';
 import ConfirmDialog from '../ConfirmDialog/ConfirmDialog';
 import logger from '../../utils/logger';
 import styles from './SettingsDialog.module.css';
+
+// מיפוי מפתחות שגיאה לטאבים
+const ERROR_KEY_TO_TAB = {
+  // Structure tab
+  connectedBoardId: 'structure',
+  peopleColumnIds: 'structure',
+  currentBoard: 'structure',
+  timeReportingBoardId: 'structure',
+  tasksBoardId: 'structure',
+  tasksProjectColumnId: 'structure',
+  projectStatusColumnId: 'structure',
+  projectActiveStatusValues: 'structure',
+  taskStatusColumnId: 'structure',
+  taskActiveStatusValues: 'structure',
+  assignmentsBoardId: 'structure',
+  assignmentPersonColumnId: 'structure',
+  assignmentStartDateColumnId: 'structure',
+  assignmentEndDateColumnId: 'structure',
+  assignmentProjectLinkColumnId: 'structure',
+  // Mapping tab
+  dateColumnId: 'mapping',
+  endTimeColumnId: 'mapping',
+  durationColumnId: 'mapping',
+  projectColumnId: 'mapping',
+  taskColumnId: 'mapping',
+  reporterColumnId: 'mapping',
+  eventTypeStatusColumnId: 'mapping',
+  nonBillableStatusColumnId: 'mapping',
+  stageColumnId: 'mapping',
+  eventTypeMapping: 'mapping',
+  assignmentColumnId: 'mapping',
+};
 
 /**
  * דיאלוג הגדרות ראשי
@@ -37,10 +69,21 @@ export default function SettingsDialog({ monday, onClose, context }) {
   });
   
   // Validation
-  const { 
-    isValid, 
+  const {
+    errors,
+    isValid,
     getMissingFieldsMessage
   } = useSettingsValidation(tempSettings, context);
+
+  // חישוב מספר שגיאות לכל טאב
+  const tabErrorCounts = useMemo(() => {
+    const counts = { structure: 0, mapping: 0, filters: 0 };
+    for (const key of Object.keys(errors)) {
+      const tab = ERROR_KEY_TO_TAB[key];
+      if (tab) counts[tab]++;
+    }
+    return counts;
+  }, [errors]);
 
   // טעינת רשימת לוחות בעלייה
   useEffect(() => {
@@ -138,13 +181,16 @@ export default function SettingsDialog({ monday, onClose, context }) {
   };
 
   // Tab Header Component
-  const TabHeader = ({ id, label, icon: Icon, isActive, onClick }) => (
+  const TabHeader = ({ id, label, icon: Icon, isActive, onClick, errorCount }) => (
     <button
       className={`${styles.tab} ${isActive ? styles.tabActive : ''}`}
       onClick={onClick}
     >
       <Icon size={18} />
       {label}
+      {errorCount > 0 && (
+        <span className={styles.tabBadge}>{errorCount}</span>
+      )}
     </button>
   );
 
@@ -172,6 +218,7 @@ export default function SettingsDialog({ monday, onClose, context }) {
             icon={Layout}
             isActive={activeTab === 'structure'}
             onClick={() => setActiveTab('structure')}
+            errorCount={tabErrorCounts.structure}
           />
           <TabHeader
             id="mapping"
@@ -179,6 +226,7 @@ export default function SettingsDialog({ monday, onClose, context }) {
             icon={Database}
             isActive={activeTab === 'mapping'}
             onClick={() => setActiveTab('mapping')}
+            errorCount={tabErrorCounts.mapping}
           />
           <TabHeader
             id="filters"
@@ -186,6 +234,7 @@ export default function SettingsDialog({ monday, onClose, context }) {
             icon={Filter}
             isActive={activeTab === 'filters'}
             onClick={() => setActiveTab('filters')}
+            errorCount={tabErrorCounts.filters}
           />
         </div>
 
