@@ -300,6 +300,7 @@ async function createMultipleReports({
                 allDay: isSpecialEventType,
                 notes: report.notes,
                 mondayItemId: createdItem.id,
+                projectId: report.projectId || null,
                 isPending: !!customSettings.enableApproval,
                 isApproved: false,
                 isApprovedBillable: false,
