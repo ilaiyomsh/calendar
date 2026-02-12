@@ -260,7 +260,7 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
     } = useMondayEvents(monday, context);
 
     // Hook לחגיגות קונפטי באבני דרך יומיות
-    const { captureBeforeState, checkCelebration } = useCelebration(events, showSuccess);
+    const { captureBeforeState, checkCelebration } = useCelebration(events, showSuccess, customSettings.workdayLength);
 
     // Hook לחישוב שעות חודשיות (בטרייה)
     const monthlyHours = useMonthlyHours(monday, context);
@@ -656,9 +656,9 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
 
         try {
             captureBeforeState(pendingSlot.start);
-            await createEvent(eventData, pendingSlot.start, pendingSlot.end);
-            showSuccess('האירוע נוצר בהצלחה');
-            checkCelebration(pendingSlot.start);
+            const newEvent = await createEvent(eventData, pendingSlot.start, pendingSlot.end);
+            const celebrated = checkCelebration(pendingSlot.start, newEvent);
+            if (!celebrated) showSuccess('האירוע נוצר בהצלחה');
             monthlyHours.refetch();
             modals.closeEventModal();
         } catch (error) {
@@ -721,6 +721,8 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
         try {
             logger.functionStart('handleConvertEvent', { eventId: eventToEdit.id, eventData });
 
+            captureBeforeState(pendingSlot.start);
+
             // עדכון האירוע הקיים - הסטטוס יעודכן בהתאם לבחירת המשתמש בטופס
             // (שעתי/לא לחיוב עם סיווג משני, או חופשה/מחלה/מילואים לאירועים יומיים)
             await updateEvent(eventToEdit.id, {
@@ -728,7 +730,17 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
                 isBillable: eventData.isBillable !== false
             }, pendingSlot.start, pendingSlot.end);
 
-            showSuccess('האירוע הומר לדיווח שעות בהצלחה');
+            // אירוע סינתטי לבדיקת חגיגה — ההמרה מוסיפה שעות אמיתיות
+            const convertedEvent = {
+                start: pendingSlot.start,
+                end: pendingSlot.end,
+                allDay: false,
+                isTemporary: false,
+                isHoliday: false
+            };
+            const celebrated = checkCelebration(pendingSlot.start, convertedEvent);
+            if (!celebrated) showSuccess('האירוע הומר לדיווח שעות בהצלחה');
+
             monthlyHours.refetch();
             modals.closeEventModal();
             logger.functionEnd('handleConvertEvent', { eventId: eventToEdit.id });

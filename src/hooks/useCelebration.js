@@ -14,12 +14,14 @@ import confetti from 'canvas-confetti';
  * @param {Date} date - התאריך לבדיקה
  * @returns {{ hours: number, count: number }}
  */
-const getTimedHoursForDate = (events, date) => {
+const getTimedHoursForDate = (events, date, extraEvent = null) => {
     const dateStr = date.toDateString();
     let hours = 0;
     let count = 0;
 
-    for (const event of events) {
+    const allEvents = extraEvent ? [...events, extraEvent] : events;
+
+    for (const event of allEvents) {
         if (event.allDay || event.isTemporary || event.isHoliday) continue;
         if (event.start.toDateString() !== dateStr) continue;
 
@@ -55,7 +57,7 @@ const fireCelebration = (intensity) => {
     }
 };
 
-export const useCelebration = (events, showSuccess) => {
+export const useCelebration = (events, showSuccess, workdayLength = 8.5) => {
     // שמירת snapshot של שעות לפני יצירת אירוע
     const beforeStateRef = useRef(null);
 
@@ -72,38 +74,46 @@ export const useCelebration = (events, showSuccess) => {
      * בדיקה אם חציית אבן דרך והפעלת חגיגה
      * @param {Date} eventDate - תאריך האירוע שנוצר
      */
-    const checkCelebration = useCallback((eventDate) => {
+    /**
+     * בדיקה אם חציית אבן דרך והפעלת חגיגה
+     * @param {Date} eventDate - תאריך האירוע שנוצר
+     * @param {Object|null} newEvent - האירוע החדש (לעקיפת stale closure)
+     * @returns {boolean} האם הופעלה חגיגה (true = אין צורך בהודעת הצלחה רגילה)
+     */
+    const checkCelebration = useCallback((eventDate, newEvent = null) => {
         const before = beforeStateRef.current;
-        if (!before || before.dateStr !== eventDate.toDateString()) return;
+        if (!before || before.dateStr !== eventDate.toDateString()) return false;
 
-        const after = getTimedHoursForDate(events, eventDate);
+        const after = getTimedHoursForDate(events, eventDate, newEvent);
 
         // דיווח ראשון ביום
         if (before.count === 0 && after.count > 0) {
             fireCelebration('small');
-            showSuccess('!יאללה, התחלנו! המשך כך');
+            showSuccess('יאללה, התחלנו את היום!');
             beforeStateRef.current = null;
-            return;
+            return true;
         }
 
-        // 8 שעות — בדיקה לפני 4 שעות כי שניהם יכולים להתקיים
-        if (before.hours < 8 && after.hours >= 8) {
+        // יום מלא — בדיקה לפני חצי יום כי שניהם יכולים להתקיים
+        if (before.hours < workdayLength && after.hours >= workdayLength) {
             fireCelebration('big');
-            showSuccess('!יום מלא דווח — כל הכבוד');
+            showSuccess(`כל הכבוד, סגרת יום מלא!`);
             beforeStateRef.current = null;
-            return;
+            return true;
         }
 
-        // 4 שעות
-        if (before.hours < 4 && after.hours >= 4) {
+        // חצי יום
+        const halfDay = workdayLength / 2;
+        if (before.hours < halfDay && after.hours >= halfDay) {
             fireCelebration('medium');
-            showSuccess('!חצי יום — אתה על זה');
+            showSuccess('עברת את חצי היום, ממשיכים!');
             beforeStateRef.current = null;
-            return;
+            return true;
         }
 
         beforeStateRef.current = null;
-    }, [events, showSuccess]);
+        return false;
+    }, [events, showSuccess, workdayLength]);
 
     return { captureBeforeState, checkCelebration };
 };

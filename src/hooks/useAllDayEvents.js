@@ -434,6 +434,14 @@ function buildReportColumnValues({
         time: `${toLocalTimeFormat(eventStart)}:00`
     };
 
+    // עמודת זמן סיום (אם מוגדרת)
+    if (customSettings.endTimeColumnId) {
+        columnValues[customSettings.endTimeColumnId] = {
+            date: toLocalDateFormat(eventEnd),
+            time: `${toLocalTimeFormat(eventEnd)}:00`
+        };
+    }
+
     // חישוב משך זמן בדקות
     if (!isSpecialEventType) {
         const durationMinutes = (eventEnd.getTime() - eventStart.getTime()) / 60000;
