@@ -397,7 +397,7 @@ export default function EventModal({
                             )}
                             {isFutureEvent && (
                                 <div className={styles.futureEventWarning}>
-                                    ⚠️ לא ניתן להמיר אירוע שמסתיים בעתיד. יש להמתין עד לסיום האירוע.
+                                    ⚠️ לא ניתן לערוך אירוע עתידי
                                 </div>
                             )}
                             {!isFutureEvent && (
@@ -408,6 +408,8 @@ export default function EventModal({
                         </div>
                     )}
 
+                    {/* כל שדות הטופס מוסתרים באירוע עתידי */}
+                    {!isFutureEvent && (<>
                     {/* בחירת מצב דיווח - לחיוב / לא לחיוב */}
                     <div className={`${styles.modeSelector} ${styles.fixedSection}`}>
                         <button
@@ -537,6 +539,7 @@ export default function EventModal({
                             />
                         </div>
                     )}
+                    </>)}
                 </div>
 
                 <div className={styles.footer}>
@@ -566,15 +569,15 @@ export default function EventModal({
                             </button>
                         </>
                     )}
-                    <button className={`${styles.btn} ${styles.btnSecondary}`} onClick={onClose}>{isEditMode && isLocked ? 'סגור' : 'ביטול'}</button>
-                    {!(isEditMode && isLocked) && (
+                    <button className={`${styles.btn} ${styles.btnSecondary}`} onClick={onClose}>{isEditMode && isLocked || isFutureEvent ? 'סגור' : 'ביטול'}</button>
+                    {!(isEditMode && isLocked) && !isFutureEvent && (
                     <button
                         className={`${styles.btn} ${formIsValid && !isLoadingEventData ? styles.btnPrimaryActive : styles.btnPrimary}`}
                         onClick={handleCreate}
                         disabled={!formIsValid || isLoadingEventData}
                     >
                         {isConvertMode
-                            ? (isFutureEvent ? 'אירוע עתידי' : 'המר לדיווח')
+                            ? 'המר לדיווח'
                             : isEditMode
                                 ? (isLoadingEventData ? 'טוען...' : 'עדכן')
                                 : 'שמור'
