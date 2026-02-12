@@ -646,7 +646,13 @@ export default function AllDayEventModal({
                     );
                 })}
             </div>
-            {!isEditMode && (
+            {!isEditMode && (() => {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const selectedDate = new Date(pendingDate);
+                selectedDate.setHours(0, 0, 0, 0);
+                return selectedDate <= today;
+            })() && (
                 <button className={`${styles.menuButton} ${styles.btnMultiple}`} onClick={() => {
                     setSelectedType('reports');
                     setViewMode('form');
