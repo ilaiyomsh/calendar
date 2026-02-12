@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Briefcase, Tag, ListTodo, FileText, Calendar, ShieldCheck, Lock, X } from 'lucide-react';
+import { Briefcase, Tag, ListTodo, FileText, Calendar, ShieldCheck, Lock, X, Battery } from 'lucide-react';
 import StructureOption from './StructureOption';
 import { STRUCTURE_MODES } from '../../contexts/SettingsContext';
 import { EDIT_LOCK_MODES, EDIT_LOCK_LABELS } from '../../utils/editLockUtils';
@@ -249,6 +249,38 @@ const StructureTab = ({ settings, onChange, monday }) => {
             מנהלים מורשים פטורים מנעילת עריכה
           </div>
         )}
+      </div>
+
+      {/* יעד שעות חודשי */}
+      <div className={styles.editLockSection}>
+        <div className={styles.editLockHeader}>
+          <Battery size={20} className={styles.notesIcon} />
+          <span className={styles.editLockTitle}>יעד שעות חודשי</span>
+        </div>
+        <div className={styles.monthlyTargetInputs}>
+          <label className={styles.monthlyTargetField}>
+            <span>יעד שעות בחודש</span>
+            <input
+              type="number"
+              min="0"
+              step="0.5"
+              value={settings.monthlyHoursTarget ?? 182.5}
+              onChange={(e) => onChange({ monthlyHoursTarget: parseFloat(e.target.value) || 0 })}
+              className={styles.monthlyTargetInput}
+            />
+          </label>
+          <label className={styles.monthlyTargetField}>
+            <span>אורך יום עבודה (שעות)</span>
+            <input
+              type="number"
+              min="0"
+              step="0.5"
+              value={settings.workdayLength ?? 8.5}
+              onChange={(e) => onChange({ workdayLength: parseFloat(e.target.value) || 0 })}
+              className={styles.monthlyTargetInput}
+            />
+          </label>
+        </div>
       </div>
     </div>
   );

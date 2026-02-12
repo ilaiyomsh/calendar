@@ -83,7 +83,11 @@ const DEFAULT_SETTINGS = {
   filterEmployeesColumnId: null, // עמודת People בלוח העובדים
 
   // --- נעילת עריכה ---
-  editLockMode: 'none'           // none | two_days | current_week | current_month
+  editLockMode: 'none',           // none | two_days | current_week | current_month
+
+  // --- יעד שעות חודשי ---
+  monthlyHoursTarget: 182.5,      // יעד שעות חודשי
+  workdayLength: 8.5              // אורך יום עבודה בשעות (לחישוב שעות מאירועים יומיים)
 };
 
 // Provider Component

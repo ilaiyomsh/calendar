@@ -20,6 +20,7 @@
     "@mondaycom/apps-sdk": "^2.1.2",
     "@vibe/core": "^3.77.0",
     "@vibe/icons": "^1.16.0",
+    "canvas-confetti": "^1.9.4",
     "date-fns": "^4.1.0",
     "lucide-react": "^0.555.0",
     "monday-sdk-js": "^0.5.5",

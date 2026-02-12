@@ -250,3 +250,37 @@
   background-color: #f9fafb;
   border-radius: 6px;
 }
+
+/* === יעד שעות חודשי === */
+
+.monthlyTargetInputs {
+  display: flex;
+  gap: 16px;
+}
+
+.monthlyTargetField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+}
+
+.monthlyTargetInput {
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+  direction: ltr;
+  text-align: center;
+  outline: none;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+}
+
+.monthlyTargetInput:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}

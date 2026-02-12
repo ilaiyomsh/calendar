@@ -61,9 +61,10 @@ export const parseStatusColumnLabels = (settings) => {
 
         // אם labels הוא אובייקט (מבנה ישן של Monday) - נמיר אותו למערך
         if (typeof settingsObj.labels === 'object') {
+            const labelsColors = settingsObj.labels_colors || {};
             return Object.entries(settingsObj.labels).map(([index, label]) => ({
                 label: label || '',
-                color: '',
+                color: labelsColors[index]?.color || '',
                 index: parseInt(index, 10),
                 id: parseInt(index, 10)
             }));

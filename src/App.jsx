@@ -49,7 +49,7 @@ const AppContent = () => {
 
 
   if (isLoading) {
-    return <div className="App"><p>טוען הגדרות...</p></div>;
+    return 
   }
 
   return (

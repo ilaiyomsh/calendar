@@ -82,6 +82,11 @@
     gap: 8px;
 }
 
+/* Battery Section */
+.rbc-toolbar-battery {
+    flex-shrink: 0;
+}
+
 /* Actions Section (Left) */
 .rbc-toolbar-actions {
     gap: 16px;

@@ -16,7 +16,11 @@ const FilterBar = ({
     onClear,
     hasActiveFilter,
     isLoadingReporters = false,
-    isLoadingProjects = false
+    isLoadingProjects = false,
+    // Temporary events toggle
+    showTemporaryEvents = true,
+    onToggleTemporaryEvents = null,
+    hasTemporaryEventsFeature = false
 }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [reporterSearch, setReporterSearch] = useState('');
@@ -116,6 +120,20 @@ const FilterBar = ({
             {/* דרופדאון */}
             {isOpen && (
                 <div className={styles.dropdown}>
+                    {/* טוגל מתוכננים */}
+                    {hasTemporaryEventsFeature && onToggleTemporaryEvents && (
+                        <div className={styles.toggleRow}>
+                            <span className={styles.toggleLabel}>הצג מתוכננים</span>
+                            <label className={styles.toggleSwitch}>
+                                <input
+                                    type="checkbox"
+                                    checked={showTemporaryEvents}
+                                    onChange={onToggleTemporaryEvents}
+                                />
+                                <span className={styles.toggleSlider} />
+                            </label>
+                        </div>
+                    )}
                     <div className={styles.columns}>
                         {/* עמודת אנשים (ימין ב-RTL) */}
                         <div className={styles.column}>

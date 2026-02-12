@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Navigate } from 'react-big-calendar';
-import { Settings, Clock, Filter } from 'lucide-react';
+import { Settings, Filter } from 'lucide-react';
 import { NavigationChevronLeft, NavigationChevronRight, DropdownChevronDown } from "@vibe/icons";
 import { useMobile } from '../contexts/MobileContext';
 import FilterBar from './FilterBar';
+import MonthlyBattery from './MonthlyBattery';
 import logger from '../utils/logger';
 
 const CalendarToolbar = ({
@@ -17,10 +18,8 @@ const CalendarToolbar = ({
   isOwner = false,
   // Filter props
   filterProps = null,
-  // Temporary events toggle props
-  showTemporaryEvents = true,
-  onToggleTemporaryEvents = null,
-  hasTemporaryEventsFeature = false,
+  // Battery props
+  batteryProps = null,
   // Approval props
   isManager = false,
   isApprovalEnabled = false,
@@ -118,18 +117,6 @@ const CalendarToolbar = ({
           </button>
         ) : null}
 
-        {/* טוגל מתוכננים - אייקון בלבד */}
-        {hasTemporaryEventsFeature && onToggleTemporaryEvents ? (
-          <button
-            type="button"
-            className={`rbc-temporary-toggle-btn ${showTemporaryEvents ? 'active' : ''}`}
-            onClick={onToggleTemporaryEvents}
-            aria-label={showTemporaryEvents ? 'הסתר מתוכננים' : 'הצג מתוכננים'}
-          >
-            <Clock size={18} />
-          </button>
-        ) : null}
-
         {/* בחירת תצוגה */}
         <div className="rbc-view-dropdown" ref={dropdownRef}>
           <button
@@ -199,6 +186,13 @@ const CalendarToolbar = ({
         </div>
       ) : null}
 
+      {/* בטרייה חודשית */}
+      {batteryProps ? (
+        <div className="rbc-toolbar-section rbc-toolbar-battery">
+          <MonthlyBattery {...batteryProps} />
+        </div>
+      ) : null}
+
       {/* צד שמאל - תצוגות והגדרות */}
       <div className="rbc-toolbar-section rbc-toolbar-actions">
         {/* כפתורי אישור מנהל */}
@@ -261,19 +255,6 @@ const CalendarToolbar = ({
             </div>
           ) : null}
         </div>
-
-        {/* טוגל הצגת אירועים מתוכננים */}
-        {hasTemporaryEventsFeature && onToggleTemporaryEvents ? (
-          <button
-            type="button"
-            className={`rbc-temporary-toggle-btn ${showTemporaryEvents ? 'active' : ''}`}
-            onClick={onToggleTemporaryEvents}
-            title={showTemporaryEvents ? 'הסתר מתוכננים' : 'הצג מתוכננים'}
-          >
-            <Clock size={18} />
-            <span className="rbc-temporary-toggle-label">מתוכננים</span>
-          </button>
-        ) : null}
 
         {/* כפתור הגדרות - מוסתר במובייל */}
         {isOwner ? (

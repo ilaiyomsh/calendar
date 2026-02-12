@@ -20,6 +20,9 @@ importers:
       '@vibe/icons':
         specifier: ^1.16.0
         version: 1.16.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      canvas-confetti:
+        specifier: ^1.9.4
+        version: 1.9.4
       date-fns:
         specifier: ^4.1.0
         version: 4.1.0
@@ -2073,6 +2076,9 @@ packages:
 
   caniuse-lite@1.0.30001764:
     resolution: {integrity: sha512-9JGuzl2M+vPL+pz70gtMF9sHdMFbY9FJaQBi186cHKH3pSzDvzoUJUPV6fqiKIMyXbud9ZLg4F3Yza1vJ1+93g==}
+
+  canvas-confetti@1.9.4:
+    resolution: {integrity: sha512-yxQbJkAVrFXWNbTUjPqjF7G+g6pDotOUHGbkZq2NELZUMDpiJ85rIEazVb8GTaAptNW2miJAXbs1BtioA251Pw==}
 
   cardinal@2.1.1:
     resolution: {integrity: sha512-JSr5eOgoEymtYHBjNWyjrMqet9Am2miJhlfKNdqLp6zoeAh0KN5dRAcxlecj5mAJrmQomgiOBj35xHLrFjqBpw==}
@@ -7527,6 +7533,8 @@ snapshots:
   camelcase@7.0.1: {}
 
   caniuse-lite@1.0.30001764: {}
+
+  canvas-confetti@1.9.4: {}
 
   cardinal@2.1.1:
     dependencies:

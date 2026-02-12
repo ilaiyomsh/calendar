@@ -28,6 +28,8 @@ import ErrorDetailsModal from './components/ErrorDetailsModal/ErrorDetailsModal'
 import SettingsValidationDialog from './components/SettingsValidationDialog';
 import SelectionActionBar from './components/SelectionActionBar';
 import ApprovalActionBar from './components/ApprovalActionBar';
+import StopwatchLoader from './components/StopwatchLoader';
+import loaderStyles from './components/StopwatchLoader/StopwatchLoader.module.css';
 
 // Context
 import { useSettings } from './contexts/SettingsContext';
@@ -53,6 +55,8 @@ import { useCalendarFilter } from './hooks/useCalendarFilter';
 import { useFilterOptions } from './hooks/useFilterOptions';
 import { useApproval } from './hooks/useApproval';
 import { useEventSelection } from './hooks/useEventSelection';
+import { useCelebration } from './hooks/useCelebration';
+import { useMonthlyHours } from './hooks/useMonthlyHours';
 
 // עטיפת הלוח ברכיב Drag and Drop
 const DnDCalendar = withDragAndDrop(Calendar);
@@ -152,37 +156,19 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
         swipeDuration: 500, // מגביל רק לתנועות סוויפ מהירות
     });
 
-    // גלילה ידנית לשעה 8:00 - גרסה מבוססת טקסט (מדויקת יותר)
-    useEffect(() => {
-        const scrollToEight = () => {
-            // 1. איתור הקונטיינר הנגלל
-            const scrollContainer = document.querySelector('.rbc-time-content');
-            if (!scrollContainer) return;
-
-            // 2. חיפוש תווית השעה שמכילה את הטקסט "08:00"
-            const labels = Array.from(document.querySelectorAll('.rbc-time-gutter .rbc-label'));
-            const targetLabel = labels.find(label => label.textContent.includes('08:00'));
-
-            if (targetLabel) {
-                // 3. מציאת השורה (הקבוצה) שמכילה את התווית הזו
-                const slotGroup = targetLabel.closest('.rbc-timeslot-group');
-                
-                if (slotGroup) {
-                    // 4. ביצוע הגלילה למיקום המדויק של השורה (הוספת 14px בגלל מירכוז התוויות ב-CSS)
-                    scrollContainer.scrollTop = slotGroup.offsetTop - 10;
-                }
+    // גלילה ידנית לשעה 8:00 - מופעל כשהלואדר נעלם והלוח מוצג
+    const scrollToEightRef = useRef(() => {
+        const scrollContainer = document.querySelector('.rbc-time-content');
+        if (!scrollContainer) return;
+        const labels = Array.from(document.querySelectorAll('.rbc-time-gutter .rbc-label'));
+        const targetLabel = labels.find(label => label.textContent.includes('08:00'));
+        if (targetLabel) {
+            const slotGroup = targetLabel.closest('.rbc-timeslot-group');
+            if (slotGroup) {
+                scrollContainer.scrollTop = slotGroup.offsetTop - 10;
             }
-        };
-        
-        // טיימרים להבטחת ביצוע לאחר הרינדור
-        const timer1 = setTimeout(scrollToEight, 100);
-        const timer2 = setTimeout(scrollToEight, 400);
-        
-        return () => {
-            clearTimeout(timer1);
-            clearTimeout(timer2);
-        };
-    }, [minTime]);
+        }
+    });
 
     // State - Monday context (חייב להיות לפני hooks שמשתמשים ב-context)
     const [context, setContext] = useState(null);
@@ -272,6 +258,53 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
         addEvent,
         fetchEmployeeHourlyRate
     } = useMondayEvents(monday, context);
+
+    // Hook לחגיגות קונפטי באבני דרך יומיות
+    const { captureBeforeState, checkCelebration } = useCelebration(events, showSuccess);
+
+    // Hook לחישוב שעות חודשיות (בטרייה)
+    const monthlyHours = useMonthlyHours(monday, context);
+
+    // State - Loader: מוצג מרגע העלייה, מינימום 1.5 שניות + fade-out
+    const [showLoader, setShowLoader] = useState(true);
+    const [loaderFading, setLoaderFading] = useState(false);
+    const loaderStartRef = useRef(Date.now());
+    const prevLoadingRef = useRef(false);
+    const initialLoadDone = useRef(false);
+    const loaderTimersRef = useRef({});
+
+    useEffect(() => {
+        const wasLoading = prevLoadingRef.current;
+        prevLoadingRef.current = eventsLoading;
+
+        // רק במעבר true → false, ורק בטעינה הראשונה
+        if (wasLoading && !eventsLoading && !initialLoadDone.current) {
+            initialLoadDone.current = true;
+            const elapsed = Date.now() - loaderStartRef.current;
+            const remaining = Math.max(0, 1500 - elapsed);
+
+            loaderTimersRef.current.minTimer = setTimeout(() => {
+                setLoaderFading(true);
+                // גלילה ל-08:00 ברגע שהלוח מוצג
+                requestAnimationFrame(() => {
+                    scrollToEightRef.current();
+                    setTimeout(() => scrollToEightRef.current(), 100);
+                });
+                loaderTimersRef.current.fadeTimer = setTimeout(() => {
+                    setShowLoader(false);
+                    setLoaderFading(false);
+                }, 400);
+            }, remaining);
+        }
+
+        return () => {
+            // ניקוי טיימרים רק לפני שהטעינה הראשונה הסתיימה
+            if (!initialLoadDone.current) {
+                clearTimeout(loaderTimersRef.current.minTimer);
+                clearTimeout(loaderTimersRef.current.fadeTimer);
+            }
+        };
+    }, [eventsLoading]);
 
     // שמירת טווח התצוגה הנוכחי לשימוש ברענון אירועים
     const [currentViewRange, setCurrentViewRange] = useState(null);
@@ -420,6 +453,54 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
 
         migrateEventTypeMapping();
     }, [customSettings.eventTypeMapping, customSettings.eventTypeStatusColumnId, effectiveBoardId]);
+
+    // מיגרציה: עדכון צבעי labelMeta אם חסרים (labels_colors לא נקראו בעבר)
+    useEffect(() => {
+        const migrateLabelMetaColors = async () => {
+            if (!customSettings.eventTypeLabelMeta || !customSettings.eventTypeStatusColumnId || !effectiveBoardId) return;
+
+            // בדיקה אם יש לייבלים עם צבע ריק
+            const hasEmptyColors = Object.values(customSettings.eventTypeLabelMeta).some(meta => !meta.color);
+            if (!hasEmptyColors) return;
+
+            try {
+                logger.info('MondayCalendar', 'Migrating labelMeta colors from column settings...');
+                const query = `query {
+                    boards(ids: [${effectiveBoardId}]) {
+                        columns(ids: ["${customSettings.eventTypeStatusColumnId}"]) {
+                            settings_str
+                        }
+                    }
+                }`;
+                const res = await monday.api(query);
+                const settingsStr = res?.data?.boards?.[0]?.columns?.[0]?.settings_str;
+                if (!settingsStr) return;
+
+                const labels = parseStatusColumnLabels(settingsStr);
+                if (labels.length === 0) return;
+
+                // עדכון צבעים חסרים ב-labelMeta
+                const updatedMeta = { ...customSettings.eventTypeLabelMeta };
+                let updated = false;
+                for (const labelObj of labels) {
+                    const index = String(labelObj.index);
+                    if (updatedMeta[index] && !updatedMeta[index].color && labelObj.color) {
+                        updatedMeta[index] = { ...updatedMeta[index], color: labelObj.color };
+                        updated = true;
+                    }
+                }
+
+                if (updated) {
+                    await updateSettings({ eventTypeLabelMeta: updatedMeta });
+                    logger.info('MondayCalendar', 'LabelMeta colors updated successfully');
+                }
+            } catch (error) {
+                logger.error('MondayCalendar', 'Error migrating labelMeta colors', error);
+            }
+        };
+
+        migrateLabelMetaColors();
+    }, [customSettings.eventTypeLabelMeta, customSettings.eventTypeStatusColumnId, effectiveBoardId]);
 
     // מיגרציה אוטומטית של מיפוי אישור (3 קטגוריות → 4)
     useEffect(() => {
@@ -574,8 +655,11 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
         }
 
         try {
+            captureBeforeState(pendingSlot.start);
             await createEvent(eventData, pendingSlot.start, pendingSlot.end);
             showSuccess('האירוע נוצר בהצלחה');
+            checkCelebration(pendingSlot.start);
+            monthlyHours.refetch();
             modals.closeEventModal();
         } catch (error) {
             showErrorWithDetails(error, { functionName: 'handleCreateEvent' });
@@ -596,6 +680,7 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
         try {
             await updateEvent(eventToEdit.id, eventData, pendingSlot.start, pendingSlot.end);
             showSuccess('האירוע עודכן בהצלחה');
+            monthlyHours.refetch();
             modals.closeEventModal();
         } catch (error) {
             showErrorWithDetails(error, { functionName: 'handleUpdateEvent' });
@@ -615,6 +700,7 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
         try {
             await deleteEvent(eventToEdit.id);
             showSuccess('האירוע נמחק בהצלחה');
+            monthlyHours.refetch();
             modals.closeEventModal();
         } catch (error) {
             showErrorWithDetails(error, { functionName: 'handleDeleteEvent' });
@@ -643,6 +729,7 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
             }, pendingSlot.start, pendingSlot.end);
 
             showSuccess('האירוע הומר לדיווח שעות בהצלחה');
+            monthlyHours.refetch();
             modals.closeEventModal();
             logger.functionEnd('handleConvertEvent', { eventId: eventToEdit.id });
         } catch (error) {
@@ -940,7 +1027,8 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
         hasTemporaryEventsFeature,
         approval,
         approvalSelection,
-        handleApproveAllInWeek
+        handleApproveAllInWeek,
+        monthlyHours
     };
 
     // Custom Toolbar עם גישה ל-props
@@ -959,8 +1047,22 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
             onClear: data.calendarFilter.clearFilters,
             hasActiveFilter: data.calendarFilter.hasActiveFilter,
             isLoadingReporters: data.loadingReporters,
-            isLoadingProjects: data.loadingFilterProjects
+            isLoadingProjects: data.loadingFilterProjects,
+            showTemporaryEvents: data.showTemporaryEvents,
+            onToggleTemporaryEvents: data.handleToggleTemporaryEvents,
+            hasTemporaryEventsFeature: data.hasTemporaryEventsFeature
         };
+
+        // הכנת props לבטרייה חודשית
+        const mh = data.monthlyHours;
+        const batteryProps = mh ? {
+            breakdown: mh.breakdown,
+            totalHours: mh.totalHours,
+            targetHours: mh.targetHours,
+            loading: mh.loading,
+            selectedMonth: mh.selectedMonth,
+            onMonthChange: mh.setSelectedMonth
+        } : null;
 
         return (
             <CalendarToolbar
@@ -972,9 +1074,7 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
                 events={data.events}
                 isOwner={data.isOwner}
                 filterProps={filterProps}
-                showTemporaryEvents={data.showTemporaryEvents}
-                onToggleTemporaryEvents={data.handleToggleTemporaryEvents}
-                hasTemporaryEventsFeature={data.hasTemporaryEventsFeature}
+                batteryProps={batteryProps}
                 isManager={data.approval.isManager}
                 isApprovalEnabled={data.approval.isApprovalEnabled}
                 isSelectionMode={data.approvalSelection.isSelectionMode}
@@ -1002,15 +1102,22 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
         // חישוב נעילה - מנהלים פטורים
         const lockMode = customSettings.editLockMode || 'none';
         const managerBypass = approval.isManager;
+        const isApprovalEnabled = !!customSettings.enableApproval;
 
         let regularEvents = events.map(ev => {
             const lockResult = (!managerBypass && lockMode !== 'none')
                 ? isEventLocked(ev, lockMode)
                 : { locked: false, reason: '' };
+            // כשאישור מנהל כבוי - ביטול כל דגלי האישור למניעת שקיפות מיותרת
+            const effectivePending = isApprovalEnabled && ev.isPending;
             return {
                 ...ev,
+                isPending: effectivePending,
+                isRejected: isApprovalEnabled && ev.isRejected,
+                isApprovedBillable: isApprovalEnabled && ev.isApprovedBillable,
+                isApprovedUnbillable: isApprovalEnabled && ev.isApprovedUnbillable,
                 isSelected: multiSelect.isSelected(ev.id),
-                isInApprovalSelection: approvalSelection.isSelectionMode && ev.isPending,
+                isInApprovalSelection: approvalSelection.isSelectionMode && effectivePending,
                 isApprovalSelected: approvalSelection.isSelected(ev.id),
                 isLocked: lockResult.locked,
                 lockReason: lockResult.reason
@@ -1028,7 +1135,7 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
         }
 
         return regularEvents;
-    }, [events, multiSelect, approvalSelection, holidays, customSettings.showHolidays, customSettings.editLockMode, approval.isManager, showTemporaryEvents]);
+    }, [events, multiSelect, approvalSelection, holidays, customSettings.showHolidays, customSettings.editLockMode, customSettings.enableApproval, approval.isManager, showTemporaryEvents]);
 
     // פונקציה לקביעת גובה משבצות זמן (כדי לדרוס חישובי inline של BCR)
     const slotPropGetter = useCallback(() => ({
@@ -1108,7 +1215,20 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
     }, [events]);
 
     return (
-        <div className="gcCalendarRoot" style={{ height: '100%', padding: isMobile ? '0' : '0 20px', direction: 'rtl', display: 'flex', flexDirection: 'column' }} {...(isMobile ? swipeHandlers : {})}>
+        <div className="gcCalendarRoot" style={{ height: '100%', padding: isMobile ? '0' : '0 20px', direction: 'rtl', display: 'flex', flexDirection: 'column', position: 'relative' }} {...(isMobile ? swipeHandlers : {})}>
+            {showLoader && !loaderFading && (
+                <div className={loaderStyles.overlay}>
+                    <StopwatchLoader size={80} />
+                    <p className={loaderStyles.brandText}>Powered by Twyst</p>
+                </div>
+            )}
+            {loaderFading && (
+                <div className={loaderStyles.overlayFadeOut}>
+                    <StopwatchLoader size={80} />
+                    <p className={loaderStyles.brandText}>Powered by Twyst</p>
+                </div>
+            )}
+            <div style={{ flex: 1, display: showLoader && !loaderFading ? 'none' : 'flex', flexDirection: 'column', height: '100%' }}>
                 <DnDCalendar
                     localizer={localizer}
                     events={enrichedEvents}
@@ -1154,6 +1274,7 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
                         header: CustomDayHeader
                     }}
                 />
+            </div>
 
             <EventModal
                 isOpen={modals.eventModal.isOpen}
