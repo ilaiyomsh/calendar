@@ -292,6 +292,8 @@ async function createMultipleReports({
         );
 
         if (createdItem) {
+            const isBillable = report.isBillable !== false;
+            const typeIndex = getTimedEventIndex(isBillable, customSettings.eventTypeMapping);
             const newEvent = {
                 id: createdItem.id,
                 title: itemName,
@@ -301,6 +303,8 @@ async function createMultipleReports({
                 notes: report.notes,
                 mondayItemId: createdItem.id,
                 projectId: report.projectId || null,
+                eventType: getLabelText(typeIndex, customSettings.eventTypeLabelMeta) || 'שעתי',
+                eventTypeIndex: typeIndex,
                 isPending: !!customSettings.enableApproval,
                 isApproved: false,
                 isApprovedBillable: false,
@@ -459,6 +463,13 @@ function buildReportColumnValues({
     if (report.projectId && customSettings.projectColumnId) {
         columnValues[customSettings.projectColumnId] = {
             item_ids: [parseInt(report.projectId)]
+        };
+    }
+
+    // הוספת קישור להקצאה
+    if (report.assignmentId && customSettings.assignmentColumnId) {
+        columnValues[customSettings.assignmentColumnId] = {
+            item_ids: [parseInt(report.assignmentId)]
         };
     }
 

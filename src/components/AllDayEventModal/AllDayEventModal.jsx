@@ -214,6 +214,7 @@ export default function AllDayEventModal({
             id: Date.now(),
             projectId: project.id,
             projectName: project.name,
+            assignmentId: project.assignmentId || null,
             tasks: [],
             hours: hours,
             startTime: startTime,
@@ -554,6 +555,7 @@ export default function AllDayEventModal({
                 return {
                     projectId: r.projectId,
                     projectName: r.projectName,
+                    assignmentId: r.assignmentId || null,
                     hours: hours,
                     notes: r.notes,
                     taskId: r.taskId,
