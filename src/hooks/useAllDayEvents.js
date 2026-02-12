@@ -340,74 +340,79 @@ async function createSingleAllDayEvent({
     // מספר הימים (ברירת מחדל: 1)
     const durationDays = allDayData.durationDays || 1;
 
-    const columnValues = {};
-    // לאירועים יומיים - תאריך בלבד ללא שעה
-    columnValues[customSettings.dateColumnId] = {
-        date: dateStr
-    };
+    // יצירת אייטם נפרד לכל יום - כל יום הוא שורה עצמאית בלוח
+    for (let i = 0; i < durationDays; i++) {
+        const dayDate = new Date(allDayData.date);
+        dayDate.setDate(dayDate.getDate() + i);
+        dayDate.setHours(0, 0, 0, 0);
+        const dayDateStr = toLocalDateFormat(dayDate);
 
-    // משך בימים - Duration פולימורפי
-    if (customSettings.durationColumnId) {
-        columnValues[customSettings.durationColumnId] = formatDurationForSave(durationDays, typeIndex, customSettings.eventTypeMapping);
-    }
-
-    if (customSettings.reporterColumnId && reporterId) {
-        columnValues[customSettings.reporterColumnId] = {
-            personsAndTeams: [
-                { id: parseInt(reporterId), kind: "person" }
-            ]
+        const columnValues = {};
+        // לאירועים יומיים - תאריך בלבד ללא שעה
+        columnValues[customSettings.dateColumnId] = {
+            date: dayDateStr
         };
-    }
 
-    if (customSettings.eventTypeStatusColumnId && typeIndex != null) {
-        columnValues[customSettings.eventTypeStatusColumnId] = {
-            index: parseInt(typeIndex, 10)
-        };
-    }
+        // משך תמיד 1 יום לכל אייטם
+        if (customSettings.durationColumnId) {
+            columnValues[customSettings.durationColumnId] = formatDurationForSave(1, typeIndex, customSettings.eventTypeMapping);
+        }
 
-    // סטטוס אישור - כתיבת "ממתין" ביצירת אירוע חדש
-    if (customSettings.enableApproval && customSettings.approvalStatusColumnId) {
-        const pendingIdx = getPendingIndex(customSettings.approvalStatusMapping);
-        if (pendingIdx != null) {
-            columnValues[customSettings.approvalStatusColumnId] = {
-                index: parseInt(pendingIdx)
+        if (customSettings.reporterColumnId && reporterId) {
+            columnValues[customSettings.reporterColumnId] = {
+                personsAndTeams: [
+                    { id: parseInt(reporterId), kind: "person" }
+                ]
             };
+        }
+
+        if (customSettings.eventTypeStatusColumnId && typeIndex != null) {
+            columnValues[customSettings.eventTypeStatusColumnId] = {
+                index: parseInt(typeIndex, 10)
+            };
+        }
+
+        // סטטוס אישור - כתיבת "ממתין" ביצירת אירוע חדש
+        if (customSettings.enableApproval && customSettings.approvalStatusColumnId) {
+            const pendingIdx = getPendingIndex(customSettings.approvalStatusMapping);
+            if (pendingIdx != null) {
+                columnValues[customSettings.approvalStatusColumnId] = {
+                    index: parseInt(pendingIdx)
+                };
+            }
+        }
+
+        const columnValuesJson = JSON.stringify(columnValues);
+
+        const createdItem = await createBoardItem(
+            monday,
+            effectiveBoardId,
+            itemName,
+            columnValuesJson
+        );
+
+        if (createdItem) {
+            const endDate = calculateEndDateFromDays(dayDate, 1);
+
+            const newEvent = {
+                id: createdItem.id,
+                title: itemName,
+                start: new Date(dayDate),
+                end: endDate,
+                allDay: true,
+                mondayItemId: createdItem.id,
+                eventType: eventName,
+                eventTypeIndex: String(typeIndex),
+                durationDays: 1,
+                isPending: !!customSettings.enableApproval,
+                isApproved: false,
+                isRejected: false
+            };
+            addEvent(newEvent);
         }
     }
 
-    const columnValuesJson = JSON.stringify(columnValues);
-
-    const createdItem = await createBoardItem(
-        monday,
-        effectiveBoardId,
-        itemName,
-        columnValuesJson
-    );
-
-    if (createdItem) {
-        const eventDate = new Date(allDayData.date);
-        eventDate.setHours(0, 0, 0, 0);
-
-        // חישוב תאריך סיום (Exclusive) לפי מספר הימים
-        const endDate = calculateEndDateFromDays(eventDate, durationDays);
-
-        const newEvent = {
-            id: createdItem.id,
-            title: itemName,
-            start: eventDate,
-            end: endDate,
-            allDay: true,
-            mondayItemId: createdItem.id,
-            eventType: eventName,
-            eventTypeIndex: String(typeIndex),
-            durationDays: durationDays,
-            isPending: !!customSettings.enableApproval,
-            isApproved: false,
-            isRejected: false
-        };
-        addEvent(newEvent);
-        logger.functionEnd('createSingleAllDayEvent', { type: allDayData.type, eventId: createdItem.id, durationDays });
-    }
+    logger.functionEnd('createSingleAllDayEvent', { type: allDayData.type, durationDays, itemsCreated: durationDays });
 }
 
 /**
