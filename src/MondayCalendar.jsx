@@ -1325,11 +1325,37 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
                 isOpen={modals.allDayModal.isOpen}
                 onClose={modals.closeAllDayModal}
                 pendingDate={modals.allDayModal.date}
-                onCreate={allDayEvents.handleCreateAllDayEvent}
+                onCreate={async (allDayData) => {
+                    const isBulkReports = allDayData.type === 'reports';
+                    if (isBulkReports) {
+                        captureBeforeState(new Date(allDayData.date));
+                    }
+                    await allDayEvents.handleCreateAllDayEvent(allDayData);
+                    if (isBulkReports) {
+                        // אירוע סינתטי שמייצג את סך השעות שנוצרו - לחישוב אבני דרך
+                        const totalHours = allDayData.reports.reduce((sum, r) => sum + (parseFloat(r.hours) || 0), 0);
+                        const eventDate = new Date(allDayData.date);
+                        eventDate.setHours(8, 0, 0, 0);
+                        const syntheticEvent = {
+                            start: eventDate,
+                            end: new Date(eventDate.getTime() + totalHours * 3600000),
+                            allDay: false
+                        };
+                        const celebrated = checkCelebration(new Date(allDayData.date), syntheticEvent);
+                        if (!celebrated) showSuccess('הדיווחים נוצרו בהצלחה');
+                    }
+                    monthlyHours.refetch();
+                }}
                 eventToEdit={modals.allDayModal.eventToEdit}
                 isEditMode={modals.allDayModal.isEditMode}
-                onUpdate={allDayEvents.handleUpdateAllDayEvent}
-                onDelete={allDayEvents.handleDeleteAllDayEvent}
+                onUpdate={async (newType) => {
+                    await allDayEvents.handleUpdateAllDayEvent(newType);
+                    monthlyHours.refetch();
+                }}
+                onDelete={async () => {
+                    await allDayEvents.handleDeleteAllDayEvent();
+                    monthlyHours.refetch();
+                }}
                 isManager={approval.isManager}
                 isApprovalEnabled={approval.isApprovalEnabled}
                 onApprove={handleApproveEvent}
