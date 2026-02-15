@@ -17,9 +17,9 @@ pnpm run deploy     # Build + push to Monday.com
 pnpm run server     # Dev server only
 pnpm run expose     # Create tunnel via mapps CLI
 pnpm run stop       # Kill dev processes
+pnpm test           # Run tests in watch mode (Vitest)
+pnpm run test:run   # Run tests once (CI mode)
 ```
-
-No lint or test commands configured.
 
 ## Architecture
 

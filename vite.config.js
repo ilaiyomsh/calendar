@@ -10,6 +10,12 @@ export default defineConfig(() => {
     server: {
       port: 8301,
       allowedHosts: ['.apps-tunnel.monday.app']
+    },
+    test: {
+      environment: 'jsdom',
+      setupFiles: ['./src/setupTests.js'],
+      globals: true,
+      css: { modules: { classNameStrategy: 'non-scoped' } }
     }
   };
 });
