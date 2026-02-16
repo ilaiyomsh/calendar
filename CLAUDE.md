@@ -445,6 +445,36 @@ useProjects → EventModal (project selector)
 useNonBillableOptions / useStageOptions → EventModal (dropdown options)
 ```
 
+## Monday SDK Context
+
+The app uses a centralized `MondayContext` provider that loads the Monday SDK context once and exposes it to the entire app. Before implementing any new feature, check if the Monday SDK context already provides the data you need.
+
+### Usage
+```javascript
+import { useMondayContext, useMobile } from './contexts/MondayContext';
+
+const { context, isMobile } = useMondayContext();
+// or just:
+const isMobile = useMobile();
+```
+
+### Available context fields (from Monday SDK)
+| Field | Mobile | Desktop | Description |
+|-------|--------|---------|-------------|
+| `mode` | `"mobile"` | absent | Platform mode |
+| `viewMode` | `"mobile"` | absent | View mode |
+| `boardId` | present | present | Current board ID |
+| `theme` | `"light"/"dark"/"black"` | same | UI theme |
+| `user` | `{ id, isAdmin, ... }` | same | Current user |
+| `account` | `{ id }` | same | Account info |
+| `region` | `"use1"` etc | same | Availability zone |
+
+### Planning a new feature
+When planning a new feature that requires platform information (device type, user info, theme, region, etc.):
+1. **Check the Monday SDK context first** — use `useMondayContext()` and inspect the `context` object
+2. **If the needed data is missing** — ask the user / check Monday SDK docs before implementing a custom solution
+3. **Never use browser APIs for data the SDK provides** — e.g. don't use `matchMedia` for mobile detection, don't use `localStorage` for settings storage
+
 ## Common Pitfalls
 
 1. **Don't use console.log** - Use `logger` instead
@@ -455,6 +485,8 @@ useNonBillableOptions / useStageOptions → EventModal (dropdown options)
 6. **Board ID resolution** - Always use `getEffectiveBoardId()` instead of hardcoding board IDs
 7. **Assignments mode** - Check `useAssignmentsMode` before assuming project source
 8. **Event type labels** - All 6 required labels must exist in the status column
+9. **Mobile detection** - Use `useMobile()` from MondayContext (based on SDK `context.mode`), never `matchMedia`
+10. **Platform data** - Always check Monday SDK context before implementing browser-based solutions
 
 ## Testing Changes
 
@@ -478,6 +510,7 @@ useNonBillableOptions / useStageOptions → EventModal (dropdown options)
 |---------|-------|
 | Entry point | `index.jsx`, `App.jsx` |
 | Main view | `MondayCalendar.jsx` |
+| Monday context | `contexts/MondayContext.jsx` |
 | Settings | `SettingsDialog/`, `SettingsContext.jsx` |
 | Event forms | `EventModal/`, `AllDayEventModal/` |
 | Filtering | `FilterBar/`, `hooks/useCalendarFilter.js`, `hooks/useFilterOptions.js` |

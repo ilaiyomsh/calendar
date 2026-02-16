@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Navigate } from 'react-big-calendar';
 import { Settings, Filter } from 'lucide-react';
 import { NavigationChevronLeft, NavigationChevronRight, DropdownChevronDown } from "@vibe/icons";
-import { useMobile } from '../contexts/MobileContext';
+import { useMobile } from '../contexts/MondayContext';
 import FilterBar from './FilterBar';
 import MonthlyBattery from './MonthlyBattery';
 import logger from '../utils/logger';

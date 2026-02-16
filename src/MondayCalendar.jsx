@@ -33,7 +33,7 @@ import loaderStyles from './components/StopwatchLoader/StopwatchLoader.module.cs
 
 // Context
 import { useSettings } from './contexts/SettingsContext';
-import { useMobile } from './contexts/MobileContext';
+import { useMondayContext, useMobile } from './contexts/MondayContext';
 
 // Event Type Mapping
 import { createLegacyMapping } from './utils/eventTypeMapping';
@@ -170,8 +170,8 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
         }
     });
 
-    // State - Monday context (חייב להיות לפני hooks שמשתמשים ב-context)
-    const [context, setContext] = useState(null);
+    // קונטקסט Monday מרכזי
+    const { context } = useMondayContext();
     const [settings, setSettings] = useState(null);
     const [columnIds, setColumnIds] = useState(null); // מזהי העמודות
 
@@ -308,21 +308,6 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
 
     // שמירת טווח התצוגה הנוכחי לשימוש ברענון אירועים
     const [currentViewRange, setCurrentViewRange] = useState(null);
-
-    // טעינת context מ-Monday
-    useEffect(() => {
-        const loadContext = async () => {
-            try {
-                const contextResponse = await monday.get("context");
-                setContext(contextResponse.data);
-                logger.info('MondayCalendar', 'Loaded context', contextResponse.data);
-            } catch (error) {
-                logger.error('MondayCalendar', 'Error loading context', error);
-            }
-        };
-
-        loadContext();
-    }, [monday]);
 
     // טעינת הגדרות מ-Monday
     useEffect(() => {
