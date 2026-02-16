@@ -1,6 +1,7 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import logger from '../utils/logger';
 import { isLegacyMapping } from '../utils/eventTypeMapping';
+import { useMondayContext } from './MondayContext';
 
 // יצירת Context
 const SettingsContext = createContext(null);
@@ -92,13 +93,15 @@ const DEFAULT_SETTINGS = {
 
 // Provider Component
 export function SettingsProvider({ monday, children }) {
+  const { context } = useMondayContext();
   const [customSettings, setCustomSettings] = useState(DEFAULT_SETTINGS);
   const [isLoading, setIsLoading] = useState(true);
 
-  // טעינת הגדרות מ-Monday Storage בעלייה
+  // טעינת הגדרות מ-Monday Storage רק אחרי שה-context נטען (מבטיח שה-parent frame מזהה את ה-instance)
   useEffect(() => {
+    if (!context) return;
     loadSettings();
-  }, []);
+  }, [context]);
 
   const loadSettings = async () => {
     try {
