@@ -102,6 +102,9 @@ export function SettingsProvider({ monday, children }) {
 
   const loadSettings = async () => {
     try {
+      // מוודא שה-SDK סיים handshake לפני גישה ל-storage
+      await monday.get('context');
+
       const result = await monday.storage.instance.getItem('customSettings');
       
       if (result.data && result.data.value) {
