@@ -14,36 +14,26 @@ import { setGlobalErrorHandler } from "./utils/globalErrorHandler";
 const monday = mondaySdk();
 
 // רכיב פנימי שמשתמש ב-Settings Context
-const AppContent = () => {
+const AppContent = ({ context }) => {
   const { customSettings, isLoading } = useSettings();
   const isMobile = useMobile();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [context, setContext] = useState(null);
   const dialogRef = useRef(null);
-  
+
   // Toast management
-  const { 
-    toasts, 
-    removeToast, 
+  const {
+    toasts,
+    removeToast,
     showErrorWithDetails,
     errorDetailsModal,
     openErrorDetailsModal,
     closeErrorDetailsModal
   } = useToast();
-  
+
   // הגדרת global error handler
   useEffect(() => {
     setGlobalErrorHandler(showErrorWithDetails);
   }, [showErrorWithDetails]);
-
-  // טעינת context מ-Monday
-  useEffect(() => {
-    monday.get('context').then(res => {
-      if (res.data) {
-        setContext(res.data);
-      }
-    });
-  }, []);
 
 
 
@@ -161,10 +151,21 @@ const AppContent = () => {
 
 // רכיב App הראשי שעוטף הכל ב-SettingsProvider
 const App = () => {
+  const [context, setContext] = useState(null);
+
+  // טעינת context מ-Monday SDK
+  useEffect(() => {
+    monday.get('context').then(res => {
+      if (res.data) {
+        setContext(res.data);
+      }
+    });
+  }, []);
+
   return (
-    <MobileProvider>
+    <MobileProvider context={context}>
       <SettingsProvider monday={monday}>
-        <AppContent />
+        <AppContent context={context} />
       </SettingsProvider>
     </MobileProvider>
   );

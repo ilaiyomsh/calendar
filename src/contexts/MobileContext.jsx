@@ -1,10 +1,13 @@
 import React, { createContext, useContext } from 'react';
-import { useIsMobile } from '../hooks/useIsMobile';
 
 const MobileContext = createContext(false);
 
-export function MobileProvider({ children }) {
-    const isMobile = useIsMobile();
+/**
+ * ספק מובייל - מזהה מובייל לפי context.mode מ-Monday SDK
+ * @param {object} props.context - הקונטקסט שמתקבל מ-monday.get('context')
+ */
+export function MobileProvider({ context, children }) {
+    const isMobile = context?.mode === 'mobile';
     return (
         <MobileContext.Provider value={isMobile}>
             {children}
