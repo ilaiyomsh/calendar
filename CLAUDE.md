@@ -17,9 +17,9 @@ pnpm run deploy     # Build + push to Monday.com
 pnpm run server     # Dev server only
 pnpm run expose     # Create tunnel via mapps CLI
 pnpm run stop       # Kill dev processes
+pnpm test           # Run tests in watch mode (Vitest)
+pnpm run test:run   # Run tests once (CI mode)
 ```
-
-No lint or test commands configured.
 
 ## Architecture
 
@@ -445,6 +445,24 @@ useProjects → EventModal (project selector)
 useNonBillableOptions / useStageOptions → EventModal (dropdown options)
 ```
 
+## Monday SDK Context
+
+The app uses a centralized `MondayContext` provider that loads the Monday SDK context once and exposes it to the entire app.
+
+### Usage
+```javascript
+import { useMondayContext, useMobile } from './contexts/MondayContext';
+
+const { context, isMobile } = useMondayContext();
+// or just:
+const isMobile = useMobile();
+```
+
+### Planning a new feature
+When planning a new feature that requires platform information (device type, user info, theme, region, etc.):
+1. **Check the Monday SDK context first** — use `useMondayContext()` and inspect the `context` object
+2. **If the needed data is missing** — ask the user / check Monday SDK docs before implementing a custom solution
+
 ## Common Pitfalls
 
 1. **Don't use console.log** - Use `logger` instead
@@ -478,6 +496,7 @@ useNonBillableOptions / useStageOptions → EventModal (dropdown options)
 |---------|-------|
 | Entry point | `index.jsx`, `App.jsx` |
 | Main view | `MondayCalendar.jsx` |
+| Monday context | `contexts/MondayContext.jsx` |
 | Settings | `SettingsDialog/`, `SettingsContext.jsx` |
 | Event forms | `EventModal/`, `AllDayEventModal/` |
 | Filtering | `FilterBar/`, `hooks/useCalendarFilter.js`, `hooks/useFilterOptions.js` |

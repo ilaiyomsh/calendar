@@ -1,6 +1,7 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import logger from '../utils/logger';
 import { isLegacyMapping } from '../utils/eventTypeMapping';
+import { useMondayContext } from './MondayContext';
 
 // יצירת Context
 const SettingsContext = createContext(null);
@@ -92,77 +93,97 @@ const DEFAULT_SETTINGS = {
 
 // Provider Component
 export function SettingsProvider({ monday, children }) {
+  const { context } = useMondayContext();
   const [customSettings, setCustomSettings] = useState(DEFAULT_SETTINGS);
   const [isLoading, setIsLoading] = useState(true);
 
-  // טעינת הגדרות מ-Monday Storage בעלייה
+  // טעינת הגדרות מ-Monday Storage רק אחרי שה-context נטען (מבטיח שה-parent frame מזהה את ה-instance)
   useEffect(() => {
+    if (!context) return;
     loadSettings();
-  }, []);
+  }, [context]);
 
   const loadSettings = async () => {
-    try {
-      const result = await monday.storage.instance.getItem('customSettings');
-      
-      if (result.data && result.data.value) {
-        const savedSettings = JSON.parse(result.data.value);
-        
-        // מיגרציה של מפתחות ישנים לחדשים (תאימות לאחור)
-        const migratedSettings = { ...savedSettings };
-        
-        // מיגרציה של שמות ישנים (products -> tasks)
-        if (savedSettings.productsBoardId && !savedSettings.tasksBoardId) {
-          migratedSettings.tasksBoardId = savedSettings.productsBoardId;
-        }
-        if (savedSettings.productsCustomerColumnId && !savedSettings.tasksProjectColumnId) {
-          migratedSettings.tasksProjectColumnId = savedSettings.productsCustomerColumnId;
-        }
-        if (savedSettings.productColumnId && !savedSettings.taskColumnId) {
-          migratedSettings.taskColumnId = savedSettings.productColumnId;
-        }
-        
-        // זיהוי אוטומטי של structureMode אם לא קיים
-        if (!savedSettings.structureMode) {
-          migratedSettings.structureMode = detectStructureMode(migratedSettings);
-          logger.info('SettingsContext', 'Auto-detected structureMode', { mode: migratedSettings.structureMode });
-        }
-        
-        // מיגרציה של useStageField ל-structureMode
-        if (savedSettings.useStageField !== undefined && !savedSettings.structureMode) {
-          // אם יש משימות, זה PROJECT_WITH_TASKS
-          // אם אין משימות ויש stage, זה PROJECT_WITH_STAGE
-          // אם אין משימות ואין stage, זה PROJECT_ONLY
-        }
-        
-        // מיגרציה של eventTypeMapping מפורמט ישן (טקסט) לפורמט חדש (אינדקס)
-        if (migratedSettings.eventTypeMapping && isLegacyMapping(migratedSettings.eventTypeMapping)) {
-          logger.info('SettingsContext', 'Detected legacy text-based eventTypeMapping, clearing for re-migration');
-          migratedSettings.eventTypeMapping = null;
-          migratedSettings.eventTypeLabelMeta = null;
-        }
-        // מיגרציה של eventTypeLabelColors ישן ל-eventTypeLabelMeta
-        if (migratedSettings.eventTypeLabelColors) {
-          delete migratedSettings.eventTypeLabelColors;
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY_MS = 300;
+
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const result = await monday.storage.instance.getItem('customSettings');
+
+        if (result.data && result.data.value) {
+          const savedSettings = JSON.parse(result.data.value);
+
+          // מיגרציה של מפתחות ישנים לחדשים (תאימות לאחור)
+          const migratedSettings = { ...savedSettings };
+
+          // מיגרציה של שמות ישנים (products -> tasks)
+          if (savedSettings.productsBoardId && !savedSettings.tasksBoardId) {
+            migratedSettings.tasksBoardId = savedSettings.productsBoardId;
+          }
+          if (savedSettings.productsCustomerColumnId && !savedSettings.tasksProjectColumnId) {
+            migratedSettings.tasksProjectColumnId = savedSettings.productsCustomerColumnId;
+          }
+          if (savedSettings.productColumnId && !savedSettings.taskColumnId) {
+            migratedSettings.taskColumnId = savedSettings.productColumnId;
+          }
+
+          // זיהוי אוטומטי של structureMode אם לא קיים
+          if (!savedSettings.structureMode) {
+            migratedSettings.structureMode = detectStructureMode(migratedSettings);
+            logger.info('SettingsContext', 'Auto-detected structureMode', { mode: migratedSettings.structureMode });
+          }
+
+          // מיגרציה של useStageField ל-structureMode
+          if (savedSettings.useStageField !== undefined && !savedSettings.structureMode) {
+            // אם יש משימות, זה PROJECT_WITH_TASKS
+            // אם אין משימות ויש stage, זה PROJECT_WITH_STAGE
+            // אם אין משימות ואין stage, זה PROJECT_ONLY
+          }
+
+          // מיגרציה של eventTypeMapping מפורמט ישן (טקסט) לפורמט חדש (אינדקס)
+          if (migratedSettings.eventTypeMapping && isLegacyMapping(migratedSettings.eventTypeMapping)) {
+            logger.info('SettingsContext', 'Detected legacy text-based eventTypeMapping, clearing for re-migration');
+            migratedSettings.eventTypeMapping = null;
+            migratedSettings.eventTypeLabelMeta = null;
+          }
+          // מיגרציה של eventTypeLabelColors ישן ל-eventTypeLabelMeta
+          if (migratedSettings.eventTypeLabelColors) {
+            delete migratedSettings.eventTypeLabelColors;
+          }
+
+          // הסרת שדות ישנים שכבר לא בשימוש
+          delete migratedSettings.useStageField;
+          delete migratedSettings.useEmployeeCost;
+          delete migratedSettings.employeesBoardId;
+          delete migratedSettings.employeesPersonColumnId;
+          delete migratedSettings.employeesHourlyRateColumnId;
+          delete migratedSettings.totalCostColumnId;
+          delete migratedSettings.productsBoardId;
+          delete migratedSettings.productsCustomerColumnId;
+          delete migratedSettings.productColumnId;
+
+          setCustomSettings(prev => ({ ...DEFAULT_SETTINGS, ...migratedSettings }));
+          setIsLoading(false);
+          return;
         }
 
-        // הסרת שדות ישנים שכבר לא בשימוש
-        delete migratedSettings.useStageField;
-        delete migratedSettings.useEmployeeCost;
-        delete migratedSettings.employeesBoardId;
-        delete migratedSettings.employeesPersonColumnId;
-        delete migratedSettings.employeesHourlyRateColumnId;
-        delete migratedSettings.totalCostColumnId;
-        delete migratedSettings.productsBoardId;
-        delete migratedSettings.productsCustomerColumnId;
-        delete migratedSettings.productColumnId;
-        
-        setCustomSettings(prev => ({ ...DEFAULT_SETTINGS, ...migratedSettings }));
+        // Storage החזיר ריק - ייתכן שה-SDK עדיין לא מוכן, ניסיון חוזר
+        if (attempt < MAX_RETRIES) {
+          logger.info('SettingsContext', `Storage returned empty, retrying (${attempt}/${MAX_RETRIES})`);
+          await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+        }
+      } catch (error) {
+        logger.error('SettingsContext', `Failed to load settings (attempt ${attempt}/${MAX_RETRIES})`, error);
+        if (attempt < MAX_RETRIES) {
+          await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+        }
       }
-    } catch (error) {
-      logger.error('SettingsContext', 'Failed to load settings from storage', error);
-    } finally {
-      setIsLoading(false);
     }
+
+    // כל הניסיונות מוצו - instance חדש או בעיה ב-SDK
+    logger.warn('SettingsContext', `Settings not found after ${MAX_RETRIES} attempts, using defaults`);
+    setIsLoading(false);
   };
   
   // זיהוי אוטומטי של structureMode לפי הגדרות קיימות

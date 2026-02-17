@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import "./App.css";
 import mondaySdk from "monday-sdk-js";
 import MondayCalendar from "./MondayCalendar";
 import { SettingsProvider, useSettings } from "./contexts/SettingsContext";
-import { MobileProvider, useMobile } from "./contexts/MobileContext";
+import { MondayProvider, useMondayContext, useMobile } from "./contexts/MondayContext";
 import SettingsDialog from "./components/SettingsDialog/SettingsDialog";
 import ErrorBoundary from "./components/ErrorBoundary/ErrorBoundary";
 import { useToast } from "./hooks/useToast";
@@ -16,34 +16,24 @@ const monday = mondaySdk();
 // רכיב פנימי שמשתמש ב-Settings Context
 const AppContent = () => {
   const { customSettings, isLoading } = useSettings();
-  const isMobile = useMobile();
+  const { context, isMobile } = useMondayContext();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [context, setContext] = useState(null);
   const dialogRef = useRef(null);
-  
+
   // Toast management
-  const { 
-    toasts, 
-    removeToast, 
+  const {
+    toasts,
+    removeToast,
     showErrorWithDetails,
     errorDetailsModal,
     openErrorDetailsModal,
     closeErrorDetailsModal
   } = useToast();
-  
+
   // הגדרת global error handler
   useEffect(() => {
     setGlobalErrorHandler(showErrorWithDetails);
   }, [showErrorWithDetails]);
-
-  // טעינת context מ-Monday
-  useEffect(() => {
-    monday.get('context').then(res => {
-      if (res.data) {
-        setContext(res.data);
-      }
-    });
-  }, []);
 
 
 
@@ -159,14 +149,14 @@ const AppContent = () => {
   );
 };
 
-// רכיב App הראשי שעוטף הכל ב-SettingsProvider
+// רכיב App הראשי שעוטף הכל ב-MondayProvider
 const App = () => {
   return (
-    <MobileProvider>
+    <MondayProvider monday={monday}>
       <SettingsProvider monday={monday}>
         <AppContent />
       </SettingsProvider>
-    </MobileProvider>
+    </MondayProvider>
   );
 };
 

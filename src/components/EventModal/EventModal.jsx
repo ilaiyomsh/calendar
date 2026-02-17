@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useSettings, STRUCTURE_MODES } from '../../contexts/SettingsContext';
-import { useMobile } from '../../contexts/MobileContext';
+import { useMobile } from '../../contexts/MondayContext';
 import { useProjects } from '../../hooks/useProjects';
 import { useTasks } from '../../hooks/useTasks';
 import { useStageOptions } from '../../hooks/useStageOptions';
