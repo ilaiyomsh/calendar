@@ -11,6 +11,9 @@ const FOCUSABLE_SELECTOR = 'a[href], button:not(:disabled), textarea:not(:disabl
 export function useFocusTrap(isOpen, onEscape) {
     const containerRef = useRef(null);
     const previousFocusRef = useRef(null);
+    // שמירת onEscape ב-ref כדי שהאפקט לא ירוץ מחדש בכל שינוי reference
+    const onEscapeRef = useRef(onEscape);
+    onEscapeRef.current = onEscape;
 
     useEffect(() => {
         if (!isOpen) return;
@@ -38,7 +41,7 @@ export function useFocusTrap(isOpen, onEscape) {
             if (e.key === 'Escape') {
                 e.preventDefault();
                 e.stopPropagation();
-                if (onEscape) onEscape();
+                if (onEscapeRef.current) onEscapeRef.current();
                 return;
             }
 
@@ -73,7 +76,7 @@ export function useFocusTrap(isOpen, onEscape) {
                 previousFocusRef.current.focus();
             }
         };
-    }, [isOpen, onEscape]);
+    }, [isOpen]);
 
     return containerRef;
 }
