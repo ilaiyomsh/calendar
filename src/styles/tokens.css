@@ -1,0 +1,25 @@
+/* Design Tokens - Shared CSS custom properties */
+:root {
+  /* Border Radius */
+  --radius-modal: 16px;
+  --radius-button: 8px;
+  --radius-input: 8px;
+  --radius-card: 12px;
+
+  /* Font Sizes */
+  --font-size-button: 0.9rem;
+  --font-size-label: 0.85rem;
+  --font-size-body: 0.95rem;
+
+  /* Colors */
+  --color-primary: #0073ea;
+  --color-primary-hover: #0060b9;
+  --color-danger: #e2445c;
+  --color-danger-hover: #d0394e;
+  --color-danger-bg: #fff0f2;
+  --color-text: #323338;
+  --color-text-secondary: #676879;
+  --color-border: #e6e9ef;
+  --color-bg-secondary: #f7f9fa;
+  --color-bg-input: #f9f9f9;
+}

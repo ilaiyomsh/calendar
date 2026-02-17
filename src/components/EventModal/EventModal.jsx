@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useSettings, STRUCTURE_MODES } from '../../contexts/SettingsContext';
 import { useMobile } from '../../contexts/MondayContext';
 import { useProjects } from '../../hooks/useProjects';
 import { useTasks } from '../../hooks/useTasks';
 import { useStageOptions } from '../../hooks/useStageOptions';
 import { useNonBillableOptions } from '../../hooks/useNonBillableOptions';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { getEffectiveBoardId } from '../../utils/boardIdResolver';
 import { getNonBillableIndexes, getLabelText } from '../../utils/eventTypeMapping';
 import TaskSelect from '../TaskSelect';
@@ -73,8 +74,13 @@ export default function EventModal({
     // State נפרד למשימות של הפרויקט הנבחר
     const [selectedItemTasks, setSelectedItemTasks] = useState([]);
     
-    // State - תיבת אישור למחיקה
+    // State - תיבת אישור למחיקה ושינויים שלא נשמרו
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+
+    // State - שגיאות ולידציה
+    const [fieldErrors, setFieldErrors] = useState({});
+    const formRef = useRef(null);
     
     // טעינת שם המשתמש
     const [reporterName, setReporterName] = useState('');
@@ -105,6 +111,8 @@ export default function EventModal({
     // Reset state when dialog opens
     useEffect(() => {
         if (isOpen) {
+            setFieldErrors({});
+            setShowCloseConfirm(false);
             if (isConvertMode && eventToEdit) {
                 // מצב המרה - איפוס שדות מלבד הערות
                 // המשתמש חייב לבחור פרויקט/משימה/סיווג מחדש
@@ -214,38 +222,78 @@ export default function EventModal({
         }
     };
 
+    // ניקוי שגיאה כשהמשתמש מתקן שדה
+    const clearFieldError = useCallback((field) => {
+        setFieldErrors(prev => {
+            if (!prev[field]) return prev;
+            const next = { ...prev };
+            delete next[field];
+            return next;
+        });
+    }, []);
+
+    // בדיקה אם יש שינויים שלא נשמרו
+    const hasUnsavedChanges = useCallback(() => {
+        if (isEditMode && eventToEdit) {
+            return (
+                (notes || '') !== (eventToEdit.notes || '') ||
+                selectedItem?.id !== eventToEdit.projectId ||
+                (selectedTask || null) !== (eventToEdit.taskId || null) ||
+                (selectedStage || null) !== (eventToEdit.stageId || null) ||
+                isBillable !== (eventToEdit.isBillable !== false) ||
+                (selectedNonBillableType || null) !== (eventToEdit.nonBillableType || null)
+            );
+        }
+        // מצב יצירה - בודקים אם המשתמש מילא משהו
+        return !!(selectedItem || notes || selectedTask || selectedStage || !isBillable || selectedNonBillableType);
+    }, [isEditMode, eventToEdit, notes, selectedItem, selectedTask, selectedStage, isBillable, selectedNonBillableType]);
+
+    const handleCloseAttempt = useCallback(() => {
+        if (showDeleteConfirm) return;
+        if (hasUnsavedChanges()) {
+            setShowCloseConfirm(true);
+        } else {
+            onClose();
+        }
+    }, [hasUnsavedChanges, onClose, showDeleteConfirm]);
+
+    const modalRef = useFocusTrap(isOpen && !showDeleteConfirm && !showCloseConfirm, handleCloseAttempt);
+
     const handleCreate = async () => {
         const { structureMode } = customSettings;
-        
+        const errors = {};
+
         // לא לחיוב - נדרש רק סוג דיווח
         if (!isBillable) {
             if (!selectedNonBillableType) {
-                alert('יש לבחור סוג דיווח לא לחיוב');
-                return;
+                errors.nonBillableType = 'יש לבחור סוג דיווח לא לחיוב';
             }
         }
-        
+
         // לחיוב
         if (isBillable) {
-            // פרויקט חובה תמיד
             if (!selectedItem) {
-                alert('יש לבחור פרויקט');
-                return;
+                errors.project = 'יש לבחור פרויקט';
             }
-            
-            // במצב TASKS - משימה חובה
-            if (structureMode === STRUCTURE_MODES.PROJECT_WITH_TASKS && 
+
+            if (structureMode === STRUCTURE_MODES.PROJECT_WITH_TASKS &&
                 customSettings.taskColumnId && !selectedTask) {
-                alert('יש לבחור משימה');
-                return;
+                errors.task = 'יש לבחור משימה';
             }
-            
-            // במצב PROJECT_WITH_STAGE - סיווג חובה
-            if (structureMode === STRUCTURE_MODES.PROJECT_WITH_STAGE && 
+
+            if (structureMode === STRUCTURE_MODES.PROJECT_WITH_STAGE &&
                 customSettings.stageColumnId && !selectedStage) {
-                alert('יש לבחור סיווג');
-                return;
+                errors.stage = 'יש לבחור סיווג';
             }
+        }
+
+        if (Object.keys(errors).length > 0) {
+            setFieldErrors(errors);
+            // גלילה לשגיאה הראשונה
+            const firstErrorKey = Object.keys(errors)[0];
+            const el = formRef.current?.querySelector(`[data-field="${firstErrorKey}"]`);
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            return;
         }
 
         const task = selectedItemTasks.find(t => t.id === selectedTask);
@@ -360,10 +408,10 @@ export default function EventModal({
 
     return (
         <div className={styles.overlay} onClick={(e) => {
-            if (showDeleteConfirm) return;
-            if (e.target === e.currentTarget) onClose();
+            if (showDeleteConfirm || showCloseConfirm) return;
+            if (e.target === e.currentTarget) handleCloseAttempt();
         }}>
-            <div className={styles.modal} onClick={(e) => e.stopPropagation()} onKeyDown={handleKeyDown} tabIndex={-1}>
+            <div className={styles.modal} ref={modalRef} role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()} onKeyDown={handleKeyDown} tabIndex={-1}>
                 <div className={styles.header}>
                     <div className={styles.titleGroup}>
                         <h2 className={styles.title}>
@@ -371,7 +419,7 @@ export default function EventModal({
                         </h2>
                         <span className={styles.subtitle}>{dateStr}</span>
                     </div>
-                    <button className={styles.closeBtn} onClick={onClose} aria-label="סגור">{isMobile ? '→' : '✕'}</button>
+                    <button className={styles.closeBtn} onClick={handleCloseAttempt} aria-label="סגור">{isMobile ? '→' : '✕'}</button>
                 </div>
 
                 {/* הודעת נעילה בראש המודל */}
@@ -379,7 +427,7 @@ export default function EventModal({
                     <div className={styles.lockBanner}>{lockReason}</div>
                 )}
 
-                <div className={styles.content} style={{ position: 'relative' }}>
+                <div className={styles.content} ref={formRef} style={{ position: 'relative' }}>
                     {isLoadingEventData && (
                         <div className={styles.loadingOverlay}>
                             <div className={styles.spinner}></div>
@@ -427,7 +475,7 @@ export default function EventModal({
                     </div>
 
                     {!isBillable && customSettings.nonBillableStatusColumnId && (
-                        <div className={`${styles.formGroup} ${styles.fixedSection}`}>
+                        <div className={`${styles.formGroup} ${styles.fixedSection} ${fieldErrors.nonBillableType ? styles.formGroupError : ''}`} data-field="nonBillableType">
                             <label className={styles.label}>סוג דיווח לא לחיוב <span className={styles.required}>*</span></label>
                             {loadingNonBillable ? (
                                 <div className={styles.loading}>טוען...</div>
@@ -436,7 +484,7 @@ export default function EventModal({
                                     {nonBillableOptions.map(option => (
                                         <button
                                             key={option.id}
-                                            onClick={() => setSelectedNonBillableType(option.label === selectedNonBillableType ? null : option.label)}
+                                            onClick={() => { setSelectedNonBillableType(option.label === selectedNonBillableType ? null : option.label); clearFieldError('nonBillableType'); }}
                                             className={`${styles.itemButton} ${selectedNonBillableType === option.label ? styles.selected : ''}`}
                                         >
                                             {option.label}
@@ -444,13 +492,14 @@ export default function EventModal({
                                     ))}
                                 </div>
                             )}
+                            {fieldErrors.nonBillableType && <span className={styles.fieldError}>{fieldErrors.nonBillableType}</span>}
                         </div>
                     )}
 
                     {/* פרויקט - רק לדיווח לחיוב */}
                     {isBillable && (
                         <div className={styles.scrollableSection}>
-                            <div className={styles.formGroup}>
+                            <div className={`${styles.formGroup} ${fieldErrors.project ? styles.formGroupError : ''}`} data-field="project">
                                 <label className={styles.label}>
                                     פרויקט <span className={styles.required}>*</span>
                                 </label>
@@ -470,7 +519,7 @@ export default function EventModal({
                                             .map(item => (
                                                 <button
                                                     key={item.id}
-                                                    onClick={() => setSelectedItem(item.id === selectedItem?.id ? null : item)}
+                                                    onClick={() => { setSelectedItem(item.id === selectedItem?.id ? null : item); clearFieldError('project'); }}
                                                     className={`${styles.itemButton} ${selectedItem?.id === item.id ? styles.selected : ''}`}
                                                 >
                                                     {item.name}
@@ -478,6 +527,7 @@ export default function EventModal({
                                             ))}
                                     </div>
                                 )}
+                                {fieldErrors.project && <span className={styles.fieldError}>{fieldErrors.project}</span>}
                             </div>
                         </div>
                     )}
@@ -485,13 +535,13 @@ export default function EventModal({
                     {/* משימה - מוצג רק במצב TASKS */}
                     {isBillable && customSettings.taskColumnId && selectedItem &&
                      customSettings.structureMode === STRUCTURE_MODES.PROJECT_WITH_TASKS && (
-                        <div className={`${styles.formGroup} ${styles.fixedSection}`}>
+                        <div className={`${styles.formGroup} ${styles.fixedSection} ${fieldErrors.task ? styles.formGroupError : ''}`} data-field="task">
                             <label className={styles.label}>משימה <span className={styles.required}>*</span></label>
                             <div className={styles.productSection}>
                                 <TaskSelect
                                     products={selectedItemTasks}
                                     selectedProduct={selectedTask}
-                                    onSelectProduct={setSelectedTask}
+                                    onSelectProduct={(id) => { setSelectedTask(id); clearFieldError('task'); }}
                                     onCreateNew={async (taskName) => await handleCreateTask(taskName)}
                                     isLoading={false}
                                     disabled={false}
@@ -499,14 +549,15 @@ export default function EventModal({
                                     placeholder="בחר משימה..."
                                 />
                             </div>
+                            {fieldErrors.task && <span className={styles.fieldError}>{fieldErrors.task}</span>}
                         </div>
                     )}
 
                     {/* סיווג - מוצג רק במצב STAGE */}
                     {isBillable && customSettings.stageColumnId && selectedItem &&
                      customSettings.structureMode === STRUCTURE_MODES.PROJECT_WITH_STAGE && (
-                        <div className={`${styles.formGroup} ${styles.fixedSection}`}>
-                            <label className={styles.label}>סיווג</label>
+                        <div className={`${styles.formGroup} ${styles.fixedSection} ${fieldErrors.stage ? styles.formGroupError : ''}`} data-field="stage">
+                            <label className={styles.label}>סיווג <span className={styles.required}>*</span></label>
                             {loadingStages ? (
                                 <div className={styles.loading}>טוען...</div>
                             ) : (
@@ -514,7 +565,7 @@ export default function EventModal({
                                     {stageOptions.map(option => (
                                         <button
                                             key={option.id}
-                                            onClick={() => setSelectedStage(option.label === selectedStage ? null : option.label)}
+                                            onClick={() => { setSelectedStage(option.label === selectedStage ? null : option.label); clearFieldError('stage'); }}
                                             className={`${styles.itemButton} ${selectedStage === option.label ? styles.selected : ''}`}
                                         >
                                             {option.label}
@@ -522,6 +573,7 @@ export default function EventModal({
                                     ))}
                                 </div>
                             )}
+                            {fieldErrors.stage && <span className={styles.fieldError}>{fieldErrors.stage}</span>}
                         </div>
                     )}
 
@@ -569,7 +621,7 @@ export default function EventModal({
                             </button>
                         </>
                     )}
-                    <button className={`${styles.btn} ${styles.btnSecondary}`} onClick={onClose}>{isEditMode && isLocked || isFutureEvent ? 'סגור' : 'ביטול'}</button>
+                    <button className={`${styles.btn} ${styles.btnSecondary}`} onClick={handleCloseAttempt}>{isEditMode && isLocked || isFutureEvent ? 'סגור' : 'ביטול'}</button>
                     {!(isEditMode && isLocked) && !isFutureEvent && (
                     <button
                         className={`${styles.btn} ${formIsValid && !isLoadingEventData ? styles.btnPrimaryActive : styles.btnPrimary}`}
@@ -600,6 +652,20 @@ export default function EventModal({
                 message="האם אתה בטוח שברצונך למחוק את האירוע?"
                 confirmText="מחק"
                 cancelText="ביטול"
+                confirmButtonStyle="danger"
+            />
+            <ConfirmDialog
+                isOpen={showCloseConfirm}
+                onClose={() => setShowCloseConfirm(false)}
+                onConfirm={() => {
+                    setShowCloseConfirm(false);
+                    onClose();
+                }}
+                onCancel={() => setShowCloseConfirm(false)}
+                title="שינויים שלא נשמרו"
+                message="יש שינויים שלא נשמרו. האם ברצונך לצאת?"
+                confirmText="צא ללא שמירה"
+                cancelText="המשך עריכה"
                 confirmButtonStyle="danger"
             />
         </div>

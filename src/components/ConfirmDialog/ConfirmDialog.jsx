@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { X } from 'lucide-react';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 import styles from './ConfirmDialog.module.css';
 
 export default function ConfirmDialog({
@@ -13,11 +14,17 @@ export default function ConfirmDialog({
     cancelText = "ביטול",
     confirmButtonStyle = "primary" // 'primary' | 'danger'
 }) {
+    const handleEscape = useCallback(() => {
+        (onCancel || onClose)();
+    }, [onCancel, onClose]);
+
+    const dialogRef = useFocusTrap(isOpen, handleEscape);
+
     if (!isOpen) return null;
 
     return (
         <div className={styles.overlay}>
-            <div className={styles.dialog}>
+            <div className={styles.dialog} ref={dialogRef} role="dialog" aria-modal="true" tabIndex={-1}>
                 <div className={styles.header}>
                     <h3>{title}</h3>
                     <button className={styles.closeButton} onClick={onCancel || onClose}>

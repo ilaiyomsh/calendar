@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { FileText, Plus, Minus, Trash2, X, Clock, Calendar } from 'lucide-react';
 import { differenceInDays } from 'date-fns';
 import { useSettings, STRUCTURE_MODES } from '../../contexts/SettingsContext';
@@ -7,6 +7,7 @@ import { useProjects } from '../../hooks/useProjects';
 import { useTasksMultiple } from '../../hooks/useTasksMultiple';
 import { useStageOptions } from '../../hooks/useStageOptions';
 import { useNonBillableOptions } from '../../hooks/useNonBillableOptions';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { getEffectiveBoardId } from '../../utils/boardIdResolver';
 import { getAllDayIndexes, getNonBillableIndexes, getLabelText, getLabelColor, getLabelsByCategory, EVENT_CATEGORIES } from '../../utils/eventTypeMapping';
 import TaskSelect from '../TaskSelect';
@@ -86,6 +87,10 @@ export default function AllDayEventModal({
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [editingDuration, setEditingDuration] = useState({});
 
+    // State - שגיאות ולידציה
+    const [fieldErrors, setFieldErrors] = useState({});
+    const formRef = useRef(null);
+
     // חישוב לוח דיווחים אפקטיבי - העמודות נמצאות בלוח הזה
     const boardId = getEffectiveBoardId(customSettings, context);
 
@@ -131,7 +136,8 @@ export default function AllDayEventModal({
     useEffect(() => {
         if (isOpen) {
             logger.debug('AllDayEventModal', 'Modal opened - resetting state');
-            
+            setFieldErrors({});
+
             if (isEditMode && eventToEdit) {
                 // זיהוי סוג אירוע יומי מתוך eventTypeIndex
                 const allDayIndexes = getAllDayIndexes(customSettings.eventTypeMapping);
@@ -199,6 +205,11 @@ export default function AllDayEventModal({
     // הוספת שורת דיווח מפרויקט
     const addReportRow = (project) => {
         if (!project) return;
+        setFieldErrors(prev => {
+            if (!prev.reports) return prev;
+            const { reports, ...rest } = prev;
+            return rest;
+        });
         
         // טעינת משימות של הפרויקט
         if (customSettings.tasksProjectColumnId) {
@@ -353,10 +364,12 @@ export default function AllDayEventModal({
     };
     
     // פונקציה לטיפול בסגירה עם אישור
-    const handleCloseAttempt = () => {
+    const handleCloseAttempt = useCallback(() => {
         if (hasValidReports()) setShowCloseConfirm(true);
         else onClose();
-    };
+    }, [onClose]);
+
+    const modalRef = useFocusTrap(isOpen && !showCloseConfirm && !showDeleteConfirm, handleCloseAttempt);
     
     // עדכון שעות, הערות או משימה לדיווח
     const updateReport = (id, field, value) => {
@@ -407,10 +420,23 @@ export default function AllDayEventModal({
         });
     };
     
+    // ניקוי שגיאת ולידציה בשורה
+    const clearRowError = (reportId) => {
+        setFieldErrors(prev => {
+            if (!prev.rowErrors || !prev.rowErrors[reportId]) return prev;
+            const newRowErrors = { ...prev.rowErrors };
+            delete newRowErrors[reportId];
+            const newErrors = { ...prev, rowErrors: newRowErrors };
+            if (Object.keys(newRowErrors).length === 0) delete newErrors.rowErrors;
+            return newErrors;
+        });
+    };
+
     // עדכון משימה שנבחרה
     const updateSelectedTask = (reportId, taskId) => {
         const report = addedReports.find(r => r.id === reportId);
         if (report) {
+            clearRowError(reportId);
             setSelectedTasks(prev => ({ ...prev, [reportId]: taskId }));
             updateReport(reportId, 'taskId', taskId);
             if (!taskId) {
@@ -427,6 +453,7 @@ export default function AllDayEventModal({
     const updateSelectedStage = (reportId, stageId) => {
         const report = addedReports.find(r => r.id === reportId);
         if (report) {
+            clearRowError(reportId);
             setSelectedStages(prev => ({ ...prev, [reportId]: stageId }));
             updateReport(reportId, 'stageId', stageId);
         }
@@ -506,41 +533,55 @@ export default function AllDayEventModal({
     const handleCreate = () => {
         if (!selectedType) return;
         const { structureMode } = customSettings;
-        
+
         if (selectedType === 'reports') {
             const validReports = addedReports.filter(r => r.hours && parseFloat(r.hours) > 0);
+            const errors = {};
+            const rowErrors = {};
+
             if (validReports.length === 0) {
-                alert('יש להוסיף לפחות פרויקט אחד עם שעות');
+                errors.reports = 'יש להוסיף לפחות פרויקט אחד עם שעות';
+            } else {
+                // בדיקת משימות - רק במצב TASKS
+                if (structureMode === STRUCTURE_MODES.PROJECT_WITH_TASKS &&
+                    customSettings.taskColumnId) {
+                    validReports.forEach(r => {
+                        if (r.isBillable && !r.taskId) {
+                            rowErrors[r.id] = rowErrors[r.id] || [];
+                            rowErrors[r.id].push('יש לבחור משימה');
+                        }
+                    });
+                }
+
+                // בדיקת סוגי לא לחיוב
+                validReports.forEach(r => {
+                    if (!r.isBillable && !r.nonBillableType) {
+                        rowErrors[r.id] = rowErrors[r.id] || [];
+                        rowErrors[r.id].push('יש לבחור סוג דיווח לא לחיוב');
+                    }
+                });
+
+                // בדיקת סיווג - לפי structureMode
+                if (customSettings.stageColumnId && structureMode === STRUCTURE_MODES.PROJECT_WITH_STAGE) {
+                    validReports.forEach(r => {
+                        if (r.isBillable && !r.stageId) {
+                            rowErrors[r.id] = rowErrors[r.id] || [];
+                            rowErrors[r.id].push('יש לבחור סיווג');
+                        }
+                    });
+                }
+            }
+
+            if (Object.keys(rowErrors).length > 0) {
+                errors.rowErrors = rowErrors;
+            }
+
+            if (Object.keys(errors).length > 0) {
+                setFieldErrors(errors);
+                // גלילה לשגיאה הראשונה
+                const firstErrorRow = formRef.current?.querySelector(`.${styles.reportRowError}`);
+                if (firstErrorRow) firstErrorRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 return;
-            }
-            
-            // בדיקת משימות - רק במצב TASKS
-            if (structureMode === STRUCTURE_MODES.PROJECT_WITH_TASKS && 
-                customSettings.taskColumnId) {
-                const missingTasks = validReports.filter(r => r.isBillable && !r.taskId);
-                if (missingTasks.length > 0) {
-                    alert('יש לבחור משימה לכל דיווח שעות לחיוב');
-                    return;
-                }
-            }
-            
-            // בדיקת סוגי לא לחיוב
-            const missingNonBillableTypes = validReports.filter(r => !r.isBillable && !r.nonBillableType);
-            if (missingNonBillableTypes.length > 0) {
-                alert('יש לבחור סוג דיווח לא לחיוב לכל דיווח שאינו לחיוב');
-                return;
-            }
-            
-            // בדיקת סיווג - לפי structureMode
-            if (customSettings.stageColumnId) {
-                let missingStages = [];
-                if (structureMode === STRUCTURE_MODES.PROJECT_WITH_STAGE) {
-                    missingStages = validReports.filter(r => r.isBillable && !r.stageId);
-                }
-                if (missingStages.length > 0) {
-                    alert('יש לבחור סיווג לכל דיווח שעות לחיוב');
-                    return;
-                }
             }
             
             const formattedReports = validReports.map(r => {
@@ -667,17 +708,21 @@ export default function AllDayEventModal({
     );
     
     const renderSplitForm = () => {
+        const rowErrors = fieldErrors.rowErrors || {};
         return (
-            <div className={styles.splitView}>
+            <div className={styles.splitView} ref={formRef}>
                 <div className={styles.mainForm}>
-                    {addedReports.length === 0 && (
+                    {fieldErrors.reports && (
+                        <div className={styles.formError}>{fieldErrors.reports}</div>
+                    )}
+                    {addedReports.length === 0 && !fieldErrors.reports && (
                         <div className={styles.emptyState}>
                             <FileText size={48} color="#d0d4e4" />
                             <div>בחר פרויקט מהרשימה בצד שמאל כדי להתחיל</div>
                         </div>
                     )}
                     {addedReports.map((report) => (
-                            <div key={report.id} className={styles.reportRow}>
+                            <div key={report.id} className={`${styles.reportRow} ${rowErrors[report.id] ? styles.reportRowError : ''}`}>
                                 <button onClick={() => removeReportRow(report.id)} className={styles.deleteButtonTop} title="מחק שורה"><X size={18} strokeWidth={2} /></button>
                                 <div className={styles.rowMainContent}>
                                     <div className={styles.selectorsGroup}>
@@ -729,7 +774,7 @@ export default function AllDayEventModal({
                                                     nonBillableOptions.map(option => (
                                                         <button
                                                             key={option.id}
-                                                            onClick={() => updateReport(report.id, 'nonBillableType', option.label === report.nonBillableType ? '' : option.label)}
+                                                            onClick={() => { clearRowError(report.id); updateReport(report.id, 'nonBillableType', option.label === report.nonBillableType ? '' : option.label); }}
                                                             className={`${styles.stageButton} ${report.nonBillableType === option.label ? styles.stageButtonSelected : ''}`}
                                                         >
                                                             {option.label}
@@ -815,6 +860,13 @@ export default function AllDayEventModal({
                                             value={report.notes || ''}
                                             onChange={(e) => updateReport(report.id, 'notes', e.target.value)}
                                         />
+                                    </div>
+                                )}
+                                {rowErrors[report.id] && (
+                                    <div className={styles.rowErrorMessages}>
+                                        {rowErrors[report.id].map((msg, i) => (
+                                            <span key={i} className={styles.fieldError}>{msg}</span>
+                                        ))}
                                     </div>
                                 )}
                             </div>
@@ -938,7 +990,7 @@ export default function AllDayEventModal({
             if (showCloseConfirm || showDeleteConfirm) return;
             if (e.target === e.currentTarget) handleCloseAttempt();
         }}>
-            <div className={`${styles.modal} ${viewMode === 'form' ? styles.modalWide : ''} ${viewMode === 'days-selection' ? styles.modalVisible : ''}`} onClick={e => e.stopPropagation()}>
+            <div className={`${styles.modal} ${viewMode === 'form' ? styles.modalWide : ''} ${viewMode === 'days-selection' ? styles.modalVisible : ''}`} ref={modalRef} role="dialog" aria-modal="true" onClick={e => e.stopPropagation()}>
                 <div className={styles.header}>
                     <h2>{getModalTitle()}{pendingDate && ` - ${pendingDate.toLocaleDateString('he-IL')}`}</h2>
                     <button className={styles.closeButton} onClick={handleCloseAttempt}><X size={24} /></button>

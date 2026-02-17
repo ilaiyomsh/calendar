@@ -17,7 +17,7 @@
 
 .modal {
   background-color: white;
-  border-radius: 12px;
+  border-radius: var(--radius-modal);
   width: 90%;
   max-width: 750px;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
@@ -47,7 +47,7 @@
   justify-content: space-between;
   align-items: center;
   background-color: #f7f9fa;
-  border-radius: 12px 12px 0 0; /* שמירה על פינות מעוגלות למעלה */
+  border-radius: var(--radius-modal) var(--radius-modal) 0 0;
   flex-shrink: 0; /* מונע התכווצות של ה-header */
 }
 
@@ -526,7 +526,7 @@
   gap: 12px;
   flex-shrink: 0; /* מונע התכווצות של ה-footer */
   background-color: #f7f9fa;
-  border-radius: 0 0 12px 12px; /* שמירה על פינות מעוגלות למטה */
+  border-radius: 0 0 var(--radius-modal) var(--radius-modal);
 }
 
 .footer .deleteBtn {
@@ -576,9 +576,9 @@
 
 .button {
   padding: 8px 24px;
-  border-radius: 4px;
+  border-radius: var(--radius-button);
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--font-size-button);
   font-weight: 500;
   border: none;
   transition: background-color 0.2s, color 0.2s;
@@ -595,22 +595,22 @@
 }
 
 .saveBtn {
-  background-color: #0073ea;
+  background-color: var(--color-primary);
   color: white;
 }
 
 .saveBtn:hover {
-  background-color: #0060b9;
+  background-color: var(--color-primary-hover);
 }
 
 .deleteBtn {
   background-color: white;
-  border: 1px solid #e2445c;
-  color: #e2445c;
+  border: 1px solid var(--color-danger);
+  color: var(--color-danger);
 }
 
 .deleteBtn:hover {
-  background-color: #fff0f2;
+  background-color: var(--color-danger-bg);
 }
 
 .approveBtn {
@@ -892,6 +892,36 @@
 .timeFieldWrapper :global(.container) {
   width: 100%;
   min-width: 0;
+}
+
+/* Inline Validation Errors */
+.formError {
+    text-align: center;
+    padding: 12px 16px;
+    background-color: var(--color-danger-bg, #fff0f2);
+    border: 1px solid var(--color-danger, #e2445c);
+    border-radius: var(--radius-input, 8px);
+    color: var(--color-danger, #e2445c);
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+.reportRowError {
+    border-color: var(--color-danger, #e2445c) !important;
+    background-color: var(--color-danger-bg, #fff0f2) !important;
+}
+
+.rowErrorMessages {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    width: 100%;
+}
+
+.fieldError {
+    font-size: 0.8rem;
+    color: var(--color-danger, #e2445c);
+    font-weight: 500;
 }
 
 /* ===== Mobile Responsive ===== */

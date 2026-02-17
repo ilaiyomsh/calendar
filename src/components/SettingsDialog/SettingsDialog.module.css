@@ -24,7 +24,7 @@
 /* Modal */
 .modal {
   background-color: #ffffff;
-  border-radius: 16px;
+  border-radius: var(--radius-modal);
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
   width: 100%;
   max-width: 800px;
@@ -152,8 +152,8 @@
   padding: 12px 24px;
   background-color: transparent;
   border: none;
-  border-radius: 10px;
-  font-size: 15px;
+  border-radius: var(--radius-button);
+  font-size: var(--font-size-button);
   font-weight: 500;
   color: #6b7280;
   cursor: pointer;
@@ -172,8 +172,8 @@
   padding: 12px 24px;
   background-color: #2563eb;
   border: none;
-  border-radius: 10px;
-  font-size: 15px;
+  border-radius: var(--radius-button);
+  font-size: var(--font-size-button);
   font-weight: 600;
   color: white;
   cursor: pointer;
