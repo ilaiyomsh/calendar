@@ -121,8 +121,10 @@ export default function AllDayEventModal({
     };
 
     const formatTime = (minutes) => {
-        let h = Math.floor(minutes / 60) % 24;
-        let m = minutes % 60;
+        // modulo 1440 (24 שעות) לטיפול בחציית חצות
+        const totalMins = ((minutes % 1440) + 1440) % 1440;
+        const h = Math.floor(totalMins / 60);
+        const m = totalMins % 60;
         return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
     };
 
@@ -371,45 +373,84 @@ export default function AllDayEventModal({
 
     const modalRef = useFocusTrap(isOpen && !showCloseConfirm && !showDeleteConfirm, handleCloseAttempt);
     
-    // עדכון שעות, הערות או משימה לדיווח
+    // --- Smart Time Picker ---
+    // לוגיקה חכמה שמונעת מצבים לא תקינים (start >= end) בלי לחסום את המשתמש.
+    // במקום שגיאה, המערכת מתאימה אוטומטית: Resize (עיגון) או Shift (הזזה).
     const updateReport = (id, field, value) => {
         setAddedReports(prev => {
             let newEntries = [...prev];
             const index = newEntries.findIndex(e => e.id === id);
             if (index === -1) return prev;
             const entry = { ...newEntries[index] };
-            entry[field] = value;
+
+            // שמירת ערכים ישנים לפני העדכון (נדרש ללוגיקת shift)
+            const oldStartTime = entry.startTime;
+            const oldEndTime = entry.endTime;
+            const oldHours = entry.hours;
 
             if (field === 'startTime') {
-                let originalDuration = '01:00';
-                if (entry.endTime && entry.startTime) originalDuration = calculateDurationStr(entry.startTime, entry.endTime);
-                else if (entry.hours) originalDuration = formatTime(parseFloat(entry.hours) * 60);
-                const originalDurationMinutes = parseTime(originalDuration);
-                const finalDuration = originalDurationMinutes < 30 ? formatTime(30) : originalDuration;
+                // --- שינוי שעת התחלה ---
+                const newStartMins = parseTime(value);
+                const oldEndMins = parseTime(oldEndTime);
                 entry.startTime = value;
-                entry.endTime = addTime(value, finalDuration);
-                if (entry.startTime && entry.endTime) {
-                    const calculatedHours = calculateHoursFromTimeRange(entry.startTime, entry.endTime);
-                    if (calculatedHours) entry.hours = calculatedHours;
-                }
-            } else if (field === 'endTime') {
-                if (entry.startTime) {
-                    const calculatedHours = calculateHoursFromTimeRange(entry.startTime, value);
-                    if (calculatedHours) {
-                        entry.hours = Math.max(parseFloat(calculatedHours), 0.5).toFixed(2);
-                        if (parseFloat(calculatedHours) < 0.5) {
-                            const endTotalMins = parseTime(entry.startTime) + 30;
-                            entry.endTime = formatTime(endTotalMins);
-                        }
+
+                if (oldEndTime && newStartMins < oldEndMins) {
+                    // Standard: Resize — שעת סיום עוגנת, משך מחושב מחדש
+                    const newDuration = oldEndMins - newStartMins;
+                    entry.hours = (newDuration / 60).toFixed(2);
+                    // endTime לא משתנה
+                } else {
+                    // Overlap: Shift — משך נשמר, שעת סיום נדחפת קדימה
+                    let durationMins = 60;
+                    if (oldStartTime && oldEndTime) {
+                        durationMins = parseTime(oldEndTime) - parseTime(oldStartTime);
+                        if (durationMins <= 0) durationMins = 60;
+                    } else if (oldHours) {
+                        durationMins = parseFloat(oldHours) * 60;
                     }
+                    durationMins = Math.max(durationMins, 30);
+                    entry.endTime = formatTime(newStartMins + durationMins);
+                    entry.hours = (durationMins / 60).toFixed(2);
                 }
+
+            } else if (field === 'endTime') {
+                // --- שינוי שעת סיום ---
+                const oldStartMins = parseTime(oldStartTime);
+                const newEndMins = parseTime(value);
+                entry.endTime = value;
+
+                if (oldStartTime && newEndMins > oldStartMins) {
+                    // Standard: Resize — שעת התחלה עוגנת, משך מחושב מחדש
+                    const newDuration = newEndMins - oldStartMins;
+                    entry.hours = (newDuration / 60).toFixed(2);
+                    // startTime לא משתנה
+                } else {
+                    // Overlap: Shift — משך נשמר, שעת התחלה נדחפת אחורה
+                    let durationMins = 60;
+                    if (oldStartTime && oldEndTime) {
+                        durationMins = parseTime(oldEndTime) - parseTime(oldStartTime);
+                        if (durationMins <= 0) durationMins = 60;
+                    } else if (oldHours) {
+                        durationMins = parseFloat(oldHours) * 60;
+                    }
+                    durationMins = Math.max(durationMins, 30);
+                    entry.startTime = formatTime(newEndMins - durationMins);
+                    entry.hours = (durationMins / 60).toFixed(2);
+                }
+
             } else if (field === 'hours') {
-                if (entry.startTime && value) {
-                    const finalHours = Math.max(parseFloat(value), 0.5);
-                    entry.hours = finalHours.toFixed(2);
-                    const endTotalMins = parseTime(entry.startTime) + finalHours * 60;
-                    entry.endTime = formatTime(endTotalMins);
+                // --- שינוי משך ---
+                // Forward Resize: שעת התחלה תמיד עוגנת, שעת סיום מתעדכנת
+                const finalHours = Math.max(parseFloat(value) || 0, 0.5);
+                entry.hours = finalHours.toFixed(2);
+                if (entry.startTime) {
+                    const endMins = parseTime(entry.startTime) + finalHours * 60;
+                    entry.endTime = formatTime(endMins);
                 }
+
+            } else {
+                // שדות אחרים (notes, taskId, stageId וכו')
+                entry[field] = value;
             }
 
             newEntries[index] = entry;
