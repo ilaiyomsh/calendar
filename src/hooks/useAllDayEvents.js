@@ -303,7 +303,7 @@ async function createMultipleReports({
                 notes: report.notes,
                 mondayItemId: createdItem.id,
                 projectId: report.projectId || null,
-                eventType: getLabelText(typeIndex, customSettings.eventTypeLabelMeta) || 'שעתי',
+                eventType: getLabelText(typeIndex, customSettings.eventTypeLabelMeta),
                 eventTypeIndex: typeIndex,
                 isPending: !!customSettings.enableApproval,
                 isApproved: false,

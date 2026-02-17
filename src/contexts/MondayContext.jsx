@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import logger from '../utils/logger';
 
 const MondayContext = createContext({
@@ -26,9 +26,10 @@ export function MondayProvider({ monday, children }) {
     }, [monday]);
 
     const isMobile = context?.mode === 'mobile';
+    const value = useMemo(() => ({ context, isMobile }), [context, isMobile]);
 
     return (
-        <MondayContext.Provider value={{ context, isMobile }}>
+        <MondayContext.Provider value={value}>
             {children}
         </MondayContext.Provider>
     );

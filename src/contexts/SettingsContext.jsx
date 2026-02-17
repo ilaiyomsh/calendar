@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, useContext } from 'react';
+import React, { createContext, useState, useEffect, useContext, useCallback } from 'react';
 import logger from '../utils/logger';
 import { isLegacyMapping } from '../utils/eventTypeMapping';
 import { useMondayContext } from './MondayContext';
@@ -97,13 +97,8 @@ export function SettingsProvider({ monday, children }) {
   const [customSettings, setCustomSettings] = useState(DEFAULT_SETTINGS);
   const [isLoading, setIsLoading] = useState(true);
 
-  // טעינת הגדרות מ-Monday Storage רק אחרי שה-context נטען (מבטיח שה-parent frame מזהה את ה-instance)
-  useEffect(() => {
-    if (!context) return;
-    loadSettings();
-  }, [context]);
-
-  const loadSettings = async () => {
+  // טעינת הגדרות מ-Monday Storage
+  const loadSettings = useCallback(async () => {
     const MAX_RETRIES = 3;
     const RETRY_DELAY_MS = 300;
 
@@ -134,13 +129,6 @@ export function SettingsProvider({ monday, children }) {
             logger.info('SettingsContext', 'Auto-detected structureMode', { mode: migratedSettings.structureMode });
           }
 
-          // מיגרציה של useStageField ל-structureMode
-          if (savedSettings.useStageField !== undefined && !savedSettings.structureMode) {
-            // אם יש משימות, זה PROJECT_WITH_TASKS
-            // אם אין משימות ויש stage, זה PROJECT_WITH_STAGE
-            // אם אין משימות ואין stage, זה PROJECT_ONLY
-          }
-
           // מיגרציה של eventTypeMapping מפורמט ישן (טקסט) לפורמט חדש (אינדקס)
           if (migratedSettings.eventTypeMapping && isLegacyMapping(migratedSettings.eventTypeMapping)) {
             logger.info('SettingsContext', 'Detected legacy text-based eventTypeMapping, clearing for re-migration');
@@ -163,15 +151,16 @@ export function SettingsProvider({ monday, children }) {
           delete migratedSettings.productsCustomerColumnId;
           delete migratedSettings.productColumnId;
 
-          setCustomSettings(prev => ({ ...DEFAULT_SETTINGS, ...migratedSettings }));
+          setCustomSettings({ ...DEFAULT_SETTINGS, ...migratedSettings });
           setIsLoading(false);
           return;
         }
 
-        // Storage החזיר ריק - ייתכן שה-SDK עדיין לא מוכן, ניסיון חוזר
-        if (attempt < MAX_RETRIES) {
-          logger.info('SettingsContext', `Storage returned empty, retrying (${attempt}/${MAX_RETRIES})`);
-          await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+        // Storage החזיר ריק בהצלחה - instance חדש, שימוש בברירות מחדל
+        if (attempt === 1) {
+          logger.info('SettingsContext', 'No saved settings found, using defaults (new instance)');
+          setIsLoading(false);
+          return;
         }
       } catch (error) {
         logger.error('SettingsContext', `Failed to load settings (attempt ${attempt}/${MAX_RETRIES})`, error);
@@ -181,10 +170,16 @@ export function SettingsProvider({ monday, children }) {
       }
     }
 
-    // כל הניסיונות מוצו - instance חדש או בעיה ב-SDK
+    // כל הניסיונות מוצו - בעיה ב-SDK
     logger.warn('SettingsContext', `Settings not found after ${MAX_RETRIES} attempts, using defaults`);
     setIsLoading(false);
-  };
+  }, [monday]);
+
+  // טעינת הגדרות רק אחרי שה-context נטען (מבטיח שה-parent frame מזהה את ה-instance)
+  useEffect(() => {
+    if (!context) return;
+    loadSettings();
+  }, [context, loadSettings]);
   
   // זיהוי אוטומטי של structureMode לפי הגדרות קיימות
   const detectStructureMode = (settings) => {

@@ -18,9 +18,6 @@ vi.mock('@hebcal/core', () => {
     };
 });
 
-vi.mock('../logger', () => ({
-    default: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() }
-}));
 
 // מוק ל-holidayConfig
 vi.mock('../../constants/holidayConfig', () => ({

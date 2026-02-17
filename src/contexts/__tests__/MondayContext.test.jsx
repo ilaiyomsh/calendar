@@ -2,9 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import React from 'react';
 
-vi.mock('../../utils/logger', () => ({
-    default: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() }
-}));
 
 import { MondayProvider, useMondayContext, useMobile } from '../MondayContext';
 

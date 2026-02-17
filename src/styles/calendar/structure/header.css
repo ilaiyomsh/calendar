@@ -108,6 +108,7 @@
 
 .rbc-time-header-content {
     border-left: none !important;
+    border-right: none !important; /* RTL: הסרת גבול ימני ברירת מחדל - מונע הזזת עמודות ביחס לגריד */
     overflow: visible !important; /* שונה מ-hidden כדי לאפשר לאירועים להראות */
     display: flex;
     flex-direction: column;
@@ -134,7 +135,8 @@
 .rbc-allday-cell {
     background: white;
     padding: 0 !important;
-    border-left: 1px solid #e6e9ef !important; /* גבול אנכי בין עמודות */
+    border-left: none !important; /* הוסר - גבולות אנכיים מוגדרים על day-bg בלבד */
+    border-right: none !important; /* הוסר - למניעת הזזת עמודות */
     border-bottom: 1px solid #e6e9ef !important; /* גבול תחתון מוחלט */
     margin: 0 !important;
     position: relative;
@@ -176,13 +178,11 @@
     pointer-events: auto !important;
     cursor: pointer;
     height: 100% !important; /* גובה מלא לפי ה-container */
-    border-left: 1px solid #e6e9ef !important; /* גבול אנכי בין ימים */
+    border-left: none !important; /* RTL: לא להשתמש ב-border-left */
+    border-right: 1px solid #e6e9ef !important; /* גבול אנכי בין ימים - תואם לכיוון הגבולות בגריד */
 }
 
-/* יום ראשון (האחרון ב-RTL) - ללא גבול שמאלי */
-.rbc-allday-cell .rbc-row-bg .rbc-day-bg:last-child {
-    border-left: none !important;
-}
+/* הוסר first-child exception - כל העמודות כולל הראשונה צריכות גבול ימני לתאימות עם הגריד */
 
 .rbc-allday-cell .rbc-row-content {
     position: relative !important;

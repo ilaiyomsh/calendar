@@ -1,14 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
 
-// מוק ל-logger כדי למנוע console output בבדיקות
-vi.mock('../logger', () => ({
-    default: {
-        info: vi.fn(),
-        warn: vi.fn(),
-        error: vi.fn(),
-        debug: vi.fn()
-    }
-}));
 
 import {
     EVENT_CATEGORIES,

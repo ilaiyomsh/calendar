@@ -1,9 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 
-vi.mock('../../utils/logger', () => ({
-    default: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() }
-}));
 
 import { useEventSelection } from '../useEventSelection';
 

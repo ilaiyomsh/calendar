@@ -82,6 +82,7 @@
 .rbc-time-header-content {
   /* min-height מוגדר ב-header.css - הוסר קונפליקט */
   border-left: none !important;
+  border-right: none !important; /* RTL: הסרת גבול ברירת מחדל למניעת הזזת קווים אנכיים */
 }
 
 .rbc-time-header-gutter {

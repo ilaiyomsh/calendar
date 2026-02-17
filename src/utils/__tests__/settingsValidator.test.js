@@ -1,11 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('../logger', () => ({
-    default: {
-        debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(),
-        functionStart: vi.fn(), functionEnd: vi.fn()
-    }
-}));
 
 vi.mock('../../contexts/SettingsContext', () => ({
     STRUCTURE_MODES: {

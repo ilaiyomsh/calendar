@@ -1,16 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
 
-// מוק ל-logger
-vi.mock('../logger', () => ({
-    default: {
-        info: vi.fn(),
-        warn: vi.fn(),
-        error: vi.fn(),
-        debug: vi.fn(),
-        functionStart: vi.fn(),
-        functionEnd: vi.fn()
-    }
-}));
 
 import {
     REQUIRED_EVENT_TYPE_LABELS,
