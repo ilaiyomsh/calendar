@@ -84,7 +84,6 @@ export default function AllDayEventModal({
     
     // State - תיבות אישור
     const [showCloseConfirm, setShowCloseConfirm] = useState(false);
-    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [editingDuration, setEditingDuration] = useState({});
 
     // State - שגיאות ולידציה
@@ -371,7 +370,7 @@ export default function AllDayEventModal({
         else onClose();
     }, [onClose]);
 
-    const modalRef = useFocusTrap(isOpen && !showCloseConfirm && !showDeleteConfirm, handleCloseAttempt);
+    const modalRef = useFocusTrap(isOpen && !showCloseConfirm, handleCloseAttempt);
     
     // --- Smart Time Picker ---
     // לוגיקה חכמה שמונעת מצבים לא תקינים (start >= end) בלי לחסום את המשתמש.
@@ -1028,7 +1027,7 @@ export default function AllDayEventModal({
     
     return (
         <div className={styles.overlay} onClick={(e) => {
-            if (showCloseConfirm || showDeleteConfirm) return;
+            if (showCloseConfirm) return;
             if (e.target === e.currentTarget) handleCloseAttempt();
         }}>
             <div className={`${styles.modal} ${viewMode === 'form' ? styles.modalWide : ''} ${viewMode === 'days-selection' ? styles.modalVisible : ''}`} ref={modalRef} role="dialog" aria-modal="true" onClick={e => e.stopPropagation()}>
@@ -1041,7 +1040,7 @@ export default function AllDayEventModal({
                 )}
                 <div className={`${styles.content} ${viewMode === 'days-selection' ? styles.contentVisible : ''} ${viewMode === 'form' ? styles.contentForm : ''}`}>{getModalContent()}</div>
                 <div className={styles.footer}>
-                    {isEditMode && !isLocked && onDelete && <button className={`${styles.button} ${styles.deleteBtn}`} onClick={() => setShowDeleteConfirm(true)}>מחק</button>}
+                    {isEditMode && !isLocked && onDelete && <button className={`${styles.button} ${styles.deleteBtn}`} onClick={onDelete}>מחק</button>}
                     {isEditMode && isManager && isApprovalEnabled && eventToEdit?.isPending && (
                         <>
                             <button className={`${styles.button} ${styles.approveBtn}`} onClick={() => { if (onApprove) onApprove(eventToEdit, 'billable'); onClose(); }}>אשר - לחיוב</button>
@@ -1067,7 +1066,6 @@ export default function AllDayEventModal({
                 </div>
             </div>
             <ConfirmDialog isOpen={showCloseConfirm} onClose={() => setShowCloseConfirm(false)} onConfirm={() => { setShowCloseConfirm(false); handleCreate(); }} onCancel={() => { setShowCloseConfirm(false); onClose(); }} title="שמירת דיווחים" message="יש דיווחים שלא נשמרו. האם ברצונך לשמור את הדיווחים לפני סגירה?" confirmText="שמור דיווחים" cancelText="בטל" confirmButtonStyle="primary" />
-            <ConfirmDialog isOpen={showDeleteConfirm} onClose={() => setShowDeleteConfirm(false)} onConfirm={() => { setShowDeleteConfirm(false); if (onDelete) onDelete(); }} onCancel={() => setShowDeleteConfirm(false)} title="מחיקת אירוע" message="האם אתה בטוח שברצונך למחוק את האירוע?" confirmText="מחק" cancelText="ביטול" confirmButtonStyle="danger" />
         </div>
     );
 }

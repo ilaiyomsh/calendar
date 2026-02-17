@@ -82,6 +82,7 @@ const CustomEvent = ({ event }) => {
         <div
             className={wrapperClasses}
             style={wrapperStyle}
+            onContextMenu={event.onContextMenu}
         >
             {/* ספינר טעינה לאירוע בתהליך יצירה */}
             {isLoading && (

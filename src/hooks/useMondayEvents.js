@@ -914,6 +914,21 @@ export const useMondayEvents = (monday, context) => {
         }
     }, [customSettings, monday]);
 
+    // הסרת אירועים מה-state בלבד (ללא API) — מחזיר את האירועים שהוסרו
+    const removeEventsFromState = useCallback((eventIds) => {
+        let removedEvents = [];
+        setEvents(prev => {
+            removedEvents = prev.filter(ev => eventIds.includes(ev.id));
+            return prev.filter(ev => !eventIds.includes(ev.id));
+        });
+        return removedEvents;
+    }, []);
+
+    // החזרת אירועים ל-state
+    const restoreEvents = useCallback((eventsToRestore) => {
+        setEvents(prev => [...prev, ...eventsToRestore]);
+    }, []);
+
     return {
         events,
         loading,
@@ -926,7 +941,9 @@ export const useMondayEvents = (monday, context) => {
         addEvent,
         resolvePendingEvent,
         removePendingEvent,
-        fetchEmployeeHourlyRate
+        fetchEmployeeHourlyRate,
+        removeEventsFromState,
+        restoreEvents
     };
 };
 

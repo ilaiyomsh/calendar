@@ -18,7 +18,6 @@ import logger from '../utils/logger';
  * @param {Function} params.showError - Toast error
  * @param {Function} params.showWarning - Toast warning
  * @param {Function} params.showErrorWithDetails - Toast error with details
- * @param {Function} params.deleteEvent - Delete event function
  * @param {Function} params.loadEvents - Load events function
  * @param {Function} params.addEvent - Add event to state
  * @param {Function} params.resolvePendingEvent - Replace skeleton with real event
@@ -35,7 +34,6 @@ export const useAllDayEvents = ({
     showError,
     showWarning,
     showErrorWithDetails,
-    deleteEvent,
     loadEvents,
     addEvent,
     resolvePendingEvent,
@@ -182,31 +180,9 @@ export const useAllDayEvents = ({
         }
     }, [effectiveBoardId, customSettings, monday, modals, showSuccess, showError, showErrorWithDetails, loadEvents, currentViewRange]);
 
-    /**
-     * מחיקת אירוע יומי
-     */
-    const handleDeleteAllDayEvent = useCallback(async () => {
-        const allDayEventToEdit = modals.allDayModal.eventToEdit;
-        if (!allDayEventToEdit || !allDayEventToEdit.mondayItemId) {
-            logger.error('handleDeleteAllDayEvent', 'Missing event ID for deletion');
-            showError('שגיאה: לא נמצא מזהה אירוע למחיקה');
-            return;
-        }
-
-        try {
-            await deleteEvent(allDayEventToEdit.id);
-            showSuccess('האירוע נמחק בהצלחה');
-            modals.closeAllDayModal();
-        } catch (error) {
-            showErrorWithDetails(error, { functionName: 'handleDeleteAllDayEvent' });
-            logger.error('useAllDayEvents', 'Error in handleDeleteAllDayEvent', error);
-        }
-    }, [modals, deleteEvent, showSuccess, showError, showErrorWithDetails]);
-
     return {
         handleCreateAllDayEvent,
-        handleUpdateAllDayEvent,
-        handleDeleteAllDayEvent
+        handleUpdateAllDayEvent
     };
 };
 

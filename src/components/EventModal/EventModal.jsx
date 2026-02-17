@@ -74,8 +74,7 @@ export default function EventModal({
     // State נפרד למשימות של הפרויקט הנבחר
     const [selectedItemTasks, setSelectedItemTasks] = useState([]);
     
-    // State - תיבת אישור למחיקה ושינויים שלא נשמרו
-    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    // State - תיבת אישור לשינויים שלא נשמרו
     const [showCloseConfirm, setShowCloseConfirm] = useState(false);
 
     // State - שגיאות ולידציה
@@ -596,7 +595,7 @@ export default function EventModal({
 
                 <div className={styles.footer}>
                     {isEditMode && !isConvertMode && !isLocked && onDelete && (
-                        <button className={`${styles.btn} ${styles.btnDanger}`} onClick={() => setShowDeleteConfirm(true)}>מחק</button>
+                        <button className={`${styles.btn} ${styles.btnDanger}`} onClick={onDelete}>מחק</button>
                     )}
                     {/* כפתורי אישור/דחייה מנהל */}
                     {isEditMode && !isConvertMode && isManager && isApprovalEnabled && eventToEdit?.isPending && (
@@ -639,21 +638,6 @@ export default function EventModal({
                 </div>
             </div>
             
-            <ConfirmDialog
-                isOpen={showDeleteConfirm}
-                onClose={() => setShowDeleteConfirm(false)}
-                onConfirm={() => {
-                    setShowDeleteConfirm(false);
-                    if (onDelete) onDelete();
-                    onClose();
-                }}
-                onCancel={() => setShowDeleteConfirm(false)}
-                title="מחיקת אירוע"
-                message="האם אתה בטוח שברצונך למחוק את האירוע?"
-                confirmText="מחק"
-                cancelText="ביטול"
-                confirmButtonStyle="danger"
-            />
             <ConfirmDialog
                 isOpen={showCloseConfirm}
                 onClose={() => setShowCloseConfirm(false)}
