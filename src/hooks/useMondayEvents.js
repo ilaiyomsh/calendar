@@ -556,10 +556,29 @@ export const useMondayEvents = (monday, context) => {
             return null;
         }
 
+        const itemName = eventData.title;
+        const isBillable = eventData.isBillable !== false;
+        const newTypeIndex = getTimedEventIndex(isBillable, customSettings.eventTypeMapping);
+
+        // הוספת שלד מיידית — כדי שהמשתמש יראה את האירוע ברגע שהמודאל נסגר
+        const tempId = `pending_${Date.now()}`;
+        const skeletonEvent = {
+            id: tempId,
+            title: itemName,
+            start: startTime,
+            end: endTime,
+            allDay: false,
+            isLoading: true,
+            notes: eventData.notes,
+            projectId: eventData.itemId || null,
+            eventType: getLabelText(newTypeIndex, customSettings.eventTypeLabelMeta) || 'שעתי',
+            eventTypeIndex: newTypeIndex,
+            isPending: !!customSettings.enableApproval
+        };
+        setEvents(prev => [...prev, skeletonEvent]);
+
         try {
             logger.functionStart('useMondayEvents.createEvent', { eventData, startTime, endTime });
-
-            const itemName = eventData.title;
 
             const currentUserId = context?.user?.id;
 
@@ -584,8 +603,6 @@ export const useMondayEvents = (monday, context) => {
             );
 
             if (createdItem) {
-                const isBillable = eventData.isBillable !== false;
-                const newTypeIndex = getTimedEventIndex(isBillable, customSettings.eventTypeMapping);
                 const newEvent = {
                     id: createdItem.id,
                     title: itemName,
@@ -603,13 +620,18 @@ export const useMondayEvents = (monday, context) => {
                     isRejected: false
                 };
 
-                setEvents(prev => [...prev, newEvent]);
+                // החלפת השלד באירוע האמיתי
+                setEvents(prev => prev.map(ev => ev.id === tempId ? newEvent : ev));
                 logger.functionEnd('useMondayEvents.createEvent', { eventId: newEvent.id });
                 return newEvent;
             }
 
+            // אם ה-API לא החזיר אייטם — מסירים את השלד
+            setEvents(prev => prev.filter(ev => ev.id !== tempId));
             return null;
         } catch (error) {
+            // הסרת השלד במקרה שגיאה
+            setEvents(prev => prev.filter(ev => ev.id !== tempId));
             logger.error('useMondayEvents.createEvent', 'Error creating event', error);
             setError('שגיאה ביצירת האירוע');
             throw error;
@@ -827,6 +849,20 @@ export const useMondayEvents = (monday, context) => {
     }, []);
 
     /**
+     * החלפת אירוע שלד באירוע אמיתי (לפי tempId)
+     */
+    const resolvePendingEvent = useCallback((tempId, realEvent) => {
+        setEvents(prev => prev.map(ev => ev.id === tempId ? realEvent : ev));
+    }, []);
+
+    /**
+     * הסרת אירוע שלד (במקרה שגיאה)
+     */
+    const removePendingEvent = useCallback((tempId) => {
+        setEvents(prev => prev.filter(ev => ev.id !== tempId));
+    }, []);
+
+    /**
      * שליפת מחיר לשעה של עובד מלוח העובדים
      */
     const fetchEmployeeHourlyRate = useCallback(async (userId) => {
@@ -888,6 +924,8 @@ export const useMondayEvents = (monday, context) => {
         deleteEvent,
         updateEventPosition,
         addEvent,
+        resolvePendingEvent,
+        removePendingEvent,
         fetchEmployeeHourlyRate
     };
 };

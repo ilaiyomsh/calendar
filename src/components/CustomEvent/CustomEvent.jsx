@@ -9,6 +9,9 @@ const CustomEvent = ({ event }) => {
     // עיצוב שונה לאירועים יומיים
     const isAllDayEvent = event.allDay;
 
+    // בדיקה אם האירוע בטעינה (שלד)
+    const isLoading = event.isLoading || false;
+
     // בדיקה אם זה חג
     const isHoliday = event.isHoliday || false;
 
@@ -63,7 +66,8 @@ const CustomEvent = ({ event }) => {
         isSelected ? 'gc-event-selected' : '',
         isHoliday ? 'gc-event-holiday' : '',
         isTemporary ? 'gc-event-temporary' : '',
-        isApprovalSelected ? 'gc-event-approval-selected' : ''
+        isApprovalSelected ? 'gc-event-approval-selected' : '',
+        isLoading ? 'gc-event-loading' : ''
     ].filter(Boolean).join(' ');
 
     const wrapperStyle = isTemporary
@@ -79,6 +83,10 @@ const CustomEvent = ({ event }) => {
             className={wrapperClasses}
             style={wrapperStyle}
         >
+            {/* ספינר טעינה לאירוע בתהליך יצירה */}
+            {isLoading && (
+                <span className="gc-event-loader" />
+            )}
             {/* X קטן אדום בפינה השמאלית העליונה לאירועים שנדחו */}
             {isRejected && (
                 <span className="gc-event-rejected-x">✕</span>

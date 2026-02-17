@@ -246,9 +246,9 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
     } = useToast();
 
     // Hook לניהול אירועים
-    const { 
-        events, 
-        loading: eventsLoading, 
+    const {
+        events,
+        loading: eventsLoading,
         error: eventsError,
         loadEvents,
         createEvent,
@@ -256,6 +256,8 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
         deleteEvent,
         updateEventPosition,
         addEvent,
+        resolvePendingEvent,
+        removePendingEvent,
         fetchEmployeeHourlyRate
     } = useMondayEvents(monday, context);
 
@@ -531,6 +533,8 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
         deleteEvent,
         loadEvents,
         addEvent,
+        resolvePendingEvent,
+        removePendingEvent,
         fetchEmployeeHourlyRate,
         currentViewRange
     });
@@ -538,6 +542,11 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
     // לחיצה על אירוע קיים - פתיחת Modal לעריכה, המרה, או בחירה מרובה
     const handleEventClick = useCallback(async (event) => {
         logger.functionStart('handleEventClick', { eventId: event.id, title: event.title, isCtrlPressed: multiSelect.isCtrlPressed, isTemporary: event.isTemporary });
+
+        // אירועים בטעינה - לא ניתן ללחוץ עליהם
+        if (event.isLoading) {
+            return;
+        }
 
         // חגים הם read-only - לא ניתן ללחוץ עליהם
         if (event.isHoliday) {
@@ -639,13 +648,15 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
             return;
         }
 
+        // סגירת המודאל מיד — השלד יופיע בלוח
+        captureBeforeState(pendingSlot.start);
+        modals.closeEventModal();
+
         try {
-            captureBeforeState(pendingSlot.start);
             const newEvent = await createEvent(eventData, pendingSlot.start, pendingSlot.end);
             const celebrated = checkCelebration(pendingSlot.start, newEvent);
             if (!celebrated) showSuccess('האירוע נוצר בהצלחה');
             monthlyHours.refetch();
-            modals.closeEventModal();
         } catch (error) {
             showErrorWithDetails(error, { functionName: 'handleCreateEvent' });
             logger.error('MondayCalendar', 'Error in handleCreateEvent', error);
@@ -1198,12 +1209,14 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
 
     // Accessors לקביעה אילו אירועים ניתנים לגרירה ולשינוי גודל
     const draggableAccessor = useCallback((event) => {
+        if (event.isLoading) return false;
         if (event.isHoliday) return false;
         if (event.isLocked) return false;
         return true;
     }, []);
 
     const resizableAccessor = useCallback((event) => {
+        if (event.isLoading) return false;
         if (event.isHoliday) return false;
         if (event.isLocked) return false;
         return true;
