@@ -28,6 +28,8 @@ import ErrorDetailsModal from './components/ErrorDetailsModal/ErrorDetailsModal'
 import SettingsValidationDialog from './components/SettingsValidationDialog';
 import SelectionActionBar from './components/SelectionActionBar';
 import ApprovalActionBar from './components/ApprovalActionBar';
+import UndoBanner from './components/UndoBanner';
+import ContextMenu from './components/ContextMenu';
 import StopwatchLoader from './components/StopwatchLoader';
 import loaderStyles from './components/StopwatchLoader/StopwatchLoader.module.css';
 
@@ -50,6 +52,7 @@ import { useEventModals } from './hooks/useEventModals';
 import { useMultiSelect } from './hooks/useMultiSelect';
 import { useCalendarHandlers } from './hooks/useCalendarHandlers';
 import { useAllDayEvents } from './hooks/useAllDayEvents';
+import { useUndoDelete } from './hooks/useUndoDelete';
 import { useEventDataLoader } from './hooks/useEventDataLoader';
 import { useCalendarFilter } from './hooks/useCalendarFilter';
 import { useFilterOptions } from './hooks/useFilterOptions';
@@ -246,9 +249,9 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
     } = useToast();
 
     // Hook לניהול אירועים
-    const { 
-        events, 
-        loading: eventsLoading, 
+    const {
+        events,
+        loading: eventsLoading,
         error: eventsError,
         loadEvents,
         createEvent,
@@ -256,7 +259,11 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
         deleteEvent,
         updateEventPosition,
         addEvent,
-        fetchEmployeeHourlyRate
+        resolvePendingEvent,
+        removePendingEvent,
+        fetchEmployeeHourlyRate,
+        removeEventsFromState,
+        restoreEvents
     } = useMondayEvents(monday, context);
 
     // Hook לחגיגות קונפטי באבני דרך יומיות
@@ -500,6 +507,16 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
 
     // --- Helper functions ---
 
+    // Hook לניהול מחיקה עם undo
+    const undoDelete = useUndoDelete({
+        monday,
+        restoreEvents,
+        showError
+    });
+
+    // State לתפריט לחיצה ימנית
+    const [contextMenu, setContextMenu] = useState({ isOpen: false, position: { x: 0, y: 0 }, event: null });
+
     // --- Event handlers ---
 
     // Hook לניהול handlers של גרירה ושינוי גודל
@@ -528,9 +545,10 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
         showError,
         showWarning,
         showErrorWithDetails,
-        deleteEvent,
         loadEvents,
         addEvent,
+        resolvePendingEvent,
+        removePendingEvent,
         fetchEmployeeHourlyRate,
         currentViewRange
     });
@@ -538,6 +556,11 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
     // לחיצה על אירוע קיים - פתיחת Modal לעריכה, המרה, או בחירה מרובה
     const handleEventClick = useCallback(async (event) => {
         logger.functionStart('handleEventClick', { eventId: event.id, title: event.title, isCtrlPressed: multiSelect.isCtrlPressed, isTemporary: event.isTemporary });
+
+        // אירועים בטעינה - לא ניתן ללחוץ עליהם
+        if (event.isLoading) {
+            return;
+        }
 
         // חגים הם read-only - לא ניתן ללחוץ עליהם
         if (event.isHoliday) {
@@ -639,13 +662,15 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
             return;
         }
 
+        // סגירת המודאל מיד — השלד יופיע בלוח
+        captureBeforeState(pendingSlot.start);
+        modals.closeEventModal();
+
         try {
-            captureBeforeState(pendingSlot.start);
             const newEvent = await createEvent(eventData, pendingSlot.start, pendingSlot.end);
             const celebrated = checkCelebration(pendingSlot.start, newEvent);
             if (!celebrated) showSuccess('האירוע נוצר בהצלחה');
             monthlyHours.refetch();
-            modals.closeEventModal();
         } catch (error) {
             showErrorWithDetails(error, { functionName: 'handleCreateEvent' });
             logger.error('MondayCalendar', 'Error in handleCreateEvent', error);
@@ -673,8 +698,8 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
         }
     };
 
-    // מחיקת אירוע
-    const handleDeleteEvent = async () => {
+    // מחיקת אירוע — עם undo
+    const handleDeleteEvent = () => {
         const eventToEdit = modals.eventModal.eventToEdit;
         if (!eventToEdit || !eventToEdit.mondayItemId) {
             logger.error('handleDeleteEvent', 'Missing event ID for deletion');
@@ -682,15 +707,10 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
             return;
         }
 
-        try {
-            await deleteEvent(eventToEdit.id);
-            showSuccess('האירוע נמחק בהצלחה');
-            monthlyHours.refetch();
-            modals.closeEventModal();
-        } catch (error) {
-            showErrorWithDetails(error, { functionName: 'handleDeleteEvent' });
-            logger.error('MondayCalendar', 'Error in handleDeleteEvent', error);
-        }
+        modals.closeEventModal();
+        const removed = removeEventsFromState([eventToEdit.id]);
+        undoDelete.scheduleDelete(removed);
+        monthlyHours.refetch();
     };
 
     // המרת אירוע מתוכנן (Temporary) לאירוע רגיל
@@ -773,15 +793,20 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
         }
     }, [allDayEvents, monthlyHours, showErrorWithDetails]);
 
-    const handleDeleteAllDayEvent = useCallback(async () => {
-        try {
-            await allDayEvents.handleDeleteAllDayEvent();
-            monthlyHours.refetch();
-        } catch (error) {
-            showErrorWithDetails(error, { functionName: 'handleDeleteAllDayEvent' });
-            logger.error('MondayCalendar', 'Error in handleDeleteAllDayEvent', error);
+    // מחיקת אירוע יומי — עם undo
+    const handleDeleteAllDayEvent = useCallback(() => {
+        const event = modals.allDayModal.eventToEdit;
+        if (!event || !event.mondayItemId) {
+            logger.error('handleDeleteAllDayEvent', 'Missing event ID for deletion');
+            showError('שגיאה: לא נמצא מזהה אירוע למחיקה');
+            return;
         }
-    }, [allDayEvents, monthlyHours, showErrorWithDetails]);
+
+        modals.closeAllDayModal();
+        const removed = removeEventsFromState([event.id]);
+        undoDelete.scheduleDelete(removed);
+        monthlyHours.refetch();
+    }, [modals, removeEventsFromState, undoDelete, monthlyHours, showError]);
 
     // --- Multi-select handlers ---
     
@@ -831,41 +856,50 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
         }
     }, [multiSelect, events, createEvent, showSuccess, showErrorWithDetails]);
 
-    // מחיקת אירועים נבחרים
-    const handleDeleteSelected = useCallback(async () => {
+    // מחיקת אירועים נבחרים — עם undo
+    const handleDeleteSelected = useCallback(() => {
         if (!multiSelect.hasSelection) return;
-        
-        multiSelect.setIsProcessingBulk(true);
+
         logger.functionStart('handleDeleteSelected', { count: multiSelect.selectedCount });
-        
-        try {
-            const idsToDelete = multiSelect.getSelectedArray();
-            let successCount = 0;
-            
-            // מחיקה ב-batches של 5 לביצועים טובים
-            for (let i = 0; i < idsToDelete.length; i += 5) {
-                const batch = idsToDelete.slice(i, i + 5);
-                const results = await Promise.allSettled(
-                    batch.map(id => deleteEvent(id))
-                );
-                
-                successCount += results.filter(r => r.status === 'fulfilled').length;
-            }
-            
-            if (successCount > 0) {
-                showSuccess(`${successCount} אירועים נמחקו בהצלחה`);
-            }
-            
-            // ניקוי הבחירה
-            multiSelect.clearSelection();
-            logger.functionEnd('handleDeleteSelected', { successCount });
-        } catch (error) {
-            showErrorWithDetails(error, { functionName: 'handleDeleteSelected' });
-            logger.error('MondayCalendar', 'Error in handleDeleteSelected', error);
-        } finally {
-            multiSelect.setIsProcessingBulk(false);
-        }
-    }, [multiSelect, deleteEvent, showSuccess, showErrorWithDetails]);
+
+        const idsToDelete = multiSelect.getSelectedArray();
+        const removed = removeEventsFromState(idsToDelete);
+        multiSelect.clearSelection();
+        undoDelete.scheduleDelete(removed);
+        monthlyHours.refetch();
+
+        logger.functionEnd('handleDeleteSelected', { count: removed.length });
+    }, [multiSelect, removeEventsFromState, undoDelete, monthlyHours]);
+
+    // --- Context menu handlers ---
+
+    // לחיצה ימנית על אירוע — פתיחת תפריט
+    const handleEventContextMenu = useCallback((e, calendarEvent) => {
+        e.preventDefault();
+        if (calendarEvent.isHoliday || calendarEvent.isLoading) return;
+
+        setContextMenu({
+            isOpen: true,
+            position: { x: e.clientX, y: e.clientY },
+            event: calendarEvent
+        });
+    }, []);
+
+    // מחיקה מתפריט לחיצה ימנית — עם undo
+    const handleContextMenuDelete = useCallback(() => {
+        const ev = contextMenu.event;
+        setContextMenu({ isOpen: false, position: { x: 0, y: 0 }, event: null });
+
+        if (!ev) return;
+
+        const removed = removeEventsFromState([ev.id]);
+        undoDelete.scheduleDelete(removed);
+        monthlyHours.refetch();
+    }, [contextMenu.event, removeEventsFromState, undoDelete, monthlyHours]);
+
+    const closeContextMenu = useCallback(() => {
+        setContextMenu({ isOpen: false, position: { x: 0, y: 0 }, event: null });
+    }, []);
 
     // --- Approval handlers ---
 
@@ -1165,7 +1199,8 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
                 isInApprovalSelection: approvalSelection.isSelectionMode && effectivePending,
                 isApprovalSelected: approvalSelection.isSelected(ev.id),
                 isLocked: lockResult.locked,
-                lockReason: lockResult.reason
+                lockReason: lockResult.reason,
+                onContextMenu: (e) => handleEventContextMenu(e, ev)
             };
         });
 
@@ -1198,12 +1233,14 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
 
     // Accessors לקביעה אילו אירועים ניתנים לגרירה ולשינוי גודל
     const draggableAccessor = useCallback((event) => {
+        if (event.isLoading) return false;
         if (event.isHoliday) return false;
         if (event.isLocked) return false;
         return true;
     }, []);
 
     const resizableAccessor = useCallback((event) => {
+        if (event.isLoading) return false;
         if (event.isHoliday) return false;
         if (event.isLocked) return false;
         return true;
@@ -1409,6 +1446,21 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
                 onApproveUnbillable={() => handleApproveSelected('unbillable')}
                 onClear={approvalSelection.clearSelection}
                 isProcessing={isProcessingApproval}
+            />
+
+            {/* Undo Banner - באנר ביטול מחיקה */}
+            <UndoBanner
+                isVisible={undoDelete.isVisible}
+                message={undoDelete.message}
+                onUndo={undoDelete.undoDelete}
+            />
+
+            {/* Context Menu - תפריט לחיצה ימנית */}
+            <ContextMenu
+                isOpen={contextMenu.isOpen}
+                position={contextMenu.position}
+                onDelete={handleContextMenuDelete}
+                onClose={closeContextMenu}
             />
         </div>
     );

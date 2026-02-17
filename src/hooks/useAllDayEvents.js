@@ -18,9 +18,10 @@ import logger from '../utils/logger';
  * @param {Function} params.showError - Toast error
  * @param {Function} params.showWarning - Toast warning
  * @param {Function} params.showErrorWithDetails - Toast error with details
- * @param {Function} params.deleteEvent - Delete event function
  * @param {Function} params.loadEvents - Load events function
  * @param {Function} params.addEvent - Add event to state
+ * @param {Function} params.resolvePendingEvent - Replace skeleton with real event
+ * @param {Function} params.removePendingEvent - Remove skeleton on error
  * @param {Function} params.fetchEmployeeHourlyRate - Fetch hourly rate
  * @param {Object} params.currentViewRange - Current view date range
  * @returns {Object} All-day event handlers
@@ -33,9 +34,10 @@ export const useAllDayEvents = ({
     showError,
     showWarning,
     showErrorWithDetails,
-    deleteEvent,
     loadEvents,
     addEvent,
+    resolvePendingEvent,
+    removePendingEvent,
     fetchEmployeeHourlyRate,
     currentViewRange
 }) => {
@@ -75,6 +77,8 @@ export const useAllDayEvents = ({
                     monday,
                     effectiveBoardId,
                     addEvent,
+                    resolvePendingEvent,
+                    removePendingEvent,
                     showWarning,
                     fetchEmployeeHourlyRate
                 });
@@ -87,7 +91,9 @@ export const useAllDayEvents = ({
                     customSettings,
                     monday,
                     effectiveBoardId,
-                    addEvent
+                    addEvent,
+                    resolvePendingEvent,
+                    removePendingEvent
                 });
             }
 
@@ -96,7 +102,7 @@ export const useAllDayEvents = ({
         } catch (error) {
             logger.error('handleCreateAllDayEvent', 'Error creating all-day event', error);
         }
-    }, [effectiveBoardId, context, customSettings, monday, modals, addEvent, showWarning, fetchEmployeeHourlyRate]);
+    }, [effectiveBoardId, context, customSettings, monday, modals, addEvent, resolvePendingEvent, removePendingEvent, showWarning, fetchEmployeeHourlyRate]);
 
     /**
      * עדכון אירוע יומי (שינוי סוג)
@@ -174,31 +180,9 @@ export const useAllDayEvents = ({
         }
     }, [effectiveBoardId, customSettings, monday, modals, showSuccess, showError, showErrorWithDetails, loadEvents, currentViewRange]);
 
-    /**
-     * מחיקת אירוע יומי
-     */
-    const handleDeleteAllDayEvent = useCallback(async () => {
-        const allDayEventToEdit = modals.allDayModal.eventToEdit;
-        if (!allDayEventToEdit || !allDayEventToEdit.mondayItemId) {
-            logger.error('handleDeleteAllDayEvent', 'Missing event ID for deletion');
-            showError('שגיאה: לא נמצא מזהה אירוע למחיקה');
-            return;
-        }
-
-        try {
-            await deleteEvent(allDayEventToEdit.id);
-            showSuccess('האירוע נמחק בהצלחה');
-            modals.closeAllDayModal();
-        } catch (error) {
-            showErrorWithDetails(error, { functionName: 'handleDeleteAllDayEvent' });
-            logger.error('useAllDayEvents', 'Error in handleDeleteAllDayEvent', error);
-        }
-    }, [modals, deleteEvent, showSuccess, showError, showErrorWithDetails]);
-
     return {
         handleCreateAllDayEvent,
-        handleUpdateAllDayEvent,
-        handleDeleteAllDayEvent
+        handleUpdateAllDayEvent
     };
 };
 
@@ -215,6 +199,8 @@ async function createMultipleReports({
     monday,
     effectiveBoardId,
     addEvent,
+    resolvePendingEvent,
+    removePendingEvent,
     showWarning,
     fetchEmployeeHourlyRate
 }) {
@@ -226,16 +212,17 @@ async function createMultipleReports({
         logger.debug('createMultipleReports', 'Hourly rate result', { hourlyRate });
     }
 
-    // יצירת שרשרת אירועים מ-8:00 בבוקר
+    // שלב 1: חישוב מראש של start/end לכל דיווח + יצירת שלדים מיידית
     let currentStart = new Date(allDayData.date);
     currentStart.setHours(8, 0, 0, 0);
 
+    const reportPlans = []; // { report, eventStart, eventEnd, tempId, itemName, skipped }
+    const now = new Date();
+
     for (const report of allDayData.reports) {
-        // חישוב זמן התחלה וסיום
         let eventStart = new Date(currentStart);
         let eventEnd;
 
-        // אם יש שעות התחלה וסיום, משתמשים בהן
         if (report.startTime && report.endTime) {
             const [startHours, startMinutes] = report.startTime.split(':').map(Number);
             const [endHours, endMinutes] = report.endTime.split(':').map(Number);
@@ -244,77 +231,102 @@ async function createMultipleReports({
             eventEnd = new Date(eventStart);
             eventEnd.setHours(endHours, endMinutes, 0, 0);
 
-            // אם זמן סיום לפני זמן התחלה, מוסיפים יום
             if (eventEnd <= eventStart) {
                 eventEnd.setDate(eventEnd.getDate() + 1);
             }
         } else {
-            // אחרת, משתמשים במשך הזמן
             const durationMinutes = (parseFloat(report.hours) || 0) * 60;
             eventEnd = new Date(eventStart.getTime() + durationMinutes * 60000);
         }
 
-        // בדיקה אם זמן ההתחלה הוא בעתיד - דיווחים מרובים הם תמיד אירועים שעתיים
-        const isSpecialEventType = false;
-        const now = new Date();
-        if (!isSpecialEventType && eventStart > now) {
+        // בדיקת זמן עתידי
+        if (eventStart > now) {
             showWarning(`לא ניתן לדווח שעות על זמן עתידי (${report.projectName || 'ללא פרויקט'})`);
             logger.debug('createMultipleReports', 'Skipped future report', { eventStart, now, projectName: report.projectName });
+            currentStart = eventEnd;
+            reportPlans.push({ report, eventStart, eventEnd, tempId: null, itemName: null, skipped: true });
             continue;
         }
 
-        // בניית column values
+        const itemName = buildItemName({ report, reporterName, customSettings }) || 'ללא שם';
+        const isBillable = report.isBillable !== false;
+        const typeIndex = getTimedEventIndex(isBillable, customSettings.eventTypeMapping);
+        const tempId = `pending_report_${Date.now()}_${reportPlans.length}`;
+
+        // הוספת שלד מיידית
+        addEvent({
+            id: tempId,
+            title: itemName,
+            start: new Date(eventStart),
+            end: new Date(eventEnd),
+            allDay: false,
+            isLoading: true,
+            notes: report.notes,
+            projectId: report.projectId || null,
+            eventType: getLabelText(typeIndex, customSettings.eventTypeLabelMeta),
+            eventTypeIndex: typeIndex,
+            isPending: !!customSettings.enableApproval
+        });
+
+        reportPlans.push({ report, eventStart, eventEnd, tempId, itemName, skipped: false });
+        currentStart = eventEnd;
+    }
+
+    // שלב 2: קריאות API ברצף — החלפת שלדים באירועים אמיתיים
+    for (const plan of reportPlans) {
+        if (plan.skipped) continue;
+
+        const { report, eventStart, eventEnd, tempId, itemName } = plan;
+
         const columnValues = buildReportColumnValues({
             eventStart,
             eventEnd,
             report,
             reporterId,
             hourlyRate,
-            isSpecialEventType,
+            isSpecialEventType: false,
             customSettings
         });
 
         const columnValuesJson = JSON.stringify(columnValues);
 
-        // קביעת שם האייטם
-        const itemName = buildItemName({
-            report,
-            reporterName,
-            customSettings
-        }) || 'ללא שם';
+        try {
+            const createdItem = await createBoardItem(
+                monday,
+                effectiveBoardId,
+                itemName,
+                columnValuesJson
+            );
 
-        // יצירת אירוע
-        const createdItem = await createBoardItem(
-            monday,
-            effectiveBoardId,
-            itemName,
-            columnValuesJson
-        );
-
-        if (createdItem) {
-            const isBillable = report.isBillable !== false;
-            const typeIndex = getTimedEventIndex(isBillable, customSettings.eventTypeMapping);
-            const newEvent = {
-                id: createdItem.id,
-                title: itemName,
-                start: eventStart,
-                end: eventEnd,
-                allDay: isSpecialEventType,
-                notes: report.notes,
-                mondayItemId: createdItem.id,
-                projectId: report.projectId || null,
-                eventType: getLabelText(typeIndex, customSettings.eventTypeLabelMeta),
-                eventTypeIndex: typeIndex,
-                isPending: !!customSettings.enableApproval,
-                isApproved: false,
-                isApprovedBillable: false,
-                isApprovedUnbillable: false,
-                isRejected: false
-            };
-            addEvent(newEvent);
+            if (createdItem) {
+                const isBillable = report.isBillable !== false;
+                const typeIndex = getTimedEventIndex(isBillable, customSettings.eventTypeMapping);
+                const newEvent = {
+                    id: createdItem.id,
+                    title: itemName,
+                    start: eventStart,
+                    end: eventEnd,
+                    allDay: false,
+                    notes: report.notes,
+                    mondayItemId: createdItem.id,
+                    projectId: report.projectId || null,
+                    eventType: getLabelText(typeIndex, customSettings.eventTypeLabelMeta),
+                    eventTypeIndex: typeIndex,
+                    isPending: !!customSettings.enableApproval,
+                    isApproved: false,
+                    isApprovedBillable: false,
+                    isApprovedUnbillable: false,
+                    isRejected: false
+                };
+                resolvePendingEvent(tempId, newEvent);
+            } else {
+                removePendingEvent(tempId);
+            }
+        } catch (error) {
+            removePendingEvent(tempId);
+            logger.error('createMultipleReports', 'Error creating report item', { itemName, error });
+            throw error;
         }
-
-        currentStart = eventEnd;
     }
 
     logger.functionEnd('createMultipleReports', { type: 'reports', count: allDayData.reports.length });
@@ -331,7 +343,9 @@ async function createSingleAllDayEvent({
     customSettings,
     monday,
     effectiveBoardId,
-    addEvent
+    addEvent,
+    resolvePendingEvent,
+    removePendingEvent
 }) {
     // allDayData.type הוא כעת אינדקס הלייבל
     const typeIndex = allDayData.type;
@@ -345,7 +359,31 @@ async function createSingleAllDayEvent({
     // מספר הימים (ברירת מחדל: 1)
     const durationDays = allDayData.durationDays || 1;
 
-    // יצירת אייטם נפרד לכל יום - כל יום הוא שורה עצמאית בלוח
+    // שלב 1: הוספת שלדים מיידית לכל הימים
+    const tempIds = [];
+    for (let i = 0; i < durationDays; i++) {
+        const dayDate = new Date(allDayData.date);
+        dayDate.setDate(dayDate.getDate() + i);
+        dayDate.setHours(0, 0, 0, 0);
+        const endDate = calculateEndDateFromDays(dayDate, 1);
+        const tempId = `pending_allday_${Date.now()}_${i}`;
+        tempIds.push(tempId);
+
+        addEvent({
+            id: tempId,
+            title: itemName,
+            start: new Date(dayDate),
+            end: endDate,
+            allDay: true,
+            isLoading: true,
+            eventType: eventName,
+            eventTypeIndex: String(typeIndex),
+            durationDays: 1,
+            isPending: !!customSettings.enableApproval
+        });
+    }
+
+    // שלב 2: יצירת אייטם נפרד לכל יום — החלפת השלד באירוע אמיתי
     for (let i = 0; i < durationDays; i++) {
         const dayDate = new Date(allDayData.date);
         dayDate.setDate(dayDate.getDate() + i);
@@ -389,31 +427,39 @@ async function createSingleAllDayEvent({
 
         const columnValuesJson = JSON.stringify(columnValues);
 
-        const createdItem = await createBoardItem(
-            monday,
-            effectiveBoardId,
-            itemName,
-            columnValuesJson
-        );
+        try {
+            const createdItem = await createBoardItem(
+                monday,
+                effectiveBoardId,
+                itemName,
+                columnValuesJson
+            );
 
-        if (createdItem) {
-            const endDate = calculateEndDateFromDays(dayDate, 1);
+            if (createdItem) {
+                const endDate = calculateEndDateFromDays(dayDate, 1);
 
-            const newEvent = {
-                id: createdItem.id,
-                title: itemName,
-                start: new Date(dayDate),
-                end: endDate,
-                allDay: true,
-                mondayItemId: createdItem.id,
-                eventType: eventName,
-                eventTypeIndex: String(typeIndex),
-                durationDays: 1,
-                isPending: !!customSettings.enableApproval,
-                isApproved: false,
-                isRejected: false
-            };
-            addEvent(newEvent);
+                const newEvent = {
+                    id: createdItem.id,
+                    title: itemName,
+                    start: new Date(dayDate),
+                    end: endDate,
+                    allDay: true,
+                    mondayItemId: createdItem.id,
+                    eventType: eventName,
+                    eventTypeIndex: String(typeIndex),
+                    durationDays: 1,
+                    isPending: !!customSettings.enableApproval,
+                    isApproved: false,
+                    isRejected: false
+                };
+                resolvePendingEvent(tempIds[i], newEvent);
+            } else {
+                removePendingEvent(tempIds[i]);
+            }
+        } catch (error) {
+            removePendingEvent(tempIds[i]);
+            logger.error('createSingleAllDayEvent', 'Error creating day item', { day: i, error });
+            throw error;
         }
     }
 
