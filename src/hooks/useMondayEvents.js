@@ -50,6 +50,8 @@ export const useMondayEvents = (monday, context) => {
     settingsRef.current = customSettings;
 
     const [events, setEvents] = useState([]);
+    const eventsRef = useRef([]);
+    eventsRef.current = events;
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [currentFilter, setCurrentFilter] = useState(null);
@@ -930,12 +932,10 @@ export const useMondayEvents = (monday, context) => {
     }, [monday]);
 
     // הסרת אירועים מה-state בלבד (ללא API) — מחזיר את האירועים שהוסרו
+    // שימוש ב-eventsRef כדי לקרוא את הסטייט הנוכחי synchronously (updater אינו synchronous ב-React 18)
     const removeEventsFromState = useCallback((eventIds) => {
-        let removedEvents = [];
-        setEvents(prev => {
-            removedEvents = prev.filter(ev => eventIds.includes(ev.id));
-            return prev.filter(ev => !eventIds.includes(ev.id));
-        });
+        const removedEvents = eventsRef.current.filter(ev => eventIds.includes(ev.id));
+        setEvents(prev => prev.filter(ev => !eventIds.includes(ev.id)));
         return removedEvents;
     }, []);
 

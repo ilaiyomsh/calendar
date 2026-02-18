@@ -31,6 +31,8 @@ export const useUndoDelete = ({ monday, restoreEvents, showError }) => {
 
         logger.functionStart('useUndoDelete.commitDelete', { count: eventsToDelete.length });
 
+        const failedEvents = [];
+
         try {
             // מחיקה ב-batches של 5
             for (let i = 0; i < eventsToDelete.length; i += BATCH_SIZE) {
@@ -39,15 +41,22 @@ export const useUndoDelete = ({ monday, restoreEvents, showError }) => {
                     batch.map(ev => deleteItem(monday, ev.mondayItemId || ev.id))
                 );
 
-                const failed = results.filter(r => r.status === 'rejected');
-                if (failed.length > 0) {
-                    logger.error('useUndoDelete.commitDelete', 'Some deletions failed', { failed: failed.length });
-                }
+                results.forEach((result, idx) => {
+                    if (result.status === 'rejected') {
+                        logger.error('useUndoDelete.commitDelete', 'Deletion failed', { eventId: batch[idx].id, reason: result.reason });
+                        failedEvents.push(batch[idx]);
+                    }
+                });
             }
 
-            logger.functionEnd('useUndoDelete.commitDelete', { count: eventsToDelete.length });
+            if (failedEvents.length > 0) {
+                restoreEvents(failedEvents);
+                showError('שגיאה במחיקת האירועים');
+            }
+
+            logger.functionEnd('useUndoDelete.commitDelete', { count: eventsToDelete.length - failedEvents.length, failed: failedEvents.length });
         } catch (error) {
-            // שגיאה — החזרת האירועים ל-state
+            // שגיאה כללית — החזרת כל האירועים ל-state
             logger.error('useUndoDelete.commitDelete', 'Error deleting events', error);
             restoreEvents(eventsToDelete);
             showError('שגיאה במחיקת האירועים');
