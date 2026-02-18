@@ -1,10 +1,10 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, Suspense } from "react";
 import "./App.css";
 import mondaySdk from "monday-sdk-js";
 import MondayCalendar from "./MondayCalendar";
 import { SettingsProvider, useSettings } from "./contexts/SettingsContext";
 import { MondayProvider, useMondayContext, useMobile } from "./contexts/MondayContext";
-import SettingsDialog from "./components/SettingsDialog/SettingsDialog";
+const SettingsDialog = React.lazy(() => import("./components/SettingsDialog/SettingsDialog"));
 import ErrorBoundary from "./components/ErrorBoundary/ErrorBoundary";
 import { useToast } from "./hooks/useToast";
 import { ToastContainer } from "./components/Toast";
@@ -138,11 +138,13 @@ const AppContent = () => {
             </div>
 
             {/* תוכן גלילתי */}
-            <SettingsDialog 
-              monday={monday}
-              context={context}
-              onClose={() => setIsSettingsOpen(false)}
-            />
+            <Suspense fallback={<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}><StopwatchLoader size={40} /></div>}>
+              <SettingsDialog
+                monday={monday}
+                context={context}
+                onClose={() => setIsSettingsOpen(false)}
+              />
+            </Suspense>
           </dialog>
         </div>
       ) : null}

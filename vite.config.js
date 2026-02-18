@@ -5,6 +5,15 @@ export default defineConfig(() => {
   return {
     build: {
       outDir: 'build',
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'calendar': ['react-big-calendar', 'date-fns'],
+            'vibe': ['@vibe/core', '@vibe/icons'],
+            'holidays': ['@hebcal/core'],
+          }
+        }
+      }
     },
     plugins: [react()],
     server: {

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef, Suspense } from 'react';
 import { Calendar } from 'react-big-calendar';
 import withDragAndDrop from 'react-big-calendar/lib/addons/dragAndDrop';
 
@@ -18,18 +18,20 @@ import { getEffectiveBoardId } from './utils/boardIdResolver';
 import { isEventLocked } from './utils/editLockUtils';
 import logger from './utils/logger';
 
-// רכיבים
-import EventModal from './components/EventModal/EventModal';
-import AllDayEventModal from './components/AllDayEventModal/AllDayEventModal';
+// רכיבים - Lazy loaded (מודלים ורכיבים כבדים שנטענים רק בעת שימוש)
+const EventModal = React.lazy(() => import('./components/EventModal/EventModal'));
+const AllDayEventModal = React.lazy(() => import('./components/AllDayEventModal/AllDayEventModal'));
+const ContextMenu = React.lazy(() => import('./components/ContextMenu'));
+const SelectionActionBar = React.lazy(() => import('./components/SelectionActionBar'));
+const ApprovalActionBar = React.lazy(() => import('./components/ApprovalActionBar'));
+
+// רכיבים - טעינה רגילה (נדרשים מיידית)
 import CalendarToolbar from './components/CalendarToolbar';
 import CustomEvent from './components/CustomEvent';
 import { ToastContainer } from './components/Toast';
 import ErrorDetailsModal from './components/ErrorDetailsModal/ErrorDetailsModal';
 import SettingsValidationDialog from './components/SettingsValidationDialog';
-import SelectionActionBar from './components/SelectionActionBar';
-import ApprovalActionBar from './components/ApprovalActionBar';
 import UndoBanner from './components/UndoBanner';
-import ContextMenu from './components/ContextMenu';
 import StopwatchLoader from './components/StopwatchLoader';
 import loaderStyles from './components/StopwatchLoader/StopwatchLoader.module.css';
 
@@ -1415,55 +1417,63 @@ export default function MondayCalendar({ monday, onOpenSettings, appLoadStart })
                 />
             </div>
 
-            <EventModal
-                isOpen={modals.eventModal.isOpen}
-                onClose={modals.closeEventModal}
-                pendingSlot={modals.eventModal.pendingSlot}
-                monday={monday}
-                context={context}
-                boardItems={boardItems}
-                isLoadingItems={isLoadingProjects}
-                newEventTitle={modals.eventModal.newEventTitle}
-                setNewEventTitle={modals.setNewEventTitle}
-                selectedItem={modals.eventModal.selectedItem}
-                setSelectedItem={modals.setSelectedItem}
-                onStartTimeChange={handleStartTimeChange}
-                onEndTimeChange={handleEndTimeChange}
-                onDateChange={handleDateChange}
-                onCreate={handleCreateEvent}
-                eventToEdit={modals.eventModal.eventToEdit}
-                isEditMode={modals.eventModal.isEditMode}
-                isConvertMode={modals.eventModal.isConvertMode}
-                isLoadingEventData={modals.eventModal.isLoading}
-                onUpdate={handleUpdateEvent}
-                onDelete={handleDeleteEvent}
-                onConvert={handleConvertEvent}
-                isManager={approval.isManager}
-                isApprovalEnabled={approval.isApprovalEnabled}
-                onApprove={handleApproveEvent}
-                onReject={handleRejectEvent}
-                isLocked={modals.eventModal.eventToEdit?.isLocked || false}
-                lockReason={modals.eventModal.eventToEdit?.lockReason || ''}
-            />
+            {modals.eventModal.isOpen && (
+                <Suspense fallback={null}>
+                    <EventModal
+                        isOpen={modals.eventModal.isOpen}
+                        onClose={modals.closeEventModal}
+                        pendingSlot={modals.eventModal.pendingSlot}
+                        monday={monday}
+                        context={context}
+                        boardItems={boardItems}
+                        isLoadingItems={isLoadingProjects}
+                        newEventTitle={modals.eventModal.newEventTitle}
+                        setNewEventTitle={modals.setNewEventTitle}
+                        selectedItem={modals.eventModal.selectedItem}
+                        setSelectedItem={modals.setSelectedItem}
+                        onStartTimeChange={handleStartTimeChange}
+                        onEndTimeChange={handleEndTimeChange}
+                        onDateChange={handleDateChange}
+                        onCreate={handleCreateEvent}
+                        eventToEdit={modals.eventModal.eventToEdit}
+                        isEditMode={modals.eventModal.isEditMode}
+                        isConvertMode={modals.eventModal.isConvertMode}
+                        isLoadingEventData={modals.eventModal.isLoading}
+                        onUpdate={handleUpdateEvent}
+                        onDelete={handleDeleteEvent}
+                        onConvert={handleConvertEvent}
+                        isManager={approval.isManager}
+                        isApprovalEnabled={approval.isApprovalEnabled}
+                        onApprove={handleApproveEvent}
+                        onReject={handleRejectEvent}
+                        isLocked={modals.eventModal.eventToEdit?.isLocked || false}
+                        lockReason={modals.eventModal.eventToEdit?.lockReason || ''}
+                    />
+                </Suspense>
+            )}
 
-            <AllDayEventModal
-                monday={monday}
-                context={context}
-                isOpen={modals.allDayModal.isOpen}
-                onClose={modals.closeAllDayModal}
-                pendingDate={modals.allDayModal.date}
-                onCreate={handleCreateAllDayEvent}
-                eventToEdit={modals.allDayModal.eventToEdit}
-                isEditMode={modals.allDayModal.isEditMode}
-                onUpdate={handleUpdateAllDayEvent}
-                onDelete={handleDeleteAllDayEvent}
-                isManager={approval.isManager}
-                isApprovalEnabled={approval.isApprovalEnabled}
-                onApprove={handleApproveEvent}
-                onReject={handleRejectEvent}
-                isLocked={modals.allDayModal.eventToEdit?.isLocked || false}
-                lockReason={modals.allDayModal.eventToEdit?.lockReason || ''}
-            />
+            {modals.allDayModal.isOpen && (
+                <Suspense fallback={null}>
+                    <AllDayEventModal
+                        monday={monday}
+                        context={context}
+                        isOpen={modals.allDayModal.isOpen}
+                        onClose={modals.closeAllDayModal}
+                        pendingDate={modals.allDayModal.date}
+                        onCreate={handleCreateAllDayEvent}
+                        eventToEdit={modals.allDayModal.eventToEdit}
+                        isEditMode={modals.allDayModal.isEditMode}
+                        onUpdate={handleUpdateAllDayEvent}
+                        onDelete={handleDeleteAllDayEvent}
+                        isManager={approval.isManager}
+                        isApprovalEnabled={approval.isApprovalEnabled}
+                        onApprove={handleApproveEvent}
+                        onReject={handleRejectEvent}
+                        isLocked={modals.allDayModal.eventToEdit?.isLocked || false}
+                        lockReason={modals.allDayModal.eventToEdit?.lockReason || ''}
+                    />
+                </Suspense>
+            )}
 
             {/* Toast Notifications */}
             <ToastContainer 
@@ -1488,22 +1498,30 @@ export default function MondayCalendar({ monday, onOpenSettings, appLoadStart })
             />
 
             {/* Selection Action Bar - תפריט פעולות לאירועים נבחרים */}
-            <SelectionActionBar
-                selectedCount={multiSelect.selectedCount}
-                onDuplicate={handleDuplicateSelected}
-                onDelete={handleDeleteSelected}
-                onClear={multiSelect.clearSelection}
-                isProcessing={multiSelect.isProcessingBulk}
-            />
+            {multiSelect.hasSelection && (
+                <Suspense fallback={null}>
+                    <SelectionActionBar
+                        selectedCount={multiSelect.selectedCount}
+                        onDuplicate={handleDuplicateSelected}
+                        onDelete={handleDeleteSelected}
+                        onClear={multiSelect.clearSelection}
+                        isProcessing={multiSelect.isProcessingBulk}
+                    />
+                </Suspense>
+            )}
 
             {/* Approval Action Bar - סרגל אישור מנהל לאירועים נבחרים */}
-            <ApprovalActionBar
-                selectedCount={approvalSelection.selectedCount}
-                onApproveBillable={() => handleApproveSelected('billable')}
-                onApproveUnbillable={() => handleApproveSelected('unbillable')}
-                onClear={approvalSelection.clearSelection}
-                isProcessing={isProcessingApproval}
-            />
+            {approvalSelection.selectedCount > 0 && (
+                <Suspense fallback={null}>
+                    <ApprovalActionBar
+                        selectedCount={approvalSelection.selectedCount}
+                        onApproveBillable={() => handleApproveSelected('billable')}
+                        onApproveUnbillable={() => handleApproveSelected('unbillable')}
+                        onClear={approvalSelection.clearSelection}
+                        isProcessing={isProcessingApproval}
+                    />
+                </Suspense>
+            )}
 
             {/* Undo Banner - באנר ביטול מחיקה */}
             <UndoBanner
@@ -1513,12 +1531,16 @@ export default function MondayCalendar({ monday, onOpenSettings, appLoadStart })
             />
 
             {/* Context Menu - תפריט לחיצה ימנית */}
-            <ContextMenu
-                isOpen={contextMenu.isOpen}
-                position={contextMenu.position}
-                onDelete={handleContextMenuDelete}
-                onClose={closeContextMenu}
-            />
+            {contextMenu.isOpen && (
+                <Suspense fallback={null}>
+                    <ContextMenu
+                        isOpen={contextMenu.isOpen}
+                        position={contextMenu.position}
+                        onDelete={handleContextMenuDelete}
+                        onClose={closeContextMenu}
+                    />
+                </Suspense>
+            )}
         </div>
     );
 }
