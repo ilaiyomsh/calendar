@@ -44,6 +44,10 @@
 .rbc-time-header-gutter {
   border-bottom: none !important;
   min-height: 0 !important;
+  width: var(--gc-gutter-width) !important;
+  min-width: var(--gc-gutter-width) !important;
+  max-width: var(--gc-gutter-width) !important;
+  flex: none !important;
 }
 
 /* Time slots (individual time periods) */
@@ -82,11 +86,13 @@
 .rbc-time-header-content {
   /* min-height מוגדר ב-header.css - הוסר קונפליקט */
   border-left: none !important;
-  border-right: none !important; /* RTL: הסרת גבול ברירת מחדל למניעת הזזת קווים אנכיים */
+  border-right: none !important; /* ביטול גבול wrapper - הגבולות האנכיים מוגדרים על תאים בודדים בלבד */
 }
 
-.rbc-time-header-gutter {
-  min-height: 0 !important;
+/* Vertical column borders in the time grid */
+.rbc-time-content > * + * > * {
+  border-right: 1px solid var(--gc-border) !important;
+  border-left: none !important;
 }
 
 /* Event gap - space between overlapping events */
@@ -99,6 +105,7 @@
   background: white;
   border-right: none !important;
   width: var(--gc-gutter-width) !important;
+  flex: none !important;
 }
 
 .rbc-time-gutter .rbc-timeslot-group {
@@ -134,9 +141,12 @@
 
 /* Responsive adjustments for mobile */
 @media (max-width: 768px) {
-  /* Reduce gutter width on mobile */
-  .rbc-time-gutter {
+  /* Reduce gutter width on mobile - both header and grid gutters */
+  .rbc-time-gutter,
+  .rbc-time-header-gutter {
     width: 42px !important;
+    min-width: 42px !important;
+    max-width: 42px !important;
   }
 
   .rbc-time-gutter .rbc-label {

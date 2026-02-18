@@ -45,7 +45,7 @@ const AppContent = () => {
 
   if (isLoading) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', height: '100dvh', background: '#ffffff', gap: '16px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100dvh', background: '#ffffff', gap: '16px' }}>
         <StopwatchLoader size={80} />
         <p className={loaderStyles.brandText}>Powered by Twyst</p>
       </div>

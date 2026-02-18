@@ -270,6 +270,21 @@ const StructureTab = ({ settings, onChange, monday }) => {
             />
           </label>
           <label className={styles.monthlyTargetField}>
+            <span>יעד שעות בשבוע</span>
+            <input
+              type="number"
+              min="0"
+              step="0.5"
+              value={settings.weeklyHoursTarget ?? ''}
+              placeholder={((settings.monthlyHoursTarget ?? 182.5) / 4.33).toFixed(1)}
+              onChange={(e) => {
+                const val = e.target.value;
+                onChange({ weeklyHoursTarget: val === '' ? null : (parseFloat(val) || 0) });
+              }}
+              className={styles.monthlyTargetInput}
+            />
+          </label>
+          <label className={styles.monthlyTargetField}>
             <span>אורך יום עבודה (שעות)</span>
             <input
               type="number"

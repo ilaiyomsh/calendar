@@ -69,6 +69,15 @@
     min-height: 160px !important; /* השוואת גובה לעמודות היום למניעת קפיצה ויזואלית */
 }
 
+/* Month view headers - only day name, no date circle */
+.rbc-month-view .rbc-header {
+    min-height: 36px !important;
+}
+
+.rbc-month-header {
+    padding: 4px 0;
+}
+
 /* Month view date cells */
 .rbc-date-cell {
     padding: 8px;
@@ -108,7 +117,7 @@
 
 .rbc-time-header-content {
     border-left: none !important;
-    border-right: none !important; /* RTL: הסרת גבול ימני ברירת מחדל - מונע הזזת עמודות ביחס לגריד */
+    border-right: none !important; /* ביטול גבול wrapper - הגבולות האנכיים מוגדרים על תאים בודדים */
     overflow: visible !important; /* שונה מ-hidden כדי לאפשר לאירועים להראות */
     display: flex;
     flex-direction: column;

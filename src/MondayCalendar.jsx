@@ -64,9 +64,9 @@ import { useMonthlyHours } from './hooks/useMonthlyHours';
 // עטיפת הלוח ברכיב Drag and Drop
 const DnDCalendar = withDragAndDrop(Calendar);
 
-// רכיב כותרת יום מותאם אישית - שם היום מעל מספר התאריך (תצוגה בלבד, ללא לחיצה)
-const CustomDayHeader = ({ date, localizer }) => {
-    const dayName = localizer.format(date, 'EEEE', 'he')
+// פונקציית עזר לשם יום בעברית
+const getHebrewDayName = (date, localizer) => {
+    return localizer.format(date, 'EEEE', 'he')
         .replace('Sunday', 'יום א\'')
         .replace('Monday', 'יום ב\'')
         .replace('Tuesday', 'יום ג\'')
@@ -74,12 +74,27 @@ const CustomDayHeader = ({ date, localizer }) => {
         .replace('Thursday', 'יום ה\'')
         .replace('Friday', 'יום ו\'')
         .replace('Saturday', 'יום ש\'');
+};
+
+// רכיב כותרת יום מותאם אישית - שם היום מעל מספר התאריך (תצוגה בלבד, ללא לחיצה)
+const CustomDayHeader = ({ date, localizer }) => {
+    const dayName = getHebrewDayName(date, localizer);
     const dayNumber = localizer.format(date, 'd', 'he');
 
     return (
         <div className="rbc-custom-header">
             <div className="rbc-header-day">{dayName}</div>
             <div className="rbc-header-date">{dayNumber}</div>
+        </div>
+    );
+};
+
+// רכיב כותרת יום לתצוגת חודש - שם היום בלבד, ללא מספר תאריך
+const MonthHeader = ({ date, localizer }) => {
+    const dayName = getHebrewDayName(date, localizer);
+    return (
+        <div className="rbc-custom-header rbc-month-header">
+            <div className="rbc-header-day">{dayName}</div>
         </div>
     );
 };
@@ -269,8 +284,11 @@ export default function MondayCalendar({ monday, onOpenSettings, appLoadStart })
     // Hook לחגיגות קונפטי באבני דרך יומיות
     const { captureBeforeState, checkCelebration } = useCelebration(events, showSuccess, customSettings.workdayLength);
 
-    // Hook לחישוב שעות חודשיות (בטרייה)
-    const monthlyHours = useMonthlyHours(monday, context);
+    // שמירת טווח התצוגה הנוכחי לשימוש ברענון אירועים ובחישוב שעות
+    const [currentViewRange, setCurrentViewRange] = useState(null);
+
+    // Hook לחישוב שעות לפי טווח התצוגה (בטרייה)
+    const monthlyHours = useMonthlyHours(monday, context, currentViewRange, calendarView);
 
     // State - Loader: מוצג מרגע העלייה, מינימום 1.5 שניות + fade-out
     const [showLoader, setShowLoader] = useState(true);
@@ -280,11 +298,15 @@ export default function MondayCalendar({ monday, onOpenSettings, appLoadStart })
     const initialLoadDone = useRef(false);
     const loaderTimersRef = useRef({});
 
+    // State - Loader למעברי תצוגה (אחרי טעינה ראשונה)
+    const [viewChangeLoading, setViewChangeLoading] = useState(false);
+    const [viewChangeFading, setViewChangeFading] = useState(false);
+
     useEffect(() => {
         const wasLoading = prevLoadingRef.current;
         prevLoadingRef.current = eventsLoading;
 
-        // רק במעבר true → false, ורק בטעינה הראשונה
+        // טעינה ראשונה - לואדר מלא עם מינימום 1.5 שניות
         if (wasLoading && !eventsLoading && !initialLoadDone.current) {
             initialLoadDone.current = true;
             const elapsed = Date.now() - loaderStartRef.current;
@@ -302,6 +324,27 @@ export default function MondayCalendar({ monday, onOpenSettings, appLoadStart })
                     setLoaderFading(false);
                 }, 400);
             }, remaining);
+            return;
+        }
+
+        // טעינות הבאות - שכבת טעינה שקופה
+        if (initialLoadDone.current) {
+            if (eventsLoading && !wasLoading) {
+                // התחלת טעינה
+                setViewChangeLoading(true);
+                setViewChangeFading(false);
+            } else if (!eventsLoading && wasLoading) {
+                // סיום טעינה - fade out + גלילה ל-08:00
+                setViewChangeFading(true);
+                requestAnimationFrame(() => {
+                    scrollToEightRef.current();
+                    setTimeout(() => scrollToEightRef.current(), 100);
+                });
+                loaderTimersRef.current.viewFadeTimer = setTimeout(() => {
+                    setViewChangeLoading(false);
+                    setViewChangeFading(false);
+                }, 300);
+            }
         }
 
         return () => {
@@ -310,11 +353,9 @@ export default function MondayCalendar({ monday, onOpenSettings, appLoadStart })
                 clearTimeout(loaderTimersRef.current.minTimer);
                 clearTimeout(loaderTimersRef.current.fadeTimer);
             }
+            clearTimeout(loaderTimersRef.current.viewFadeTimer);
         };
     }, [eventsLoading]);
-
-    // שמירת טווח התצוגה הנוכחי לשימוש ברענון אירועים
-    const [currentViewRange, setCurrentViewRange] = useState(null);
 
     // טעינת הגדרות מ-Monday
     useEffect(() => {
@@ -1056,6 +1097,11 @@ export default function MondayCalendar({ monday, onOpenSettings, appLoadStart })
     const handleRangeChange = useCallback((range) => {
         logger.debug('handleRangeChange', 'Range changed', range);
 
+        // גלילה מיידית ל-08:00 למניעת קפיצה נראית
+        requestAnimationFrame(() => {
+            scrollToEightRef.current();
+        });
+
         let start, end;
 
         if (Array.isArray(range)) {
@@ -1133,15 +1179,13 @@ export default function MondayCalendar({ monday, onOpenSettings, appLoadStart })
             hasTemporaryEventsFeature: data.hasTemporaryEventsFeature
         };
 
-        // הכנת props לבטרייה חודשית
+        // הכנת props לבטרייה
         const mh = data.monthlyHours;
         const batteryProps = mh ? {
             breakdown: mh.breakdown,
             totalHours: mh.totalHours,
             targetHours: mh.targetHours,
-            loading: mh.loading,
-            selectedMonth: mh.selectedMonth,
-            onMonthChange: mh.setSelectedMonth
+            loading: mh.loading
         } : null;
 
         return (
@@ -1311,7 +1355,18 @@ export default function MondayCalendar({ monday, onOpenSettings, appLoadStart })
                     <p className={loaderStyles.brandText}>Powered by Twyst</p>
                 </div>
             )}
-            <div style={{ flex: 1, display: showLoader && !loaderFading ? 'none' : 'flex', flexDirection: 'column', height: '100%' }}>
+            <div style={{ flex: 1, display: showLoader && !loaderFading ? 'none' : 'flex', flexDirection: 'column', height: '100%', position: 'relative' }}>
+                {/* שכבת טעינה חצי-שקופה למעברי תצוגה */}
+                {viewChangeLoading && !viewChangeFading && (
+                    <div className={loaderStyles.viewChangeOverlay}>
+                        <StopwatchLoader size={80} />
+                    </div>
+                )}
+                {viewChangeFading && (
+                    <div className={loaderStyles.viewChangeOverlayFadeOut}>
+                        <StopwatchLoader size={80} />
+                    </div>
+                )}
                 <DnDCalendar
                     localizer={localizer}
                     events={enrichedEvents}
@@ -1354,7 +1409,8 @@ export default function MondayCalendar({ monday, onOpenSettings, appLoadStart })
                     components={{
                         toolbar: CustomToolbarWithProps,
                         event: CustomEvent,
-                        header: CustomDayHeader
+                        header: CustomDayHeader,
+                        month: { header: MonthHeader }
                     }}
                 />
             </div>

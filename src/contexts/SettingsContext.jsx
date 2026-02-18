@@ -86,8 +86,9 @@ const DEFAULT_SETTINGS = {
   // --- נעילת עריכה ---
   editLockMode: 'none',           // none | two_days | current_week | current_month
 
-  // --- יעד שעות חודשי ---
+  // --- יעד שעות ---
   monthlyHoursTarget: 182.5,      // יעד שעות חודשי
+  weeklyHoursTarget: null,        // יעד שעות שבועי (null = חישוב אוטומטי מהחודשי / 4.33)
   workdayLength: 8.5              // אורך יום עבודה בשעות (לחישוב שעות מאירועים יומיים)
 };
 

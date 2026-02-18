@@ -1,107 +1,25 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { DropdownChevronDown } from "@vibe/icons";
+import React, { useState, useRef } from 'react';
 import styles from './MonthlyBattery.module.css';
-
-// שמות חודשים בעברית
-const HEBREW_MONTHS = [
-    'ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני',
-    'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'
-];
-
-/**
- * יצירת רשימת 12 החודשים האחרונים
- */
-const getLast12Months = () => {
-    const now = new Date();
-    const months = [];
-    for (let i = 0; i < 12; i++) {
-        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-        months.push({
-            year: d.getFullYear(),
-            month: d.getMonth(),
-            label: `${HEBREW_MONTHS[d.getMonth()]} ${d.getFullYear()}`
-        });
-    }
-    return months;
-};
 
 const MonthlyBattery = ({
     breakdown = [],
     totalHours = 0,
     targetHours = 182.5,
-    loading = false,
-    selectedMonth,
-    onMonthChange
+    loading = false
 }) => {
-    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [showTooltip, setShowTooltip] = useState(false);
-    const dropdownRef = useRef(null);
     const batteryRef = useRef(null);
 
     const percentage = targetHours > 0 ? Math.round((totalHours / targetHours) * 100) : 0;
     const fillPercent = Math.min(percentage, 100);
 
-    const monthLabel = selectedMonth
-        ? `${HEBREW_MONTHS[selectedMonth.month]} ${selectedMonth.year}`
-        : '';
-
-    const months = getLast12Months();
-
-    // סגירת dropdown בלחיצה מחוץ לרכיב
-    useEffect(() => {
-        const handleClickOutside = (e) => {
-            if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
-                setIsDropdownOpen(false);
-            }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
-
-    const handleMonthSelect = (month) => {
-        onMonthChange?.({ year: month.year, month: month.month });
-        setIsDropdownOpen(false);
-    };
-
     return (
         <div className={styles.container}>
-            {/* בורר חודש */}
-            <div className={styles.monthSelector} ref={dropdownRef}>
-                <button
-                    type="button"
-                    className={styles.monthButton}
-                    onClick={() => setIsDropdownOpen(prev => !prev)}
-                >
-                    <span className={styles.monthName}>{monthLabel}</span>
-                    <DropdownChevronDown size="16" />
-                </button>
-
-                {isDropdownOpen && (
-                    <div className={styles.monthDropdown}>
-                        {months.map((m) => {
-                            const isSelected = selectedMonth &&
-                                m.year === selectedMonth.year &&
-                                m.month === selectedMonth.month;
-                            return (
-                                <button
-                                    key={`${m.year}-${m.month}`}
-                                    type="button"
-                                    className={`${styles.monthOption} ${isSelected ? styles.monthOptionSelected : ''}`}
-                                    onClick={() => handleMonthSelect(m)}
-                                >
-                                    {m.label}
-                                </button>
-                            );
-                        })}
-                    </div>
-                )}
-            </div>
-
             {/* הבטרייה */}
             <div
                 className={styles.batteryWrapper}
                 ref={batteryRef}
-                onMouseEnter={() => { if (!isDropdownOpen) setShowTooltip(true); }}
+                onMouseEnter={() => setShowTooltip(true)}
                 onMouseLeave={() => setShowTooltip(false)}
             >
                 <div className={styles.batteryTrack}>

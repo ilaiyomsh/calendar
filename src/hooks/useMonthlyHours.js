@@ -7,26 +7,22 @@ import { toLocalDateFormat } from '../utils/dateFormatters';
 import logger from '../utils/logger';
 
 /**
- * Hook לחישוב שעות חודשיות מצטברות לפי סוגי דיווח
- * שולף אירועים של המשתמש הנוכחי לחודש שנבחר ומחשב breakdown
- * שולף צבעים ישירות מהעמודה בכל פעם (לא תלוי ב-labelMeta השמור)
+ * Hook לחישוב שעות לפי טווח התצוגה הנוכחי בלוח
+ * מקבל viewRange (start, end) ו-calendarView ומחשב breakdown + יעד דינמי
  */
-export const useMonthlyHours = (monday, context) => {
+export const useMonthlyHours = (monday, context, viewRange, calendarView) => {
     const { customSettings } = useSettings();
     const [breakdown, setBreakdown] = useState([]);
     const [totalHours, setTotalHours] = useState(0);
     const [loading, setLoading] = useState(false);
-    const [selectedMonth, setSelectedMonth] = useState(() => {
-        const now = new Date();
-        return { year: now.getFullYear(), month: now.getMonth() };
-    });
 
     const effectiveBoardId = useMemo(() =>
         getEffectiveBoardId(customSettings, context),
         [customSettings, context]
     );
 
-    const targetHours = customSettings.monthlyHoursTarget ?? 182.5;
+    const monthlyTarget = customSettings.monthlyHoursTarget ?? 182.5;
+    const weeklyTarget = customSettings.weeklyHoursTarget ?? (monthlyTarget / 4.33);
     const workdayLength = customSettings.workdayLength ?? 8.5;
     const mapping = customSettings.eventTypeMapping;
     const labelMeta = customSettings.eventTypeLabelMeta;
@@ -35,11 +31,23 @@ export const useMonthlyHours = (monday, context) => {
     const eventTypeColumnId = customSettings.eventTypeStatusColumnId;
     const reporterColumnId = customSettings.reporterColumnId;
 
+    // חישוב יעד דינמי לפי סוג תצוגה
+    const targetHours = useMemo(() => {
+        if (calendarView === 'month') return monthlyTarget;
+        if (calendarView === 'day') return weeklyTarget / 5;
+        // week, work_week, three_day
+        return weeklyTarget;
+    }, [calendarView, monthlyTarget, weeklyTarget]);
+
+    // ייצוב ה-viewRange כדי למנוע רינדורים מיותרים
+    const rangeStart = viewRange?.start?.getTime() || 0;
+    const rangeEnd = viewRange?.end?.getTime() || 0;
+
     // Ref למניעת race conditions
     const fetchIdRef = useRef(0);
 
-    const fetchMonthlyData = useCallback(async () => {
-        if (!effectiveBoardId || !dateColumnId || !durationColumnId || !eventTypeColumnId || !mapping) {
+    const fetchData = useCallback(async () => {
+        if (!effectiveBoardId || !dateColumnId || !durationColumnId || !eventTypeColumnId || !mapping || !rangeStart || !rangeEnd) {
             setBreakdown([]);
             setTotalHours(0);
             return;
@@ -49,11 +57,8 @@ export const useMonthlyHours = (monday, context) => {
         setLoading(true);
 
         try {
-            // חישוב טווח תאריכים לחודש שנבחר
-            const startDate = new Date(selectedMonth.year, selectedMonth.month, 1);
-            const endDate = new Date(selectedMonth.year, selectedMonth.month + 1, 0);
-            const fromDateStr = toLocalDateFormat(startDate);
-            const toDateStr = toLocalDateFormat(endDate);
+            const fromDateStr = toLocalDateFormat(viewRange.start);
+            const toDateStr = toLocalDateFormat(viewRange.end);
 
             // בניית חוקי סינון
             const rules = [
@@ -98,7 +103,6 @@ export const useMonthlyHours = (monday, context) => {
                 }
             }`;
 
-            // שליפה מקבילה של צבעים ודף ראשון
             const [colorsRes, firstPageRes] = await Promise.all([
                 monday.api(colorsQuery),
                 monday.api(firstPageQuery)
@@ -125,21 +129,15 @@ export const useMonthlyHours = (monday, context) => {
 
                 while (cursor) {
                     const nextQuery = `query {
-                        boards (ids: [${effectiveBoardId}]) {
-                            items_page (
-                                limit: 500, cursor: "${cursor}",
-                                query_params: {
-                                    rules: [${rulesStr}],
-                                    operator: and
-                                }
-                            ) {
-                                cursor
-                                items {
+                        next_items_page (
+                            limit: 500, cursor: "${cursor}"
+                        ) {
+                            cursor
+                            items {
+                                id
+                                column_values (ids: ["${eventTypeColumnId}", "${durationColumnId}"]) {
                                     id
-                                    column_values (ids: ["${eventTypeColumnId}", "${durationColumnId}"]) {
-                                        id
-                                        value
-                                    }
+                                    value
                                 }
                             }
                         }
@@ -148,7 +146,7 @@ export const useMonthlyHours = (monday, context) => {
                     const nextRes = await monday.api(nextQuery);
                     if (fetchId !== fetchIdRef.current) return;
 
-                    const nextPage = nextRes?.data?.boards?.[0]?.items_page;
+                    const nextPage = nextRes?.data?.next_items_page;
                     if (!nextPage) break;
 
                     allItems = allItems.concat(nextPage.items || []);
@@ -216,14 +214,14 @@ export const useMonthlyHours = (monday, context) => {
                 setTotalHours(Math.round(total * 10) / 10);
             }
 
-            logger.debug('useMonthlyHours', 'Monthly breakdown computed', {
-                month: selectedMonth,
+            logger.debug('useMonthlyHours', 'View range breakdown computed', {
+                calendarView,
                 itemCount: allItems.length,
                 total,
                 categories: result.length
             });
         } catch (error) {
-            logger.error('useMonthlyHours', 'Error fetching monthly data', error);
+            logger.error('useMonthlyHours', 'Error fetching data', error);
             if (fetchId === fetchIdRef.current) {
                 setBreakdown([]);
                 setTotalHours(0);
@@ -233,20 +231,18 @@ export const useMonthlyHours = (monday, context) => {
                 setLoading(false);
             }
         }
-    }, [effectiveBoardId, dateColumnId, durationColumnId, eventTypeColumnId, reporterColumnId, mapping, labelMeta, workdayLength, selectedMonth, monday]);
+    }, [effectiveBoardId, dateColumnId, durationColumnId, eventTypeColumnId, reporterColumnId, mapping, labelMeta, workdayLength, rangeStart, rangeEnd, monday]);
 
-    // טעינה אוטומטית בשינוי חודש או הגדרות
+    // טעינה אוטומטית בשינוי טווח או הגדרות
     useEffect(() => {
-        fetchMonthlyData();
-    }, [fetchMonthlyData]);
+        fetchData();
+    }, [fetchData]);
 
     return {
         breakdown,
         totalHours,
         targetHours,
         loading,
-        selectedMonth,
-        setSelectedMonth,
-        refetch: fetchMonthlyData
+        refetch: fetchData
     };
 };
