@@ -46,6 +46,9 @@ import logger from '../utils/logger';
  */
 export const useMondayEvents = (monday, context) => {
     const { customSettings } = useSettings();
+    const settingsRef = useRef(customSettings);
+    settingsRef.current = customSettings;
+
     const [events, setEvents] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
@@ -162,7 +165,8 @@ export const useMondayEvents = (monday, context) => {
      * @param {Array} customFilterRules - חוקי פילטר מותאמים אישית (אופציונלי)
      */
     const loadEvents = useCallback(async (startDate, endDate, customFilterRules = []) => {
-        if (!effectiveBoardId || !customSettings?.dateColumnId || !customSettings?.durationColumnId) {
+        const cs = settingsRef.current;
+        if (!effectiveBoardId || !cs?.dateColumnId || !cs?.durationColumnId) {
             logger.warn('useMondayEvents.loadEvents', 'Missing board ID or settings for fetching events');
             return;
         }
@@ -274,35 +278,35 @@ export const useMondayEvents = (monday, context) => {
             
             // מיפוי וחישוב לתצוגה תוך שימוש בהגדרות המותאמות
             const mappedEvents = rawItems.map(item => {
-                const dateColumn = item.column_values.find(col => col.id === customSettings.dateColumnId);
-                const durationColumn = item.column_values.find(col => col.id === customSettings.durationColumnId);
-                const notesColumn = item.column_values.find(col => col.id === customSettings.notesColumnId);
-                const typeColumn = customSettings.eventTypeStatusColumnId 
-                    ? item.column_values.find(col => col.id === customSettings.eventTypeStatusColumnId)
+                const dateColumn = item.column_values.find(col => col.id === cs.dateColumnId);
+                const durationColumn = item.column_values.find(col => col.id === cs.durationColumnId);
+                const notesColumn = item.column_values.find(col => col.id === cs.notesColumnId);
+                const typeColumn = cs.eventTypeStatusColumnId
+                    ? item.column_values.find(col => col.id === cs.eventTypeStatusColumnId)
                     : null;
                 // חילוץ פרויקט מקושר
-                const projectColumn = customSettings.projectColumnId
-                    ? item.column_values.find(col => col.id === customSettings.projectColumnId)
+                const projectColumn = cs.projectColumnId
+                    ? item.column_values.find(col => col.id === cs.projectColumnId)
                     : null;
                 const projectId = projectColumn?.linked_items?.[0]?.id || null;
                 const projectName = projectColumn?.linked_items?.[0]?.name || null;
 
                 // חילוץ משימה מקושרת
-                const taskColumn = customSettings.taskColumnId
-                    ? item.column_values.find(col => col.id === customSettings.taskColumnId)
+                const taskColumn = cs.taskColumnId
+                    ? item.column_values.find(col => col.id === cs.taskColumnId)
                     : null;
                 const taskId = taskColumn?.linked_items?.[0]?.id || null;
                 const taskName = taskColumn?.linked_items?.[0]?.name || null;
 
                 // חילוץ שלב (stage)
-                const stageColumn = customSettings.stageColumnId
-                    ? item.column_values.find(col => col.id === customSettings.stageColumnId)
+                const stageColumn = cs.stageColumnId
+                    ? item.column_values.find(col => col.id === cs.stageColumnId)
                     : null;
                 const stageId = stageColumn?.label || null;
 
                 // חילוץ סוג לא לחיוב
-                const nonBillableColumn = customSettings.nonBillableStatusColumnId
-                    ? item.column_values.find(col => col.id === customSettings.nonBillableStatusColumnId)
+                const nonBillableColumn = cs.nonBillableStatusColumnId
+                    ? item.column_values.find(col => col.id === cs.nonBillableStatusColumnId)
                     : null;
                 const nonBillableType = nonBillableColumn?.text || nonBillableColumn?.label || '';
 
@@ -320,8 +324,8 @@ export const useMondayEvents = (monday, context) => {
                 if (!start || isNaN(start.getTime())) return null;
 
                 // חילוץ זמן סיום מעמודת endTimeColumnId (אם מוגדרת)
-                const endTimeColumn = customSettings.endTimeColumnId
-                    ? item.column_values.find(col => col.id === customSettings.endTimeColumnId)
+                const endTimeColumn = cs.endTimeColumnId
+                    ? item.column_values.find(col => col.id === cs.endTimeColumnId)
                     : null;
 
                 // חילוץ משך גולמי מהעמודה
@@ -340,13 +344,13 @@ export const useMondayEvents = (monday, context) => {
                 // זיהוי סוג האירוע לפי אינדקס
                 const eventTypeIndex = typeColumn?.index ?? null;
                 const eventTypeText = typeColumn?.text || '';
-                const isAllDay = isAllDayEventType(eventTypeIndex, customSettings.eventTypeMapping);
+                const isAllDay = isAllDayEventType(eventTypeIndex, cs.eventTypeMapping);
 
                 // צבע הלייבל מ-Monday API
                 const eventTypeColor = typeColumn?.label_style?.color || null;
 
                 // פרסור Duration פולימורפי - שעות לשעתי, ימים ליומי
-                const duration = parseDuration(rawDuration, eventTypeIndex, customSettings.eventTypeMapping);
+                const duration = parseDuration(rawDuration, eventTypeIndex, cs.eventTypeMapping);
 
                 let end;
                 if (isAllDay) {
@@ -371,18 +375,18 @@ export const useMondayEvents = (monday, context) => {
                 }
 
                 // בדיקה אם זה אירוע זמני/מתוכנן
-                const isTemporary = isTemporaryIndex(eventTypeIndex, customSettings.eventTypeMapping);
+                const isTemporary = isTemporaryIndex(eventTypeIndex, cs.eventTypeMapping);
 
                 // סטטוס אישור מנהל
-                const approvalColumn = customSettings.approvalStatusColumnId
-                    ? item.column_values.find(c => c.id === customSettings.approvalStatusColumnId)
+                const approvalColumn = cs.approvalStatusColumnId
+                    ? item.column_values.find(c => c.id === cs.approvalStatusColumnId)
                     : null;
                 const approvalStatusIndex = approvalColumn?.index ?? null;
-                const isPending = customSettings.enableApproval && isPendingIndex(approvalStatusIndex, customSettings.approvalStatusMapping);
-                const isApproved = customSettings.enableApproval && isApprovedIndex(approvalStatusIndex, customSettings.approvalStatusMapping);
-                const isApprovedBillable = customSettings.enableApproval && isApprovedBillableIndex(approvalStatusIndex, customSettings.approvalStatusMapping);
-                const isApprovedUnbillable = customSettings.enableApproval && isApprovedUnbillableIndex(approvalStatusIndex, customSettings.approvalStatusMapping);
-                const isRejected = customSettings.enableApproval && isRejectedIndex(approvalStatusIndex, customSettings.approvalStatusMapping);
+                const isPending = cs.enableApproval && isPendingIndex(approvalStatusIndex, cs.approvalStatusMapping);
+                const isApproved = cs.enableApproval && isApprovedIndex(approvalStatusIndex, cs.approvalStatusMapping);
+                const isApprovedBillable = cs.enableApproval && isApprovedBillableIndex(approvalStatusIndex, cs.approvalStatusMapping);
+                const isApprovedUnbillable = cs.enableApproval && isApprovedUnbillableIndex(approvalStatusIndex, cs.approvalStatusMapping);
+                const isRejected = cs.enableApproval && isRejectedIndex(approvalStatusIndex, cs.approvalStatusMapping);
 
                 return {
                     id: item.id,
@@ -397,7 +401,7 @@ export const useMondayEvents = (monday, context) => {
                     taskId,
                     taskName,
                     stageId,
-                    isBillable: isBillableIndex(eventTypeIndex, customSettings.eventTypeMapping),
+                    isBillable: isBillableIndex(eventTypeIndex, cs.eventTypeMapping),
                     nonBillableType,
                     eventType: eventTypeText,
                     eventTypeIndex,
@@ -423,7 +427,8 @@ export const useMondayEvents = (monday, context) => {
         } finally {
             setLoading(false);
         }
-    }, [effectiveBoardId, customSettings, monday, currentFilter, buildAllRules, rulesToGraphQL]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps — customSettings accessed via settingsRef to prevent re-creation on every settings change
+    }, [effectiveBoardId, monday, currentFilter, buildAllRules, rulesToGraphQL]);
 
     // עדכון viewRangeRef כשהטווח משתנה
     useEffect(() => {
@@ -443,6 +448,7 @@ export const useMondayEvents = (monday, context) => {
      * בניית column values ליצירה/עדכון
      */
     const buildColumnValues = useCallback((eventData, startTime, endTime, currentUser, totalCost = null) => {
+        const customSettings = settingsRef.current;
         const durationMinutes = Math.round((endTime - startTime) / 60000);
         const durationHours = durationMinutes / 60;
 
@@ -544,12 +550,14 @@ export const useMondayEvents = (monday, context) => {
         }
 
         return columnValues;
-    }, [customSettings]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps — customSettings accessed via settingsRef
+    }, []);
 
     /**
      * יצירת אירוע חדש
      */
     const createEvent = useCallback(async (eventData, startTime, endTime) => {
+        const customSettings = settingsRef.current;
         if (!effectiveBoardId || !customSettings?.dateColumnId || !customSettings?.durationColumnId) {
             logger.error('useMondayEvents.createEvent', 'Missing required settings');
             setError('חסרות הגדרות נדרשות');
@@ -636,12 +644,14 @@ export const useMondayEvents = (monday, context) => {
             setError('שגיאה ביצירת האירוע');
             throw error;
         }
-    }, [effectiveBoardId, context, customSettings, monday, buildColumnValues]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps — customSettings accessed via settingsRef
+    }, [effectiveBoardId, context, monday, buildColumnValues]);
 
     /**
      * עדכון אירוע קיים
      */
     const updateEvent = useCallback(async (eventId, eventData, startTime, endTime) => {
+        const customSettings = settingsRef.current;
         if (!effectiveBoardId || !customSettings?.dateColumnId || !customSettings?.durationColumnId) {
             logger.error('useMondayEvents.updateEvent', 'Missing required settings');
             setError('חסרות הגדרות נדרשות');
@@ -709,7 +719,8 @@ export const useMondayEvents = (monday, context) => {
             setError('שגיאה בעדכון האירוע');
             throw error;
         }
-    }, [effectiveBoardId, context, customSettings, monday, events, buildColumnValues]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps — customSettings accessed via settingsRef
+    }, [effectiveBoardId, context, monday, events, buildColumnValues]);
 
     /**
      * מחיקת אירוע
@@ -746,6 +757,7 @@ export const useMondayEvents = (monday, context) => {
      * עדכון אירוע (גרירה או שינוי גודל)
      */
     const updateEventPosition = useCallback(async (event, newStart, newEnd) => {
+        const customSettings = settingsRef.current;
         if (!effectiveBoardId || !customSettings?.dateColumnId || !customSettings?.durationColumnId) {
             logger.error('useMondayEvents.updateEventPosition', 'Missing settings for update');
             return false;
@@ -839,7 +851,8 @@ export const useMondayEvents = (monday, context) => {
             setError('שגיאה בעדכון מיקום האירוע');
             throw error;
         }
-    }, [effectiveBoardId, context, customSettings, monday, events]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps — customSettings accessed via settingsRef
+    }, [effectiveBoardId, context, monday, events]);
 
     /**
      * הוספת אירוע ל-state (לשימוש באירועים יומיים)
@@ -866,6 +879,7 @@ export const useMondayEvents = (monday, context) => {
      * שליפת מחיר לשעה של עובד מלוח העובדים
      */
     const fetchEmployeeHourlyRate = useCallback(async (userId) => {
+        const customSettings = settingsRef.current;
         if (!customSettings.employeesBoardId || !customSettings.employeesPersonColumnId || !customSettings.employeesHourlyRateColumnId) {
             return null;
         }
@@ -912,7 +926,8 @@ export const useMondayEvents = (monday, context) => {
             logger.error('fetchEmployeeHourlyRate', 'Error fetching hourly rate', error);
             return null;
         }
-    }, [customSettings, monday]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps — customSettings accessed via settingsRef
+    }, [monday]);
 
     // הסרת אירועים מה-state בלבד (ללא API) — מחזיר את האירועים שהוסרו
     const removeEventsFromState = useCallback((eventIds) => {

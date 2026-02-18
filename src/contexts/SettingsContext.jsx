@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, useContext, useCallback } from 'react';
+import React, { createContext, useState, useEffect, useContext, useCallback, useRef } from 'react';
 import logger from '../utils/logger';
 import { isLegacyMapping } from '../utils/eventTypeMapping';
 import { useMondayContext } from './MondayContext';
@@ -94,13 +94,27 @@ const DEFAULT_SETTINGS = {
 // Provider Component
 export function SettingsProvider({ monday, children }) {
   const { context } = useMondayContext();
-  const [customSettings, setCustomSettings] = useState(DEFAULT_SETTINGS);
+  const [customSettings, setCustomSettingsRaw] = useState(DEFAULT_SETTINGS);
+  const settingsRef = useRef(DEFAULT_SETTINGS);
   const [isLoading, setIsLoading] = useState(true);
 
+  // עדכון settings רק אם התוכן באמת השתנה - מונע רינדורים מיותרים בכל downstream hooks
+  const setCustomSettings = useCallback((newSettings) => {
+    const prev = settingsRef.current;
+    const json = JSON.stringify(newSettings);
+    if (JSON.stringify(prev) === json) return;
+    settingsRef.current = newSettings;
+    setCustomSettingsRaw(newSettings);
+  }, []);
+
   // טעינת הגדרות מ-Monday Storage
+  // 4 ניסיונות עם 500ms הפרש = ~2 שניות סה"כ
+  // אם נכשל - רענון אוטומטי חד-פעמי (SDK לא מוכן בטעינה ראשונה)
+  const RELOAD_FLAG = '__settings_reload';
+
   const loadSettings = useCallback(async () => {
-    const MAX_RETRIES = 3;
-    const RETRY_DELAY_MS = 300;
+    const MAX_RETRIES = 4;
+    const RETRY_DELAY_MS = 500;
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {
@@ -151,16 +165,19 @@ export function SettingsProvider({ monday, children }) {
           delete migratedSettings.productsCustomerColumnId;
           delete migratedSettings.productColumnId;
 
+          // ניקוי דגל הרענון אם קיים (הצלחנו לטעון)
+          sessionStorage.removeItem(RELOAD_FLAG);
+
           setCustomSettings({ ...DEFAULT_SETTINGS, ...migratedSettings });
           setIsLoading(false);
+          logger.info('SettingsContext', `Settings loaded successfully (attempt ${attempt}/${MAX_RETRIES})`);
           return;
         }
 
-        // Storage החזיר ריק בהצלחה - instance חדש, שימוש בברירות מחדל
-        if (attempt === 1) {
-          logger.info('SettingsContext', 'No saved settings found, using defaults (new instance)');
-          setIsLoading(false);
-          return;
+        // Storage החזיר ריק - SDK עדיין לא מוכן, ממשיכים לנסות
+        if (attempt < MAX_RETRIES) {
+          logger.info('SettingsContext', `Storage returned empty (attempt ${attempt}/${MAX_RETRIES}), retrying in ${RETRY_DELAY_MS}ms...`);
+          await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
         }
       } catch (error) {
         logger.error('SettingsContext', `Failed to load settings (attempt ${attempt}/${MAX_RETRIES})`, error);
@@ -170,8 +187,17 @@ export function SettingsProvider({ monday, children }) {
       }
     }
 
-    // כל הניסיונות מוצו - בעיה ב-SDK
-    logger.warn('SettingsContext', `Settings not found after ${MAX_RETRIES} attempts, using defaults`);
+    // כל הניסיונות מוצו - רענון אוטומטי חד-פעמי אם עדיין לא נוסה
+    if (!sessionStorage.getItem(RELOAD_FLAG)) {
+      logger.info('SettingsContext', 'Settings not found after all retries, performing one-time reload...');
+      sessionStorage.setItem(RELOAD_FLAG, '1');
+      window.location.reload();
+      return;
+    }
+
+    // כבר רעננו פעם - באמת instance חדש
+    sessionStorage.removeItem(RELOAD_FLAG);
+    logger.info('SettingsContext', 'No settings found after reload, using defaults (new instance)');
     setIsLoading(false);
   }, [monday]);
 

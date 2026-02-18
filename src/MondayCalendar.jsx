@@ -84,9 +84,9 @@ const CustomDayHeader = ({ date, localizer }) => {
     );
 };
 
-export default function MondayCalendar({ monday, onOpenSettings }) {
+export default function MondayCalendar({ monday, onOpenSettings, appLoadStart }) {
     // גישה להגדרות מותאמות
-    const { customSettings, updateSettings } = useSettings();
+    const { customSettings, updateSettings, isLoading: settingsLoading } = useSettings();
     const isMobile = useMobile();
 
     // תצוגות לוח שנה - מותאמות למובייל/דסקטופ
@@ -275,7 +275,7 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
     // State - Loader: מוצג מרגע העלייה, מינימום 1.5 שניות + fade-out
     const [showLoader, setShowLoader] = useState(true);
     const [loaderFading, setLoaderFading] = useState(false);
-    const loaderStartRef = useRef(Date.now());
+    const loaderStartRef = useRef(appLoadStart || Date.now());
     const prevLoadingRef = useRef(false);
     const initialLoadDone = useRef(false);
     const loaderTimersRef = useRef({});
@@ -354,7 +354,7 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
             setCurrentViewRange({ start: startOfWeek, end: endOfWeek });
             loadEvents(startOfWeek, endOfWeek, calendarFilter.filterRules);
         }
-    }, [effectiveBoardId, customSettings, calendarFilter.isInitialized]);
+    }, [effectiveBoardId, customSettings?.dateColumnId, calendarFilter.isInitialized]);
 
     // רענון אירועים כשהפילטר משתנה
     useEffect(() => {
@@ -366,8 +366,8 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
     // אימות הגדרות בעת עליית האפליקציה
     useEffect(() => {
         const runValidation = async () => {
-            // מחכים שיהיה effectiveBoardId ו-customSettings לפני שמבצעים אימות
-            if (!effectiveBoardId || !customSettings || hasValidatedSettings) {
+            // מחכים שהטעינה תסתיים לפני אימות - מונע אימות נגד ברירות מחדל ריקות
+            if (settingsLoading || !effectiveBoardId || !customSettings || hasValidatedSettings) {
                 return;
             }
 
@@ -399,7 +399,8 @@ export default function MondayCalendar({ monday, onOpenSettings }) {
         };
 
         runValidation();
-    }, [effectiveBoardId, customSettings, monday, hasValidatedSettings]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps — customSettings is read inside but stabilized via SettingsContext deep compare
+    }, [settingsLoading, effectiveBoardId, monday, hasValidatedSettings]);
 
     // מיגרציה אוטומטית של מיפוי סוגי דיווח
     useEffect(() => {

@@ -248,15 +248,14 @@ export default function EventModal({
     }, [isEditMode, eventToEdit, notes, selectedItem, selectedTask, selectedStage, isBillable, selectedNonBillableType]);
 
     const handleCloseAttempt = useCallback(() => {
-        if (showDeleteConfirm) return;
         if (hasUnsavedChanges()) {
             setShowCloseConfirm(true);
         } else {
             onClose();
         }
-    }, [hasUnsavedChanges, onClose, showDeleteConfirm]);
+    }, [hasUnsavedChanges, onClose]);
 
-    const modalRef = useFocusTrap(isOpen && !showDeleteConfirm && !showCloseConfirm, handleCloseAttempt);
+    const modalRef = useFocusTrap(isOpen && !showCloseConfirm, handleCloseAttempt);
 
     const handleCreate = async () => {
         const { structureMode } = customSettings;
@@ -407,7 +406,7 @@ export default function EventModal({
 
     return (
         <div className={styles.overlay} onClick={(e) => {
-            if (showDeleteConfirm || showCloseConfirm) return;
+            if (showCloseConfirm) return;
             if (e.target === e.currentTarget) handleCloseAttempt();
         }}>
             <div className={styles.modal} ref={modalRef} role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()} onKeyDown={handleKeyDown} tabIndex={-1}>

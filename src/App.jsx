@@ -10,8 +10,13 @@ import { useToast } from "./hooks/useToast";
 import { ToastContainer } from "./components/Toast";
 import ErrorDetailsModal from "./components/ErrorDetailsModal/ErrorDetailsModal";
 import { setGlobalErrorHandler } from "./utils/globalErrorHandler";
+import StopwatchLoader from "./components/StopwatchLoader";
+import loaderStyles from "./components/StopwatchLoader/StopwatchLoader.module.css";
 
 const monday = mondaySdk();
+
+// זמן תחילת טעינת האפליקציה - משותף בין App loader ל-MondayCalendar loader
+const appLoadStart = Date.now();
 
 // רכיב פנימי שמשתמש ב-Settings Context
 const AppContent = () => {
@@ -39,7 +44,12 @@ const AppContent = () => {
 
 
   if (isLoading) {
-    return 
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', height: '100dvh', background: '#ffffff', gap: '16px' }}>
+        <StopwatchLoader size={80} />
+        <p className={loaderStyles.brandText}>Powered by Twyst</p>
+      </div>
+    );
   }
 
   return (
@@ -139,9 +149,10 @@ const AppContent = () => {
 
       {/* רכיב הלוח */}
       <main className="app-main">
-        <MondayCalendar 
-          monday={monday} 
+        <MondayCalendar
+          monday={monday}
           onOpenSettings={() => setIsSettingsOpen(true)}
+          appLoadStart={appLoadStart}
         />
       </main>
       </div>
