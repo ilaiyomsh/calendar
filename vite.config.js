@@ -11,6 +11,7 @@ export default defineConfig(() => {
             'calendar': ['react-big-calendar', 'date-fns'],
             'vibe': ['@vibe/core', '@vibe/icons'],
             'holidays': ['@hebcal/core'],
+            'charts': ['recharts'],
           }
         }
       }

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Navigate } from 'react-big-calendar';
-import { Settings, Filter } from 'lucide-react';
+import { Settings, Filter, BarChart3 } from 'lucide-react';
 import { NavigationChevronLeft, NavigationChevronRight, DropdownChevronDown } from "@vibe/icons";
 import { useMobile } from '../contexts/MondayContext';
 import FilterBar from './FilterBar';
@@ -15,6 +15,7 @@ const CalendarToolbar = ({
   views,
   localizer,
   onOpenSettings,
+  onSwitchToDashboard,
   isOwner = false,
   // Filter props
   filterProps = null,
@@ -103,6 +104,18 @@ const CalendarToolbar = ({
               </>
             ) : null}
           </div>
+        ) : null}
+
+        {/* כפתור דשבורד - מובייל */}
+        {onSwitchToDashboard ? (
+          <button
+            type="button"
+            className="rbc-dashboard-btn"
+            onClick={onSwitchToDashboard}
+            aria-label="דשבורד"
+          >
+            <BarChart3 size={18} />
+          </button>
         ) : null}
 
         {/* כפתורי אישור מנהל - מובייל */}
@@ -223,6 +236,19 @@ const CalendarToolbar = ({
               <span>אשר הכל - לא לחיוב</span>
             </button>
           </>
+        ) : null}
+
+        {/* כפתור דשבורד */}
+        {onSwitchToDashboard ? (
+          <button
+            type="button"
+            className="rbc-dashboard-btn"
+            onClick={onSwitchToDashboard}
+            aria-label="דשבורד"
+            title="דשבורד דיווחי שעות"
+          >
+            <BarChart3 size={20} />
+          </button>
         ) : null}
 
         {/* Dropdown תצוגות */}

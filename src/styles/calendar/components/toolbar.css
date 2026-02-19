@@ -166,6 +166,26 @@
     font-weight: 600 !important;
 }
 
+/* Dashboard Button */
+.rbc-dashboard-btn {
+    background: none !important;
+    border: 1px solid #d0d4e4 !important;
+    color: #676879 !important;
+    padding: 7px !important;
+    cursor: pointer;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border-radius: 50% !important;
+    transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.rbc-dashboard-btn:hover {
+    background-color: #e5f3ff !important;
+    border-color: #0073ea !important;
+    color: #0073ea !important;
+}
+
 .rbc-settings-btn {
     background: none !important;
     border: none !important;

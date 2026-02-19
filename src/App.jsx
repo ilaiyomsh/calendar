@@ -5,6 +5,7 @@ import MondayCalendar from "./MondayCalendar";
 import { SettingsProvider, useSettings } from "./contexts/SettingsContext";
 import { MondayProvider, useMondayContext, useMobile } from "./contexts/MondayContext";
 const SettingsDialog = React.lazy(() => import("./components/SettingsDialog/SettingsDialog"));
+const Dashboard = React.lazy(() => import("./components/Dashboard/Dashboard"));
 import ErrorBoundary from "./components/ErrorBoundary/ErrorBoundary";
 import { useToast } from "./hooks/useToast";
 import { ToastContainer } from "./components/Toast";
@@ -23,6 +24,7 @@ const AppContent = () => {
   const { customSettings, isLoading } = useSettings();
   const { context, isMobile } = useMondayContext();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [currentView, setCurrentView] = useState('calendar');
   const dialogRef = useRef(null);
 
   // Toast management
@@ -149,13 +151,25 @@ const AppContent = () => {
         </div>
       ) : null}
 
-      {/* רכיב הלוח */}
+      {/* רכיב הלוח / דשבורד */}
       <main className="app-main">
-        <MondayCalendar
-          monday={monday}
-          onOpenSettings={() => setIsSettingsOpen(true)}
-          appLoadStart={appLoadStart}
-        />
+        {currentView === 'calendar' ? (
+          <MondayCalendar
+            monday={monday}
+            onOpenSettings={() => setIsSettingsOpen(true)}
+            onSwitchToDashboard={() => setCurrentView('dashboard')}
+            appLoadStart={appLoadStart}
+          />
+        ) : (
+          <Suspense fallback={<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}><StopwatchLoader size={80} /></div>}>
+            <Dashboard
+              monday={monday}
+              onSwitchToCalendar={() => setCurrentView('calendar')}
+              onOpenSettings={() => setIsSettingsOpen(true)}
+              isOwner={true}
+            />
+          </Suspense>
+        )}
       </main>
       </div>
     </ErrorBoundary>

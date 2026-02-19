@@ -101,7 +101,7 @@ const MonthHeader = ({ date, localizer }) => {
     );
 };
 
-export default function MondayCalendar({ monday, onOpenSettings, appLoadStart }) {
+export default function MondayCalendar({ monday, onOpenSettings, onSwitchToDashboard, appLoadStart }) {
     // גישה להגדרות מותאמות
     const { customSettings, updateSettings, isLoading: settingsLoading } = useSettings();
     const isMobile = useMobile();
@@ -1145,6 +1145,7 @@ export default function MondayCalendar({ monday, onOpenSettings, appLoadStart })
         loadingReporters,
         loadingFilterProjects,
         onOpenSettings,
+        onSwitchToDashboard,
         monday,
         customSettings,
         columnIds,
@@ -1194,6 +1195,7 @@ export default function MondayCalendar({ monday, onOpenSettings, appLoadStart })
             <CalendarToolbar
                 {...props}
                 onOpenSettings={data.onOpenSettings}
+                onSwitchToDashboard={data.onSwitchToDashboard}
                 monday={data.monday}
                 customSettings={data.customSettings}
                 columnIds={data.columnIds}

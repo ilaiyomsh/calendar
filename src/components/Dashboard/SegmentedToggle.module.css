@@ -1,0 +1,36 @@
+.container {
+    display: inline-flex;
+    border: 1px solid #d0d4e4;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #f5f6f8;
+}
+
+.option {
+    padding: 6px 14px;
+    border: none;
+    background: transparent;
+    color: #676879;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s, color 0.2s;
+    white-space: nowrap;
+}
+
+.option:not(:last-child) {
+    border-left: 1px solid #d0d4e4;
+}
+
+.option:hover {
+    background-color: #e8e9ed;
+}
+
+.active {
+    background-color: #0073ea;
+    color: white;
+}
+
+.active:hover {
+    background-color: #0060b9;
+}
