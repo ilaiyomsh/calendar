@@ -5,7 +5,7 @@ import { getEffectiveBoardId } from '../../utils/boardIdResolver';
 import { useDashboardData } from '../../hooks/useDashboardData';
 import { useFilterOptions } from '../../hooks/useFilterOptions';
 import { format } from 'date-fns';
-import { aggregateAll } from '../../utils/dashboardAggregation';
+import { aggregateAll, consolidateBarData } from '../../utils/dashboardAggregation';
 import { exportDashboardToCsv } from '../../utils/csvExporter';
 import { buildDateFilterRule, getEffectiveDateRange, shiftPeriod } from '../../utils/dateFilterUtils';
 import DashboardToolbar from './DashboardToolbar';
@@ -95,7 +95,7 @@ const Dashboard = ({ monday, onSwitchToCalendar, onOpenSettings, isOwner }) => {
             });
         }
 
-        // סינון פרויקט ברמת ה-API — board_relation מצפה למספרים
+        // סינון פרויקט ברמת ה-API — board_relation + any_of עם מזהים מספריים
         if (selectedProjectIds.length > 0 && customSettings?.projectColumnId) {
             rules.push({
                 column_id: customSettings.projectColumnId,
@@ -151,12 +151,19 @@ const Dashboard = ({ monday, onSwitchToCalendar, onOpenSettings, isOwner }) => {
     }, [events, selectedReporterIds, selectedProjectIds, specificProjects, billFilter]);
 
     // אגרגציה משולבת — מעבר יחיד על המערך במקום 4 מעברים נפרדים
-    const { stats, barData, billablePieData, nonBillablePieData } = useMemo(
+    const { stats, barData: rawBarData, billablePieData, nonBillablePieData } = useMemo(
         () => aggregateAll(filteredEvents, granularity),
         [filteredEvents, granularity]
     );
 
+    // איחוד עמודות כשיש יותר מדי
+    const barData = useMemo(
+        () => consolidateBarData(rawBarData),
+        [rawBarData]
+    );
+
     const projectFilterActive = specificProjects;
+    const compactMode = projectFilterActive || billFilter !== 'all';
 
     // שינוי תאריכים עם וולידציה
     const handleDateFromChange = useCallback((value) => {
@@ -263,14 +270,17 @@ const Dashboard = ({ monday, onSwitchToCalendar, onOpenSettings, isOwner }) => {
                     <div className={styles.errorState}>{error}</div>
                 ) : isInitialLoading ? null : (
                     <>
-                        <DashboardStats stats={stats} billFilter={billFilter} projectFilterActive={projectFilterActive} />
-                        <DashboardBarChart data={barData} granularity={granularity} />
-                        <DashboardPieCharts
-                            billablePieData={billablePieData}
-                            nonBillablePieData={nonBillablePieData}
-                            billFilter={billFilter}
-                            projectFilterActive={projectFilterActive}
-                        />
+                        <div className={`${styles.topRow} ${compactMode ? styles.topRowProjectMode : ''}`}>
+                            <DashboardStats stats={stats} billFilter={billFilter} projectFilterActive={projectFilterActive} compactMode={compactMode} />
+                            <DashboardPieCharts
+                                billablePieData={billablePieData}
+                                nonBillablePieData={nonBillablePieData}
+                                billFilter={billFilter}
+                                projectFilterActive={projectFilterActive}
+                                compactMode={compactMode}
+                            />
+                        </div>
+                        <DashboardBarChart data={barData} granularity={granularity} isConsolidated={rawBarData.length > barData.length} />
                         <div className={styles.footer}>
                             {filteredEvents.length} רשומות
                         </div>

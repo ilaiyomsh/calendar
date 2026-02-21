@@ -104,12 +104,14 @@
 .filterRow {
     display: flex;
     align-items: center;
-    gap: 12px;
-    flex-wrap: wrap;
+    gap: 10px;
+    flex-wrap: nowrap;
 }
 
 .vibeDropdown {
-    width: 300px;
+    width: 220px;
+    min-width: 150px;
+    flex-shrink: 1;
 }
 
 .dateField {
@@ -270,12 +272,37 @@
     text-align: center;
 }
 
+/* === Top Row: Stats + Pies side by side === */
+
+.topRow {
+    display: grid;
+    grid-template-columns: 2fr 3fr;
+    gap: 16px;
+    align-items: stretch;
+}
+
+.topRowProjectMode {
+    grid-template-columns: 1fr 1fr;
+}
+
+/* === Section Card (wrapper for stats / pies) === */
+
+.sectionCard {
+    background: white;
+    border-radius: 8px;
+    padding: 16px;
+    border: 1px solid #e6e9ef;
+    display: flex;
+    flex-direction: column;
+}
+
 /* === Stats Grid === */
 
 .statsGrid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 12px;
+    flex: 1;
 }
 
 .statCard {
@@ -285,8 +312,7 @@
     border: 1px solid #e6e9ef;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    gap: 4px;
+    gap: 8px;
 }
 
 .statLabel {
@@ -298,6 +324,22 @@
     font-size: 28px;
     font-weight: 600;
     color: #323338;
+    text-align: center;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.statValueHero {
+    font-size: 48px;
+    font-weight: 700;
+    color: #323338;
+    text-align: center;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .statBillable {
@@ -332,6 +374,19 @@
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: 12px;
+    flex: 1;
+}
+
+.pieChartsRowSingle {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+    flex: 1;
+}
+
+.pieSection {
+    display: flex;
+    flex-direction: column;
 }
 
 .emptyState {

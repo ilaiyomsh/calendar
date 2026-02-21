@@ -13,8 +13,9 @@ const GRANULARITY_LABELS = {
  * תרשים עמודות - שעות לפי גרנולריות
  * @param {{ data: Array, granularity: string }} props
  */
-const DashboardBarChart = ({ data, granularity }) => {
-    const title = `שעות לפי ${GRANULARITY_LABELS[granularity] || granularity}`;
+const DashboardBarChart = ({ data, granularity, isConsolidated }) => {
+    const granLabel = GRANULARITY_LABELS[granularity] || granularity;
+    const title = isConsolidated ? `שעות לפי ${granLabel} (ממוצע)` : `שעות לפי ${granLabel}`;
 
     if (!data || data.length === 0) {
         return (

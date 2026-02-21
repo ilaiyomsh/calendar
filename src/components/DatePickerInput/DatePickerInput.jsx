@@ -155,6 +155,7 @@ const DatePickerInput = ({ label, date, onDateChange }) => {
                             <DatePicker
                                 date={date}
                                 onDateChange={handleDateSelect}
+                                locale={he}
                             />
                         </LayerProvider>
                     </div>

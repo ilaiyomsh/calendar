@@ -13,10 +13,10 @@ const DashboardToolbar = ({ onSwitchToCalendar, isOwner, onOpenSettings, onExpor
                     type="button"
                     className={styles.backBtn}
                     onClick={onSwitchToCalendar}
-                    aria-label="חזרה ללוח"
+                    aria-label="חזרה ליומן"
                 >
                     <ArrowRight size={20} />
-                    <span>חזרה ללוח</span>
+                    <span>חזרה ליומן</span>
                 </button>
                 <h2 className={styles.toolbarTitle}>דשבורד דיווחי שעות</h2>
             </div>

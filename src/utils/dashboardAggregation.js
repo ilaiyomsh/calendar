@@ -3,7 +3,7 @@
  * מחשבות סטטיסטיקות, קיבוץ לפי גרנולריות, ונתוני עוגה
  */
 
-import { startOfWeek, format, getISOWeek } from 'date-fns';
+import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, format } from 'date-fns';
 import { he } from 'date-fns/locale';
 
 /**
@@ -52,6 +52,29 @@ export const calcStats = (events) => {
 };
 
 /**
+ * יצירת תווית עברית לטווח שבועי
+ * אותו חודש: "5-11 ינו׳", חודשים שונים: "28 דצמ׳-3 ינו׳"
+ */
+const formatWeekLabel = (start, end) => {
+    const sameMonth = start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear();
+    if (sameMonth) {
+        return `${start.getDate()}-${end.getDate()} ${format(start, 'MMM', { locale: he })}`;
+    }
+    return `${start.getDate()} ${format(start, 'MMM', { locale: he })}-${end.getDate()} ${format(end, 'MMM', { locale: he })}`;
+};
+
+/**
+ * יצירת תווית עברית לטווח תאריכים (עבור עמודות מאוחדות)
+ */
+const formatRangeLabel = (start, end) => {
+    const sameMonth = start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear();
+    if (sameMonth) {
+        return `${start.getDate()}-${end.getDate()} ${format(start, 'MMM', { locale: he })}`;
+    }
+    return `${start.getDate()} ${format(start, 'MMM', { locale: he })}-${end.getDate()} ${format(end, 'MMM', { locale: he })}`;
+};
+
+/**
  * קיבוץ אירועים לפי גרנולריות זמן
  * @param {Array} events - רשימת DashboardEvent
  * @param {'day'|'week'|'month'|'year'} granularity
@@ -66,33 +89,41 @@ export const groupByGranularity = (events, granularity) => {
         const date = event.date;
         if (!date) continue;
 
-        let key, label;
+        let key, label, startDate, endDate;
 
         switch (granularity) {
             case 'day': {
                 const d = String(date.getDate()).padStart(2, '0');
                 const m = String(date.getMonth() + 1).padStart(2, '0');
                 key = `${date.getFullYear()}-${m}-${d}`;
-                label = `${d}/${m}`;
+                label = format(date, 'd MMM', { locale: he });
+                startDate = date;
+                endDate = date;
                 break;
             }
             case 'week': {
-                const weekStart = startOfWeek(date, { weekStartsOn: 0 });
-                const weekNum = getISOWeek(date);
-                const yr = String(date.getFullYear()).slice(-2);
-                key = `${weekStart.getFullYear()}-W${String(weekNum).padStart(2, '0')}`;
-                label = `W${weekNum}'${yr}`;
+                const ws = startOfWeek(date, { weekStartsOn: 0 });
+                const we = endOfWeek(date, { weekStartsOn: 0 });
+                const wNum = String(Math.ceil(((ws - new Date(ws.getFullYear(), 0, 1)) / 86400000 + 1) / 7)).padStart(2, '0');
+                key = `${ws.getFullYear()}-W${wNum}`;
+                label = formatWeekLabel(ws, we);
+                startDate = ws;
+                endDate = we;
                 break;
             }
             case 'month': {
                 const m = String(date.getMonth() + 1).padStart(2, '0');
                 key = `${date.getFullYear()}-${m}`;
-                label = `${m}/${String(date.getFullYear()).slice(-2)}`;
+                label = format(date, 'MMM yy', { locale: he });
+                startDate = startOfMonth(date);
+                endDate = endOfMonth(date);
                 break;
             }
             case 'year': {
                 key = String(date.getFullYear());
                 label = key;
+                startDate = new Date(date.getFullYear(), 0, 1);
+                endDate = new Date(date.getFullYear(), 11, 31);
                 break;
             }
             default:
@@ -100,7 +131,7 @@ export const groupByGranularity = (events, granularity) => {
         }
 
         if (!groups[key]) {
-            groups[key] = { key, label, hours: 0 };
+            groups[key] = { key, label, hours: 0, startDate, endDate };
         }
         groups[key].hours += getEventHours(event);
     }
@@ -195,39 +226,47 @@ export const aggregateAll = (events, granularity) => {
         const date = event.date;
         if (!date) continue;
 
-        let key, label;
+        let key, label, startDate, endDate;
         switch (granularity) {
             case 'day': {
                 const d = String(date.getDate()).padStart(2, '0');
                 const m = String(date.getMonth() + 1).padStart(2, '0');
                 key = `${date.getFullYear()}-${m}-${d}`;
-                label = `${d}/${m}`;
+                label = format(date, 'd MMM', { locale: he });
+                startDate = date;
+                endDate = date;
                 break;
             }
             case 'week': {
-                const weekStart = startOfWeek(date, { weekStartsOn: 0 });
-                const weekNum = getISOWeek(date);
-                const yr = String(date.getFullYear()).slice(-2);
-                key = `${weekStart.getFullYear()}-W${String(weekNum).padStart(2, '0')}`;
-                label = `W${weekNum}'${yr}`;
+                const ws = startOfWeek(date, { weekStartsOn: 0 });
+                const we = endOfWeek(date, { weekStartsOn: 0 });
+                const wNum = String(Math.ceil(((ws - new Date(ws.getFullYear(), 0, 1)) / 86400000 + 1) / 7)).padStart(2, '0');
+                key = `${ws.getFullYear()}-W${wNum}`;
+                label = formatWeekLabel(ws, we);
+                startDate = ws;
+                endDate = we;
                 break;
             }
             case 'month': {
                 const m = String(date.getMonth() + 1).padStart(2, '0');
                 key = `${date.getFullYear()}-${m}`;
-                label = `${m}/${String(date.getFullYear()).slice(-2)}`;
+                label = format(date, 'MMM yy', { locale: he });
+                startDate = startOfMonth(date);
+                endDate = endOfMonth(date);
                 break;
             }
             case 'year': {
                 key = String(date.getFullYear());
                 label = key;
+                startDate = new Date(date.getFullYear(), 0, 1);
+                endDate = new Date(date.getFullYear(), 11, 31);
                 break;
             }
             default:
                 continue;
         }
         if (!granularityGroups[key]) {
-            granularityGroups[key] = { key, label, hours: 0 };
+            granularityGroups[key] = { key, label, hours: 0, startDate, endDate };
         }
         granularityGroups[key].hours += hours;
     }
@@ -252,4 +291,34 @@ export const aggregateAll = (events, granularity) => {
             .map(g => ({ ...g, value: round2(g.value) }))
             .sort((a, b) => b.value - a.value)
     };
+};
+
+/**
+ * איחוד עמודות כשיש יותר מדי — ממוצע לכל קבוצה
+ * @param {Array} barData - נתוני עמודות עם startDate/endDate
+ * @param {number} maxBars - מספר עמודות מקסימלי (ברירת מחדל: 16)
+ * @returns {Array}
+ */
+export const consolidateBarData = (barData, maxBars = 25) => {
+    if (!barData || barData.length <= maxBars) return barData;
+
+    const groupSize = Math.ceil(barData.length / maxBars);
+    const result = [];
+
+    for (let i = 0; i < barData.length; i += groupSize) {
+        const chunk = barData.slice(i, i + groupSize);
+        const avgHours = Math.round((chunk.reduce((sum, b) => sum + b.hours, 0) / chunk.length) * 100) / 100;
+        const firstBar = chunk[0];
+        const lastBar = chunk[chunk.length - 1];
+
+        result.push({
+            key: firstBar.key,
+            label: formatRangeLabel(firstBar.startDate, lastBar.endDate),
+            hours: avgHours,
+            startDate: firstBar.startDate,
+            endDate: lastBar.endDate
+        });
+    }
+
+    return result;
 };

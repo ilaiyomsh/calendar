@@ -45,11 +45,10 @@ export const useCalendarFilter = (customSettings, context) => {
             });
         }
 
-        // פילטר לפי פרויקטים
+        // פילטר לפי פרויקטים — board_relation + any_of עם מזהים מספריים
         if (selectedProjectIds.length > 0 && customSettings?.projectColumnId) {
             rules.push({
                 column_id: customSettings.projectColumnId,
-                // board_relation מצפה למספרים
                 compare_value: selectedProjectIds.map(id => parseInt(id)),
                 operator: "any_of"
             });

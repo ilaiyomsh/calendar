@@ -8,33 +8,36 @@ const DEFAULT_COLORS = ['#0073ea', '#00ca72', '#fdab3d', '#e2445c', '#a25ddc', '
  * תרשימי עוגה (דונאט) - התפלגות שעות
  * @param {{ billablePieData: Array, nonBillablePieData: Array, billFilter: string, projectFilterActive: boolean }} props
  */
-const DashboardPieCharts = ({ billablePieData, nonBillablePieData, billFilter, projectFilterActive }) => {
+const DashboardPieCharts = ({ billablePieData, nonBillablePieData, billFilter, projectFilterActive, compactMode }) => {
     const showBillable = billFilter !== 'nonBillable';
     const showNonBillable = !projectFilterActive && billFilter !== 'billable';
+    const singlePie = compactMode || (showBillable !== showNonBillable);
 
     return (
-        <div className={styles.pieChartsRow}>
-            {showBillable ? (
-                <div className={styles.chartCard}>
-                    <h3 className={styles.chartTitle}>התפלגות שעות לחיוב</h3>
-                    {billablePieData && billablePieData.length > 0 ? (
-                        <MemoizedPieChartDonut data={billablePieData} />
-                    ) : (
-                        <div className={styles.emptyState}>אין נתוני שעות לחיוב</div>
-                    )}
-                </div>
-            ) : null}
+        <div className={styles.sectionCard}>
+            <div className={singlePie ? styles.pieChartsRowSingle : styles.pieChartsRow}>
+                {showBillable ? (
+                    <div className={styles.pieSection}>
+                        <h3 className={styles.chartTitle}>התפלגות שעות לחיוב</h3>
+                        {billablePieData && billablePieData.length > 0 ? (
+                            <MemoizedPieChartDonut data={billablePieData} />
+                        ) : (
+                            <div className={styles.emptyState}>אין נתוני שעות לחיוב</div>
+                        )}
+                    </div>
+                ) : null}
 
-            {showNonBillable ? (
-                <div className={styles.chartCard}>
-                    <h3 className={styles.chartTitle}>התפלגות שעות לא לחיוב</h3>
-                    {nonBillablePieData && nonBillablePieData.length > 0 ? (
-                        <MemoizedPieChartDonut data={nonBillablePieData} />
-                    ) : (
-                        <div className={styles.emptyState}>אין נתוני שעות לא לחיוב</div>
-                    )}
-                </div>
-            ) : null}
+                {showNonBillable ? (
+                    <div className={styles.pieSection}>
+                        <h3 className={styles.chartTitle}>התפלגות שעות לא לחיוב</h3>
+                        {nonBillablePieData && nonBillablePieData.length > 0 ? (
+                            <MemoizedPieChartDonut data={nonBillablePieData} />
+                        ) : (
+                            <div className={styles.emptyState}>אין נתוני שעות לא לחיוב</div>
+                        )}
+                    </div>
+                ) : null}
+            </div>
         </div>
     );
 };

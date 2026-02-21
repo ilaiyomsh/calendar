@@ -174,6 +174,7 @@ export const useDashboardData = (monday, context) => {
                 }
             }`;
 
+
             // מיפוי פריט בודד לאירוע דשבורד
             const mapping = eventTypeMapping;
             const labelMeta = eventTypeLabelColors;
