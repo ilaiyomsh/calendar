@@ -84,7 +84,7 @@
 /* Tabs */
 .tabs {
   display: flex;
-  gap: 16px;
+  gap: 4px;
   padding: 0 24px;
   margin-bottom: 4px;
   border-bottom: 1px solid #e5e7eb;
@@ -93,16 +93,17 @@
 .tab {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   padding: 12px 6px;
   background: none;
   border: none;
   border-bottom: 2px solid transparent;
   cursor: pointer;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 500;
   color: #9ca3af;
   transition: all 0.2s ease;
+  white-space: nowrap;
 }
 
 .tab:hover {

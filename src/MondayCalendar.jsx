@@ -1232,10 +1232,18 @@ export default function MondayCalendar({ monday, onOpenSettings, onSwitchToDashb
         const managerBypass = approval.isManager;
         const isApprovalEnabled = !!customSettings.enableApproval;
 
+        const lockAfterApproval = !!customSettings.lockAfterApproval;
+
         let regularEvents = events.map(ev => {
-            const lockResult = (!managerBypass && lockMode !== 'none')
+            let lockResult = (!managerBypass && lockMode !== 'none')
                 ? isEventLocked(ev, lockMode)
                 : { locked: false, reason: '' };
+            // נעילה לאחר אישור מנהל
+            if (!lockResult.locked && lockAfterApproval && isApprovalEnabled && !managerBypass) {
+                if (ev.isApprovedBillable || ev.isApprovedUnbillable) {
+                    lockResult = { locked: true, reason: 'הדיווח נעול - אושר ע"י מנהל' };
+                }
+            }
             // כשאישור מנהל כבוי - ביטול כל דגלי האישור למניעת שקיפות מיותרת
             const effectivePending = isApprovalEnabled && ev.isPending;
             return {

@@ -110,6 +110,7 @@ const DEFAULT_SETTINGS = {
 
   // --- נעילת עריכה ---
   editLockMode: 'none',           // none | two_days | current_week | current_month
+  lockAfterApproval: false,        // נעילה לאחר אישור מנהל
 
   // --- יעד שעות ---
   monthlyHoursTarget: 182.5,      // יעד שעות חודשי
