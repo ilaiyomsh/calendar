@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { STRUCTURE_MODES } from '../../contexts/SettingsContext';
+import { FIELD_MODES, TOGGLE_MODES, DEFAULT_FIELD_CONFIG } from '../../contexts/SettingsContext';
 import { getEffectiveBoardId, hasValidReportingBoard } from '../../utils/boardIdResolver';
 import { validateMapping } from '../../utils/eventTypeMapping';
 
@@ -10,13 +10,13 @@ import { validateMapping } from '../../utils/eventTypeMapping';
  * @returns {Object} { errors, isValid, getFieldError, getMissingFieldsMessage }
  */
 export const useSettingsValidation = (settings, context) => {
-  const { structureMode } = settings;
+  const fieldConfig = settings.fieldConfig || DEFAULT_FIELD_CONFIG;
 
-  // בדיקה אם המצב כולל משימות
-  const hasTasks = structureMode === STRUCTURE_MODES.PROJECT_WITH_TASKS;
-
-  // בדיקה אם המצב כולל סיווג
-  const hasStage = structureMode === STRUCTURE_MODES.PROJECT_WITH_STAGE;
+  // בדיקה אם שדות פעילים לפי fieldConfig
+  const hasTasks = fieldConfig.task !== FIELD_MODES.HIDDEN;
+  const hasStage = fieldConfig.stage !== FIELD_MODES.HIDDEN;
+  const hasNonBillableType = fieldConfig.billableToggle === TOGGLE_MODES.VISIBLE &&
+    fieldConfig.nonBillableType !== FIELD_MODES.HIDDEN;
 
   // חישוב לוח דיווחים אפקטיבי
   const effectiveBoardId = getEffectiveBoardId(settings, context);
@@ -71,7 +71,7 @@ export const useSettingsValidation = (settings, context) => {
       if (!settings.eventTypeStatusColumnId) {
         errors.eventTypeStatusColumnId = 'יש לבחור עמודת סוג דיווח';
       }
-      if (!settings.nonBillableStatusColumnId) {
+      if (hasNonBillableType && !settings.nonBillableStatusColumnId) {
         errors.nonBillableStatusColumnId = 'יש לבחור עמודת סוגי לא לחיוב';
       }
       // ולידציה של מיפוי סוגי דיווח
@@ -151,7 +151,7 @@ export const useSettingsValidation = (settings, context) => {
     }
 
     return errors;
-  }, [settings, context, hasTasks, hasStage, hasReportingBoard]);
+  }, [settings, context, hasTasks, hasStage, hasNonBillableType, hasReportingBoard]);
 
   const isValid = Object.keys(errors).length === 0;
 

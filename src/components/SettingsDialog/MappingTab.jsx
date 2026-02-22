@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Briefcase, ListTodo, Table, ChevronDown, ChevronUp, AlertTriangle, CalendarCheck, Filter, Clock, ShieldCheck } from 'lucide-react';
 import SearchableSelect from './SearchableSelect';
 import MultiSelect from './MultiSelect';
-import { STRUCTURE_MODES } from '../../contexts/SettingsContext';
+import { FIELD_MODES, TOGGLE_MODES, DEFAULT_FIELD_CONFIG } from '../../contexts/SettingsContext';
 import { fetchStatusColumnsFromBoard, parseStatusLabels, createEventTypeStatusColumn } from '../../utils/mondayApi';
 import { parseStatusColumnLabels } from '../../utils/eventTypeValidation';
 import { EVENT_CATEGORIES, CATEGORY_LABELS, UNMAPPED, UNMAPPED_LABEL, validateMapping, createLegacyMapping } from '../../utils/eventTypeMapping';
@@ -13,7 +13,7 @@ import styles from './MappingTab.module.css';
 
 /**
  * טאב מיפוי נתונים
- * מציג אקורדיונים דינמיים לפי structureMode
+ * מציג אקורדיונים דינמיים לפי fieldConfig
  */
 const MappingTab = ({ 
   settings, 
@@ -24,8 +24,8 @@ const MappingTab = ({
   loadingBoards,
   showErrorWithDetails
 }) => {
-  const { structureMode } = settings;
-  
+  const fieldConfig = settings.fieldConfig || DEFAULT_FIELD_CONFIG;
+
   // State - סקשנים פתוחים
   const [openSection, setOpenSection] = useState(''); // כל הסעיפים סגורים בברירת מחדל
   
@@ -74,11 +74,12 @@ const MappingTab = ({
   const [approvalStatusLabels, setApprovalStatusLabels] = useState([]);
   const [approvalValidation, setApprovalValidation] = useState({ isValid: true, errors: [] });
 
-  // בדיקה אם מצב כולל משימות
-  const hasTasks = structureMode === STRUCTURE_MODES.PROJECT_WITH_TASKS;
-
-  // בדיקה אם מצב כולל סיווג
-  const hasStage = structureMode === STRUCTURE_MODES.PROJECT_WITH_STAGE;
+  // בדיקה אם שדות פעילים לפי fieldConfig
+  const hasTasks = fieldConfig.task !== FIELD_MODES.HIDDEN;
+  const hasStage = fieldConfig.stage !== FIELD_MODES.HIDDEN;
+  const hasNotes = fieldConfig.notes !== FIELD_MODES.HIDDEN;
+  const hasBillableToggle = fieldConfig.billableToggle === TOGGLE_MODES.VISIBLE;
+  const hasNonBillableType = hasBillableToggle && fieldConfig.nonBillableType !== FIELD_MODES.HIDDEN;
 
   // חישוב לוח דיווחים אפקטיבי
   const effectiveBoardId = useMemo(() =>
@@ -1205,18 +1206,20 @@ const MappingTab = ({
           )}
         </FieldWrapper>
 
-        <FieldWrapper label="עמודת סיווג - לא לחיוב" required>
-          <div className={!effectiveBoardId ? styles.disabled : ''}>
-            <SearchableSelect
-              options={statusColumns}
-              value={settings.nonBillableStatusColumnId}
-              onChange={(id) => onChange({ nonBillableStatusColumnId: id })}
-              placeholder="בחר עמודת סטטוס..."
-              isLoading={loadingCurrentBoardColumns}
-              showSearch={false}
-            />
-          </div>
-        </FieldWrapper>
+        {hasNonBillableType && (
+          <FieldWrapper label="עמודת סיווג - לא לחיוב" required>
+            <div className={!effectiveBoardId ? styles.disabled : ''}>
+              <SearchableSelect
+                options={statusColumns}
+                value={settings.nonBillableStatusColumnId}
+                onChange={(id) => onChange({ nonBillableStatusColumnId: id })}
+                placeholder="בחר עמודת סטטוס..."
+                isLoading={loadingCurrentBoardColumns}
+                showSearch={false}
+              />
+            </div>
+          </FieldWrapper>
+        )}
 
         {hasStage && (
           <FieldWrapper label="עמודת סיווג - לחיוב" required>
@@ -1233,7 +1236,7 @@ const MappingTab = ({
           </FieldWrapper>
         )}
 
-        {settings.enableNotes && (
+        {hasNotes && (
           <FieldWrapper label="עמודת הערות">
             <div className={!effectiveBoardId ? styles.disabled : ''}>
               <SearchableSelect

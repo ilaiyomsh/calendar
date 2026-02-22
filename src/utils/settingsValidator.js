@@ -4,7 +4,7 @@
  */
 
 import logger from './logger';
-import { STRUCTURE_MODES } from '../contexts/SettingsContext';
+import { STRUCTURE_MODES, FIELD_MODES, TOGGLE_MODES, DEFAULT_FIELD_CONFIG } from '../contexts/SettingsContext';
 
 /**
  * בדיקה אם עמודות קיימות בלוח
@@ -83,17 +83,17 @@ async function checkBoardExists(monday, boardId) {
 }
 
 /**
- * מחזיר את ההגדרות הנדרשות לפי מצב המבנה והאם משתמשים במצב Assignments
- * @param {string} structureMode - מצב מבנה הדיווח
+ * מחזיר את ההגדרות הנדרשות לפי הגדרת השדות (fieldConfig)
+ * @param {object} fieldConfig - הגדרת שדות דיווח
  * @param {boolean} useAssignmentsMode - האם מצב Assignments מופעל
  * @returns {object} - רשימת ההגדרות הנדרשות
  */
-function getRequiredSettings(structureMode, useAssignmentsMode = false) {
-    // הגדרות בסיסיות שתמיד נדרשות
+function getRequiredSettings(fieldConfig, useAssignmentsMode = false) {
+    // הגדרות בסיסיות שתמיד נדרשות (פרויקט תמיד חובה)
     const required = {
         boards: [], // לוחות מחוברים
         currentBoardColumns: ['dateColumnId', 'endTimeColumnId', 'durationColumnId', 'projectColumnId', 'reporterColumnId'],
-        optional: ['eventTypeStatusColumnId', 'notesColumnId', 'nonBillableStatusColumnId']
+        optional: ['eventTypeStatusColumnId']
     };
 
     // לוח פרויקטים נדרש רק אם לא במצב Assignments
@@ -101,22 +101,27 @@ function getRequiredSettings(structureMode, useAssignmentsMode = false) {
         required.boards.push('connectedBoardId');
     }
 
-    // הגדרות נדרשות לפי מצב מבנה
-    switch (structureMode) {
-        case STRUCTURE_MODES.PROJECT_WITH_TASKS:
-            required.boards.push('tasksBoardId');
-            required.currentBoardColumns.push('taskColumnId');
-            required.connectedBoardColumns = ['tasksProjectColumnId'];
-            break;
+    // משימות — לפי fieldConfig
+    if (fieldConfig.task !== FIELD_MODES.HIDDEN) {
+        required.boards.push('tasksBoardId');
+        required.currentBoardColumns.push('taskColumnId');
+        required.connectedBoardColumns = ['tasksProjectColumnId'];
+    }
 
-        case STRUCTURE_MODES.PROJECT_WITH_STAGE:
-            required.currentBoardColumns.push('stageColumnId');
-            break;
+    // סיווג — לפי fieldConfig
+    if (fieldConfig.stage !== FIELD_MODES.HIDDEN) {
+        required.currentBoardColumns.push('stageColumnId');
+    }
 
-        case STRUCTURE_MODES.PROJECT_ONLY:
-        default:
-            // רק הגדרות בסיסיות
-            break;
+    // הערות — לפי fieldConfig
+    if (fieldConfig.notes !== FIELD_MODES.HIDDEN) {
+        required.optional.push('notesColumnId');
+    }
+
+    // סוג לא לחיוב — לפי fieldConfig
+    if (fieldConfig.billableToggle === TOGGLE_MODES.VISIBLE &&
+        fieldConfig.nonBillableType !== FIELD_MODES.HIDDEN) {
+        required.optional.push('nonBillableStatusColumnId');
     }
 
     return required;
@@ -130,8 +135,9 @@ function getRequiredSettings(structureMode, useAssignmentsMode = false) {
  * @returns {Promise<object>} - תוצאת האימות
  */
 export async function validateSettings(monday, customSettings, currentBoardId) {
+    const fieldConfig = customSettings?.fieldConfig || DEFAULT_FIELD_CONFIG;
     logger.functionStart('validateSettings', {
-        structureMode: customSettings?.structureMode,
+        fieldConfig,
         useAssignmentsMode: customSettings?.useAssignmentsMode
     });
 
@@ -151,7 +157,7 @@ export async function validateSettings(monday, customSettings, currentBoardId) {
     }
 
     const requiredSettings = getRequiredSettings(
-        customSettings.structureMode,
+        fieldConfig,
         customSettings.useAssignmentsMode
     );
 
@@ -200,8 +206,8 @@ export async function validateSettings(monday, customSettings, currentBoardId) {
     }
 
     // בדיקת לוח משימות (אם רלוונטי)
-    if (customSettings.tasksBoardId && 
-        customSettings.structureMode === STRUCTURE_MODES.PROJECT_WITH_TASKS) {
+    if (customSettings.tasksBoardId &&
+        fieldConfig.task !== FIELD_MODES.HIDDEN) {
         const tasksBoardCheck = await checkBoardExists(monday, customSettings.tasksBoardId);
         if (!tasksBoardCheck.valid) {
             result.isValid = false;
@@ -266,8 +272,8 @@ export async function validateSettings(monday, customSettings, currentBoardId) {
         result.warnings.push('עמודת סוג דיווח נבחרה אך לא הוגדר מיפוי סוגי דיווח');
     }
 
-    if (customSettings.enableNotes && !customSettings.notesColumnId) {
-        result.warnings.push('אפשרות מלל חופשי מופעלת אך לא הוגדרה עמודה');
+    if (fieldConfig.notes !== FIELD_MODES.HIDDEN && !customSettings.notesColumnId) {
+        result.warnings.push('שדה הערות פעיל אך לא הוגדרה עמודה');
     }
 
     logger.functionEnd('validateSettings', { 

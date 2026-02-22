@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { FileText, Plus, Minus, Trash2, X, Clock, Calendar } from 'lucide-react';
 import { differenceInDays } from 'date-fns';
-import { useSettings, STRUCTURE_MODES } from '../../contexts/SettingsContext';
+import { useSettings, FIELD_MODES, TOGGLE_MODES, DEFAULT_FIELD_CONFIG } from '../../contexts/SettingsContext';
 import { useMobile } from '../../contexts/MondayContext';
 import { useProjects } from '../../hooks/useProjects';
 import { useTasksMultiple } from '../../hooks/useTasksMultiple';
@@ -339,26 +339,27 @@ export default function AllDayEventModal({
     // פונקציה לבדיקה אם יש דיווחים תקפים
     const hasValidReports = () => {
         if (selectedType !== 'reports' || viewMode !== 'form') return false;
-        const { structureMode } = customSettings;
-        
+        const fieldConfig = customSettings.fieldConfig || DEFAULT_FIELD_CONFIG;
+
         const validReports = addedReports.filter(r => {
             const hasDirectHours = r.hours && parseFloat(r.hours) > 0;
             const hasTimeRange = r.startTime && r.endTime;
             const calculatedHours = hasTimeRange ? calculateHoursFromTimeRange(r.startTime, r.endTime) : null;
             const hasHours = hasDirectHours || (calculatedHours && parseFloat(calculatedHours) > 0);
-            
-            // משימה חובה רק במצב TASKS
-            const needsTask = structureMode === STRUCTURE_MODES.PROJECT_WITH_TASKS && 
+
+            // משימה חובה רק אם required
+            const needsTask = fieldConfig.task === FIELD_MODES.REQUIRED &&
                              customSettings.taskColumnId;
             const hasTask = !needsTask || !r.isBillable || r.taskId;
-            
-            // סיווג חובה במצב STAGE
-            const needsStage = customSettings.stageColumnId && 
-                structureMode === STRUCTURE_MODES.PROJECT_WITH_STAGE;
+
+            // סיווג חובה רק אם required
+            const needsStage = fieldConfig.stage === FIELD_MODES.REQUIRED &&
+                customSettings.stageColumnId;
             const hasStage = !needsStage || !r.isBillable || r.stageId;
-            
+
             // ולידציה ללא לחיוב
-            const hasNonBillableType = r.isBillable || r.nonBillableType;
+            const needsNonBillable = fieldConfig.nonBillableType === FIELD_MODES.REQUIRED;
+            const hasNonBillableType = r.isBillable || !needsNonBillable || r.nonBillableType;
             return hasHours && hasTask && hasStage && hasNonBillableType;
         });
         return validReports.length > 0;
@@ -572,7 +573,7 @@ export default function AllDayEventModal({
     
     const handleCreate = () => {
         if (!selectedType) return;
-        const { structureMode } = customSettings;
+        const fieldConfig = customSettings.fieldConfig || DEFAULT_FIELD_CONFIG;
 
         if (selectedType === 'reports') {
             const validReports = addedReports.filter(r => r.hours && parseFloat(r.hours) > 0);
@@ -582,8 +583,8 @@ export default function AllDayEventModal({
             if (validReports.length === 0) {
                 errors.reports = 'יש להוסיף לפחות פרויקט אחד עם שעות';
             } else {
-                // בדיקת משימות - רק במצב TASKS
-                if (structureMode === STRUCTURE_MODES.PROJECT_WITH_TASKS &&
+                // בדיקת משימות - רק אם required
+                if (fieldConfig.task === FIELD_MODES.REQUIRED &&
                     customSettings.taskColumnId) {
                     validReports.forEach(r => {
                         if (r.isBillable && !r.taskId) {
@@ -593,16 +594,18 @@ export default function AllDayEventModal({
                     });
                 }
 
-                // בדיקת סוגי לא לחיוב
-                validReports.forEach(r => {
-                    if (!r.isBillable && !r.nonBillableType) {
-                        rowErrors[r.id] = rowErrors[r.id] || [];
-                        rowErrors[r.id].push('יש לבחור סוג דיווח לא לחיוב');
-                    }
-                });
+                // בדיקת סוגי לא לחיוב - רק אם required
+                if (fieldConfig.nonBillableType === FIELD_MODES.REQUIRED) {
+                    validReports.forEach(r => {
+                        if (!r.isBillable && !r.nonBillableType) {
+                            rowErrors[r.id] = rowErrors[r.id] || [];
+                            rowErrors[r.id].push('יש לבחור סוג דיווח לא לחיוב');
+                        }
+                    });
+                }
 
-                // בדיקת סיווג - לפי structureMode
-                if (customSettings.stageColumnId && structureMode === STRUCTURE_MODES.PROJECT_WITH_STAGE) {
+                // בדיקת סיווג - רק אם required
+                if (fieldConfig.stage === FIELD_MODES.REQUIRED && customSettings.stageColumnId) {
                     validReports.forEach(r => {
                         if (r.isBillable && !r.stageId) {
                             rowErrors[r.id] = rowErrors[r.id] || [];
@@ -769,9 +772,9 @@ export default function AllDayEventModal({
                                         <div className={styles.projectName}>{report.projectName}</div>
                                         {report.isBillable ? (
                                         <>
-                                            {/* משימה - רק במצב TASKS */}
-                                            {customSettings.taskColumnId && 
-                                             customSettings.structureMode === STRUCTURE_MODES.PROJECT_WITH_TASKS && (
+                                            {/* משימה - רק אם לא מוסתר */}
+                                            {customSettings.taskColumnId &&
+                                             (customSettings.fieldConfig || DEFAULT_FIELD_CONFIG).task !== FIELD_MODES.HIDDEN && (
                                                 <div className={styles.taskField}>
                                                     <TaskSelect 
                                                         products={tasksByProject[report.projectId] || []}
@@ -785,9 +788,9 @@ export default function AllDayEventModal({
                                                     />
                                                 </div>
                                             )}
-                                            {/* סיווג - כפתורים במצב STAGE */}
-                                            {customSettings.stageColumnId && 
-                                             customSettings.structureMode === STRUCTURE_MODES.PROJECT_WITH_STAGE && (
+                                            {/* סיווג - כפתורים אם לא מוסתר */}
+                                            {customSettings.stageColumnId &&
+                                             (customSettings.fieldConfig || DEFAULT_FIELD_CONFIG).stage !== FIELD_MODES.HIDDEN && (
                                                     <div className={styles.stageButtons}>
                                                         {loadingStages ? (
                                                             <span className={styles.loadingSmall}>טוען...</span>
@@ -891,7 +894,7 @@ export default function AllDayEventModal({
                                 </div>
                                 <div className={styles.visualSeparator}></div>
                                 
-                                {customSettings.enableNotes && (
+                                {(customSettings.fieldConfig || DEFAULT_FIELD_CONFIG).notes !== FIELD_MODES.HIDDEN && (
                                     <div className={styles.notesWrapper}>
                                         <span className={styles.timeLabelSmall}>הערות / מלל חופשי</span>
                                         <textarea

@@ -6,19 +6,44 @@ import { useMondayContext } from './MondayContext';
 // יצירת Context
 const SettingsContext = createContext(null);
 
-// מצבי מבנה הדיווח
+// מצבי מבנה הדיווח (legacy — נשמר לתאימות לאחור, לא בשימוש ישיר)
 export const STRUCTURE_MODES = {
   PROJECT_ONLY: 'PROJECT_ONLY',                           // רמה 1 בלבד - פרויקט
   PROJECT_WITH_STAGE: 'PROJECT_WITH_STAGE',               // רמה 1 + סיווג (סטטוס)
   PROJECT_WITH_TASKS: 'PROJECT_WITH_TASKS'                // רמה 1 + משימות (Items)
 };
 
+// מצבי שדות דיווח
+export const FIELD_MODES = {
+  REQUIRED: 'required',   // חובה - חייב למלא
+  OPTIONAL: 'optional',   // רשות - מוצג אך לא חובה
+  HIDDEN: 'hidden'        // מוסתר - לא מוצג כלל
+};
+
+// מצבי טוגל
+export const TOGGLE_MODES = {
+  VISIBLE: 'visible',     // מוצג
+  HIDDEN: 'hidden'        // מוסתר
+};
+
+// ברירת מחדל להגדרת שדות
+export const DEFAULT_FIELD_CONFIG = {
+  task:            FIELD_MODES.HIDDEN,      // משימה
+  stage:           FIELD_MODES.HIDDEN,      // סיווג (חיוב)
+  notes:           FIELD_MODES.HIDDEN,      // הערות
+  billableToggle:  TOGGLE_MODES.VISIBLE,    // טוגל לחיוב/לא לחיוב
+  nonBillableType: FIELD_MODES.REQUIRED     // סוג לא לחיוב
+};
+
 // ברירות מחדל להגדרות
 const DEFAULT_SETTINGS = {
   // --- הגדרות מבנה (Structure) ---
-  structureMode: STRUCTURE_MODES.PROJECT_WITH_STAGE,  // ברירת מחדל: פרויקט + סיווג
-  enableNotes: true,                                   // אפשר הוספת מלל חופשי
+  structureMode: STRUCTURE_MODES.PROJECT_WITH_STAGE,  // legacy - נשמר לתאימות לאחור
+  enableNotes: true,                                   // legacy - נשמר לתאימות לאחור
   showHolidays: true,                                  // הצג חגים ישראליים בלוח
+
+  // --- הגדרת שדות דיווח (מחליף את structureMode + enableNotes) ---
+  fieldConfig: { ...DEFAULT_FIELD_CONFIG },
   
   // --- לוח פרויקטים (רמה 1) ---
   connectedBoardId: null,           // לוח הפרויקטים
@@ -166,6 +191,12 @@ export function SettingsProvider({ monday, children }) {
           delete migratedSettings.productsCustomerColumnId;
           delete migratedSettings.productColumnId;
 
+          // מיגרציה של structureMode + enableNotes ל-fieldConfig
+          if (!migratedSettings.fieldConfig) {
+            migratedSettings.fieldConfig = migrateToFieldConfig(migratedSettings);
+            logger.info('SettingsContext', 'Migrated structureMode to fieldConfig', { fieldConfig: migratedSettings.fieldConfig });
+          }
+
           // ניקוי דגל הרענון אם קיים (הצלחנו לטעון)
           sessionStorage.removeItem(RELOAD_FLAG);
 
@@ -208,6 +239,37 @@ export function SettingsProvider({ monday, children }) {
     loadSettings();
   }, [context, loadSettings]);
   
+  // מיגרציה מ-structureMode + enableNotes ל-fieldConfig
+  const migrateToFieldConfig = (settings) => {
+    const fieldConfig = { ...DEFAULT_FIELD_CONFIG };
+    const mode = settings.structureMode || detectStructureMode(settings);
+
+    switch (mode) {
+      case STRUCTURE_MODES.PROJECT_WITH_TASKS:
+        fieldConfig.task = FIELD_MODES.REQUIRED;
+        fieldConfig.stage = FIELD_MODES.HIDDEN;
+        break;
+      case STRUCTURE_MODES.PROJECT_WITH_STAGE:
+        fieldConfig.task = FIELD_MODES.HIDDEN;
+        fieldConfig.stage = FIELD_MODES.REQUIRED;
+        break;
+      case STRUCTURE_MODES.PROJECT_ONLY:
+      default:
+        fieldConfig.task = FIELD_MODES.HIDDEN;
+        fieldConfig.stage = FIELD_MODES.HIDDEN;
+        break;
+    }
+
+    // מיגרציה של enableNotes
+    if (settings.enableNotes === true) {
+      fieldConfig.notes = FIELD_MODES.OPTIONAL;
+    } else if (settings.enableNotes === false) {
+      fieldConfig.notes = FIELD_MODES.HIDDEN;
+    }
+
+    return fieldConfig;
+  };
+
   // זיהוי אוטומטי של structureMode לפי הגדרות קיימות
   const detectStructureMode = (settings) => {
     const hasTasks = settings.tasksBoardId || settings.taskColumnId || settings.tasksProjectColumnId;

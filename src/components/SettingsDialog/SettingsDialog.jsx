@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { X, Layout, Database, Filter, ChevronLeft, Save, AlertTriangle } from 'lucide-react';
-import { useSettings, STRUCTURE_MODES } from '../../contexts/SettingsContext';
+import { useSettings } from '../../contexts/SettingsContext';
 import StructureTab from './StructureTab';
 import MappingTab from './MappingTab';
 import FiltersTab from './FiltersTab';

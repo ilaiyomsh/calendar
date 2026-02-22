@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react';
-import { useSettings, STRUCTURE_MODES } from '../contexts/SettingsContext';
+import { useSettings, FIELD_MODES, DEFAULT_FIELD_CONFIG } from '../contexts/SettingsContext';
 import { createBoardItem, fetchCurrentUser } from '../utils/mondayApi';
 import { calculateEndDateFromDays, formatDurationForSave } from '../utils/durationUtils';
 import { toLocalDateFormat, toLocalTimeFormat } from '../utils/dateFormatters';
@@ -585,18 +585,17 @@ function buildReportColumnValues({
 function buildItemName({ report, reporterName, customSettings }) {
     const projectName = report.projectName;
     const isBillableReport = report.isBillable !== false;
-    const { structureMode } = customSettings;
+    const fieldConfig = customSettings.fieldConfig || DEFAULT_FIELD_CONFIG;
 
     if (isBillableReport) {
-        if (structureMode === STRUCTURE_MODES.PROJECT_ONLY) {
-            return projectName || 'ללא פרויקט';
-        } else if (structureMode === STRUCTURE_MODES.PROJECT_WITH_STAGE) {
+        // בניית שם לפי שדות פעילים ב-fieldConfig
+        if (fieldConfig.task !== FIELD_MODES.HIDDEN && report.taskName) {
+            const taskName = report.taskName || 'ללא משימה';
+            return projectName ? `${projectName} - ${taskName}` : taskName;
+        } else if (fieldConfig.stage !== FIELD_MODES.HIDDEN && report.stageId) {
             const projectDisplay = projectName || 'ללא פרויקט';
             const stageLabel = report.stageId || '';
             return stageLabel ? `${projectDisplay} - ${stageLabel}` : projectDisplay;
-        } else if (structureMode === STRUCTURE_MODES.PROJECT_WITH_TASKS) {
-            const taskName = report.taskName || 'ללא משימה';
-            return projectName ? `${projectName} - ${taskName}` : taskName;
         } else {
             return projectName || 'ללא פרויקט';
         }
