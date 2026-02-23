@@ -22,6 +22,16 @@ vi.mock('../../Toast', () => ({ ToastContainer: () => null }));
 vi.mock('../../ErrorDetailsModal/ErrorDetailsModal', () => ({ default: () => null }));
 vi.mock('../../ConfirmDialog/ConfirmDialog', () => ({ default: () => null }));
 
+// Mock validation hook to cut heavy dependency chain
+vi.mock('../useSettingsValidation', () => ({
+    useSettingsValidation: () => ({
+        errors: {},
+        isValid: true,
+        getFieldError: () => null,
+        getMissingFieldsMessage: () => null,
+    }),
+}));
+
 vi.mock('../../../hooks/useToast', () => ({
     useToast: () => ({
         showErrorWithDetails: vi.fn(),
@@ -32,6 +42,15 @@ vi.mock('../../../hooks/useToast', () => ({
         openErrorDetailsModal: vi.fn(),
         closeErrorDetailsModal: vi.fn(),
     }),
+}));
+
+// Mock logger to prevent side effects
+vi.mock('../../../utils/logger', () => ({
+    default: {
+        debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn(),
+        api: vi.fn(), apiResponse: vi.fn(), apiError: vi.fn(),
+        functionStart: vi.fn(), functionEnd: vi.fn(),
+    },
 }));
 
 const mockCustomSettings = {
