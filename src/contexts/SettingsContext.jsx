@@ -1,6 +1,7 @@
 import React, { createContext, useState, useEffect, useContext, useCallback, useRef } from 'react';
 import logger from '../utils/logger';
 import { isLegacyMapping } from '../utils/eventTypeMapping';
+import { fetchCurrentUser } from '../utils/mondayApi';
 import { useMondayContext } from './MondayContext';
 
 // יצירת Context
@@ -107,6 +108,10 @@ const DEFAULT_SETTINGS = {
   filterProjectsBoardId: null,   // לוח שממנו נטען רשימת הפרויקטים לפילטר
   filterEmployeesBoardId: null,  // לוח שממנו נטען רשימת העובדים לפילטר
   filterEmployeesColumnId: null, // עמודת People בלוח העובדים
+
+  // --- מטא-דאטה של עריכה אחרונה ---
+  lastModifiedBy: null,   // { id, name }
+  lastModifiedAt: null,   // ISO timestamp string
 
   // --- ולידציה מתקדמת (XOR) ---
   advancedValidation: { enabled: false, xorFields: [null, null] },
@@ -292,9 +297,21 @@ export function SettingsProvider({ monday, children }) {
   // עדכון הגדרות ושמירה ב-Storage
   const updateSettings = async (newSettings) => {
     try {
-      const updatedSettings = { ...customSettings, ...newSettings };
+      // שליפת המשתמש הנוכחי לצורך מטא-דאטה
+      let modifiedBy = customSettings.lastModifiedBy;
+      try {
+        const user = await fetchCurrentUser(monday);
+        if (user) modifiedBy = { id: user.id, name: user.name };
+      } catch (e) { /* שומרים ערך קודם במקרה של כשלון */ }
+
+      const updatedSettings = {
+        ...customSettings,
+        ...newSettings,
+        lastModifiedBy: modifiedBy,
+        lastModifiedAt: new Date().toISOString(),
+      };
       setCustomSettings(updatedSettings);
-      
+
       await monday.storage.instance.setItem('customSettings', JSON.stringify(updatedSettings));
       return true;
     } catch (error) {

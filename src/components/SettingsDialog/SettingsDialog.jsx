@@ -308,6 +308,13 @@ export default function SettingsDialog({ monday, onClose, context }) {
 
         {/* Footer */}
         <div className={styles.footer}>
+          {customSettings.lastModifiedAt && (
+            <span className={styles.modifiedInfo}>
+              שונה לאחרונה{customSettings.lastModifiedBy?.name ? ` ע"י ${customSettings.lastModifiedBy.name}` : ''}
+              {' '}בתאריך {new Date(customSettings.lastModifiedAt).toLocaleDateString('he-IL')}
+              {' '}בשעה {new Date(customSettings.lastModifiedAt).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          )}
           {isFirstTab ? (
             <button
               className={styles.buttonSecondary}

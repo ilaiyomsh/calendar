@@ -28,7 +28,7 @@
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
   width: 100%;
   max-width: 800px;
-  max-height: 90vh;
+  height: 90vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -79,6 +79,14 @@
   font-weight: 700;
   color: #111827;
   margin: 0;
+}
+
+.modifiedInfo {
+  font-size: 12px;
+  color: #9ca3af;
+  margin: 0;
+  margin-inline-end: auto;
+  align-self: center;
 }
 
 /* Tabs */
