@@ -314,8 +314,6 @@ async function createMultipleReports({
                     eventTypeIndex: typeIndex,
                     isPending: !!customSettings.enableApproval,
                     isApproved: false,
-                    isApprovedBillable: false,
-                    isApprovedUnbillable: false,
                     isRejected: false
                 };
                 resolvePendingEvent(tempId, newEvent);

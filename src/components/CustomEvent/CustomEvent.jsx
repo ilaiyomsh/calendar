@@ -28,8 +28,7 @@ const CustomEvent = ({ event }) => {
     // סטטוס אישור
     const isPending = event.isPending || false;
     const isRejected = event.isRejected || false;
-    const isApprovedBillable = event.isApprovedBillable || false;
-    const isApprovedUnbillable = event.isApprovedUnbillable || false;
+    const isApproved = event.isApproved || false;
 
     // זיהוי אירוע קצר (30 דקות או פחות) - להציג כותרת ושעה באותה שורה
     const isShortEvent = !isAllDayEvent && event.start && event.end

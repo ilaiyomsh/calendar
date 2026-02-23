@@ -948,14 +948,13 @@ export default function MondayCalendar({ monday, onOpenSettings, onSwitchToDashb
     // --- Approval handlers ---
 
     // אישור אירועים נבחרים
-    // @param {string} billableType - 'billable' | 'unbillable'
-    const handleApproveSelected = useCallback(async (billableType = 'billable') => {
+    const handleApproveSelected = useCallback(async () => {
         if (!approvalSelection.selectedCount) return;
 
         setIsProcessingApproval(true);
         try {
             const selectedEvents = events.filter(e => approvalSelection.isSelected(e.id));
-            const result = await approval.approveMultiple(selectedEvents, billableType);
+            const result = await approval.approveMultiple(selectedEvents);
 
             if (result.succeeded > 0) {
                 showSuccess(`${result.succeeded} דיווחים אושרו בהצלחה`);
@@ -976,11 +975,10 @@ export default function MondayCalendar({ monday, onOpenSettings, onSwitchToDashb
     }, [approvalSelection, events, approval, showSuccess, showError, showErrorWithDetails, currentViewRange, loadEvents, calendarFilter.filterRules]);
 
     // אישור כל הממתינים בתצוגה הנוכחית
-    // @param {string} billableType - 'billable' | 'unbillable'
-    const handleApproveAllInWeek = useCallback(async (billableType = 'billable') => {
+    const handleApproveAllInWeek = useCallback(async () => {
         setIsProcessingApproval(true);
         try {
-            const result = await approval.approveAllPending(events, billableType);
+            const result = await approval.approveAllPending(events);
 
             if (result.succeeded > 0) {
                 showSuccess(`${result.succeeded} דיווחים אושרו בהצלחה`);
@@ -1003,15 +1001,9 @@ export default function MondayCalendar({ monday, onOpenSettings, onSwitchToDashb
     }, [approval, events, showSuccess, showWarning, showError, showErrorWithDetails, currentViewRange, loadEvents, calendarFilter.filterRules, approvalSelection]);
 
     // אישור אירוע בודד מתוך מודל
-    // @param {Object} event - האירוע לאישור
-    // @param {string} billableType - 'billable' | 'unbillable'
-    const handleApproveEvent = useCallback(async (event, billableType = 'billable') => {
+    const handleApproveEvent = useCallback(async (event) => {
         try {
-            if (billableType === 'unbillable') {
-                await approval.approveUnbillable(event);
-            } else {
-                await approval.approveBillable(event);
-            }
+            await approval.approveEvent(event);
             showSuccess('הדיווח אושר בהצלחה');
             if (currentViewRange) {
                 loadEvents(currentViewRange.start, currentViewRange.end, calendarFilter.filterRules);
@@ -1238,9 +1230,9 @@ export default function MondayCalendar({ monday, onOpenSettings, onSwitchToDashb
             let lockResult = (!managerBypass && lockMode !== 'none')
                 ? isEventLocked(ev, lockMode)
                 : { locked: false, reason: '' };
-            // נעילה לאחר אישור מנהל
+            // נעילה לאחר אישור מנהל — רק אירועים במצב "ממתין" ניתנים לעריכה
             if (!lockResult.locked && lockAfterApproval && isApprovalEnabled && !managerBypass) {
-                if (ev.isApprovedBillable || ev.isApprovedUnbillable) {
+                if (!ev.isPending) {
                     lockResult = { locked: true, reason: 'הדיווח נעול - אושר ע"י מנהל' };
                 }
             }
@@ -1250,8 +1242,7 @@ export default function MondayCalendar({ monday, onOpenSettings, onSwitchToDashb
                 ...ev,
                 isPending: effectivePending,
                 isRejected: isApprovalEnabled && ev.isRejected,
-                isApprovedBillable: isApprovalEnabled && ev.isApprovedBillable,
-                isApprovedUnbillable: isApprovalEnabled && ev.isApprovedUnbillable,
+                isApproved: isApprovalEnabled && ev.isApproved,
                 isSelected: multiSelect.isSelected(ev.id),
                 isInApprovalSelection: approvalSelection.isSelectionMode && effectivePending,
                 isApprovalSelected: approvalSelection.isSelected(ev.id),
@@ -1525,8 +1516,7 @@ export default function MondayCalendar({ monday, onOpenSettings, onSwitchToDashb
                 <Suspense fallback={null}>
                     <ApprovalActionBar
                         selectedCount={approvalSelection.selectedCount}
-                        onApproveBillable={() => handleApproveSelected('billable')}
-                        onApproveUnbillable={() => handleApproveSelected('unbillable')}
+                        onApprove={handleApproveSelected}
                         onClear={approvalSelection.clearSelection}
                         isProcessing={isProcessingApproval}
                     />

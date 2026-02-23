@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from 'react';
 import { useSettings } from '../contexts/SettingsContext';
 import { getEffectiveBoardId } from '../utils/boardIdResolver';
-import { getPendingIndex, getApprovedBillableIndex, getApprovedUnbillableIndex, getRejectedIndex } from '../utils/approvalMapping';
+import { getPendingIndex, getApprovedIndex, getRejectedIndex } from '../utils/approvalMapping';
 import { updateItemColumnValues } from '../utils/mondayApi';
 import logger from '../utils/logger';
 
@@ -55,27 +55,15 @@ export const useApproval = ({ monday, context }) => {
         }
     }, [monday, effectiveBoardId, customSettings.approvalStatusColumnId]);
 
-    // אישור אירוע בודד - לחיוב
-    const approveBillable = useCallback(async (event) => {
-        const approvedIdx = getApprovedBillableIndex(customSettings.approvalStatusMapping);
+    // אישור אירוע בודד
+    const approveEvent = useCallback(async (event) => {
+        const approvedIdx = getApprovedIndex(customSettings.approvalStatusMapping);
         if (!approvedIdx) {
-            logger.error('useApproval', 'No approved_billable index configured');
+            logger.error('useApproval', 'No approved index configured');
             return false;
         }
 
-        logger.functionStart('approveBillable', { itemId: event.mondayItemId });
-        return updateApprovalStatus(event.mondayItemId, approvedIdx);
-    }, [customSettings.approvalStatusMapping, updateApprovalStatus]);
-
-    // אישור אירוע בודד - לא לחיוב
-    const approveUnbillable = useCallback(async (event) => {
-        const approvedIdx = getApprovedUnbillableIndex(customSettings.approvalStatusMapping);
-        if (!approvedIdx) {
-            logger.error('useApproval', 'No approved_unbillable index configured');
-            return false;
-        }
-
-        logger.functionStart('approveUnbillable', { itemId: event.mondayItemId });
+        logger.functionStart('approveEvent', { itemId: event.mondayItemId });
         return updateApprovalStatus(event.mondayItemId, approvedIdx);
     }, [customSettings.approvalStatusMapping, updateApprovalStatus]);
 
@@ -92,14 +80,11 @@ export const useApproval = ({ monday, context }) => {
     }, [customSettings.approvalStatusMapping, updateApprovalStatus]);
 
     // אישור אירועים מרובים
-    // @param {string} billableType - 'billable' | 'unbillable'
-    const approveMultiple = useCallback(async (events, billableType = 'billable') => {
-        const approvedIdx = billableType === 'unbillable'
-            ? getApprovedUnbillableIndex(customSettings.approvalStatusMapping)
-            : getApprovedBillableIndex(customSettings.approvalStatusMapping);
+    const approveMultiple = useCallback(async (events) => {
+        const approvedIdx = getApprovedIndex(customSettings.approvalStatusMapping);
         if (!approvedIdx) return { succeeded: 0, failed: 0 };
 
-        logger.functionStart('approveMultiple', { count: events.length, billableType });
+        logger.functionStart('approveMultiple', { count: events.length });
 
         let succeeded = 0;
         let failed = 0;
@@ -120,19 +105,17 @@ export const useApproval = ({ monday, context }) => {
     }, [customSettings.approvalStatusMapping, updateApprovalStatus]);
 
     // אישור כל הממתינים מתוך רשימת אירועים
-    // @param {string} billableType - 'billable' | 'unbillable'
-    const approveAllPending = useCallback(async (events, billableType = 'billable') => {
+    const approveAllPending = useCallback(async (events) => {
         const pendingEvents = events.filter(e => e.isPending && !e.isHoliday && !e.isTemporary);
         if (pendingEvents.length === 0) return { succeeded: 0, failed: 0 };
 
-        return approveMultiple(pendingEvents, billableType);
+        return approveMultiple(pendingEvents);
     }, [approveMultiple]);
 
     return {
         isApprovalEnabled,
         isManager,
-        approveBillable,
-        approveUnbillable,
+        approveEvent,
         rejectEvent,
         approveMultiple,
         approveAllPending

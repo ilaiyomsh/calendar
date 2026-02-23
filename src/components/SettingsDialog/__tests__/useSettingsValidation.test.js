@@ -94,9 +94,8 @@ describe('useSettingsValidation — approval', () => {
                 approvalStatusColumnId: 'approval_col',
                 approvalStatusMapping: {
                     '0': 'pending',
-                    '1': 'approved_billable',
-                    '2': 'approved_unbillable',
-                    '3': 'rejected',
+                    '1': 'approved',
+                    '2': 'rejected',
                 },
             }, context)
         );
@@ -112,7 +111,7 @@ describe('useSettingsValidation — approval', () => {
                 enableApproval: true,
                 approvalStatusColumnId: 'approval_col',
                 approvalStatusMapping: {
-                    '1': 'approved_billable',
+                    '1': 'approved',
                     '2': 'rejected',
                 },
             }, context)

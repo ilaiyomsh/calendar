@@ -108,6 +108,9 @@ const DEFAULT_SETTINGS = {
   filterEmployeesBoardId: null,  // לוח שממנו נטען רשימת העובדים לפילטר
   filterEmployeesColumnId: null, // עמודת People בלוח העובדים
 
+  // --- ולידציה מתקדמת (XOR) ---
+  advancedValidation: { enabled: false, xorFields: [null, null] },
+
   // --- נעילת עריכה ---
   editLockMode: 'none',           // none | two_days | current_week | current_month
   lockAfterApproval: false,        // נעילה לאחר אישור מנהל

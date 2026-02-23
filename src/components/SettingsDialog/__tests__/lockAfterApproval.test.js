@@ -18,9 +18,9 @@ function computeEventLock(event, settings, isManager) {
         ? isEventLocked(event, lockMode)
         : { locked: false, reason: '' };
 
-    // נעילה לאחר אישור מנהל
+    // נעילה לאחר אישור מנהל — רק אירועים במצב "ממתין" ניתנים לעריכה
     if (!lockResult.locked && lockAfterApproval && isApprovalEnabled && !managerBypass) {
-        if (event.isApprovedBillable || event.isApprovedUnbillable) {
+        if (!event.isPending) {
             lockResult = { locked: true, reason: 'הדיווח נעול - אושר ע"י מנהל' };
         }
     }
@@ -41,46 +41,42 @@ describe('lockAfterApproval', () => {
 
     const approvedEvent = {
         start: new Date(2026, 1, 15, 9, 0),
-        isApprovedBillable: true,
-        isApprovedUnbillable: false,
-        isPending: false
-    };
-
-    const approvedUnbillableEvent = {
-        start: new Date(2026, 1, 15, 9, 0),
-        isApprovedBillable: false,
-        isApprovedUnbillable: true,
+        isApproved: true,
         isPending: false
     };
 
     const pendingEvent = {
         start: new Date(2026, 1, 15, 9, 0),
-        isApprovedBillable: false,
-        isApprovedUnbillable: false,
+        isApproved: false,
         isPending: true
+    };
+
+    const rejectedEvent = {
+        start: new Date(2026, 1, 15, 9, 0),
+        isApproved: false,
+        isPending: false,
+        isRejected: true
     };
 
     const regularEvent = {
         start: new Date(2026, 1, 15, 9, 0),
-        isApprovedBillable: false,
-        isApprovedUnbillable: false,
+        isApproved: false,
         isPending: false
     };
 
     // L1: enableApproval=true, lockAfterApproval=true, אירוע מאושר
-    it('אירוע מאושר (billable) נעול כש-lockAfterApproval פעיל', () => {
+    it('אירוע מאושר נעול כש-lockAfterApproval פעיל', () => {
         const settings = { enableApproval: true, lockAfterApproval: true, editLockMode: 'none' };
         const result = computeEventLock(approvedEvent, settings, false);
         expect(result.locked).toBe(true);
         expect(result.reason).toContain('אושר');
     });
 
-    // אירוע מאושר (unbillable)
-    it('אירוע מאושר (unbillable) נעול כש-lockAfterApproval פעיל', () => {
+    // אירוע נדחה — נעול גם כן (רק pending ניתן לעריכה)
+    it('אירוע נדחה נעול כש-lockAfterApproval פעיל', () => {
         const settings = { enableApproval: true, lockAfterApproval: true, editLockMode: 'none' };
-        const result = computeEventLock(approvedUnbillableEvent, settings, false);
+        const result = computeEventLock(rejectedEvent, settings, false);
         expect(result.locked).toBe(true);
-        expect(result.reason).toContain('אושר');
     });
 
     // L2: enableApproval=true, lockAfterApproval=true, אירוע ממתין
@@ -115,8 +111,7 @@ describe('lockAfterApproval', () => {
     it('editLockMode קודם ל-lockAfterApproval (אירוע ישן מאושר)', () => {
         const oldApprovedEvent = {
             start: new Date(2026, 1, 1, 9, 0), // תחילת חודש — מחוץ לשבוע
-            isApprovedBillable: true,
-            isApprovedUnbillable: false
+            isApproved: true
         };
         const settings = {
             enableApproval: true,
@@ -137,11 +132,11 @@ describe('lockAfterApproval', () => {
         expect(result.locked).toBe(false);
     });
 
-    // אירוע רגיל (לא מאושר, לא ממתין) לא נעול
-    it('אירוע רגיל לא נעול', () => {
+    // אירוע רגיל (לא מאושר, לא ממתין) — נעול כי הוא לא pending
+    it('אירוע רגיל (לא pending) נעול כש-lockAfterApproval פעיל', () => {
         const settings = { enableApproval: true, lockAfterApproval: true, editLockMode: 'none' };
         const result = computeEventLock(regularEvent, settings, false);
-        expect(result.locked).toBe(false);
+        expect(result.locked).toBe(true);
     });
 
     // lockAfterApproval + editLockMode=none + אירוע מאושר בלוח = נעול

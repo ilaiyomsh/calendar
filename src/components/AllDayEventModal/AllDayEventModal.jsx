@@ -10,6 +10,7 @@ import { useNonBillableOptions } from '../../hooks/useNonBillableOptions';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { getEffectiveBoardId } from '../../utils/boardIdResolver';
 import { getAllDayIndexes, getNonBillableIndexes, getLabelText, getLabelColor, getLabelsByCategory, EVENT_CATEGORIES } from '../../utils/eventTypeMapping';
+import { getXorExemptFields, getXorErrorMessage } from '../../utils/xorValidation';
 import TaskSelect from '../TaskSelect';
 import TimeSelect from '../TimeSelect';
 import ConfirmDialog from '../ConfirmDialog';
@@ -347,19 +348,28 @@ export default function AllDayEventModal({
             const calculatedHours = hasTimeRange ? calculateHoursFromTimeRange(r.startTime, r.endTime) : null;
             const hasHours = hasDirectHours || (calculatedHours && parseFloat(calculatedHours) > 0);
 
+            // חישוב פטורי XOR לשורה זו
+            const fieldValues = {
+                task: r.taskId,
+                stage: r.stageId,
+                nonBillableType: r.nonBillableType,
+                notes: r.notes?.trim()
+            };
+            const xorExempt = getXorExemptFields(customSettings.advancedValidation, fieldValues);
+
             // משימה חובה רק אם required
             const needsTask = fieldConfig.task === FIELD_MODES.REQUIRED &&
                              customSettings.taskColumnId;
-            const hasTask = !needsTask || !r.isBillable || r.taskId;
+            const hasTask = !needsTask || !r.isBillable || r.taskId || xorExempt.has('task');
 
             // סיווג חובה רק אם required
             const needsStage = fieldConfig.stage === FIELD_MODES.REQUIRED &&
                 customSettings.stageColumnId;
-            const hasStage = !needsStage || !r.isBillable || r.stageId;
+            const hasStage = !needsStage || !r.isBillable || r.stageId || xorExempt.has('stage');
 
             // ולידציה ללא לחיוב
             const needsNonBillable = fieldConfig.nonBillableType === FIELD_MODES.REQUIRED;
-            const hasNonBillableType = r.isBillable || !needsNonBillable || r.nonBillableType;
+            const hasNonBillableType = r.isBillable || !needsNonBillable || r.nonBillableType || xorExempt.has('nonBillableType');
             return hasHours && hasTask && hasStage && hasNonBillableType;
         });
         return validReports.length > 0;
@@ -583,36 +593,40 @@ export default function AllDayEventModal({
             if (validReports.length === 0) {
                 errors.reports = 'יש להוסיף לפחות פרויקט אחד עם שעות';
             } else {
-                // בדיקת משימות - רק אם required
-                if (fieldConfig.task === FIELD_MODES.REQUIRED &&
-                    customSettings.taskColumnId) {
-                    validReports.forEach(r => {
-                        if (r.isBillable && !r.taskId) {
-                            rowErrors[r.id] = rowErrors[r.id] || [];
-                            rowErrors[r.id].push('יש לבחור משימה');
-                        }
-                    });
-                }
+                validReports.forEach(r => {
+                    // חישוב פטורי XOR לכל שורה
+                    const fieldValues = {
+                        task: r.taskId,
+                        stage: r.stageId,
+                        nonBillableType: r.nonBillableType,
+                        notes: r.notes?.trim()
+                    };
+                    const xorExempt = getXorExemptFields(customSettings.advancedValidation, fieldValues);
+                    const xorMsg = xorExempt.size === 0 ? getXorErrorMessage(customSettings.advancedValidation) : null;
 
-                // בדיקת סוגי לא לחיוב - רק אם required
-                if (fieldConfig.nonBillableType === FIELD_MODES.REQUIRED) {
-                    validReports.forEach(r => {
-                        if (!r.isBillable && !r.nonBillableType) {
-                            rowErrors[r.id] = rowErrors[r.id] || [];
-                            rowErrors[r.id].push('יש לבחור סוג דיווח לא לחיוב');
-                        }
-                    });
-                }
+                    // בדיקת משימות - רק אם required
+                    if (fieldConfig.task === FIELD_MODES.REQUIRED &&
+                        customSettings.taskColumnId &&
+                        r.isBillable && !r.taskId && !xorExempt.has('task')) {
+                        rowErrors[r.id] = rowErrors[r.id] || [];
+                        rowErrors[r.id].push(xorMsg || 'יש לבחור משימה');
+                    }
 
-                // בדיקת סיווג - רק אם required
-                if (fieldConfig.stage === FIELD_MODES.REQUIRED && customSettings.stageColumnId) {
-                    validReports.forEach(r => {
-                        if (r.isBillable && !r.stageId) {
-                            rowErrors[r.id] = rowErrors[r.id] || [];
-                            rowErrors[r.id].push('יש לבחור סיווג');
-                        }
-                    });
-                }
+                    // בדיקת סוגי לא לחיוב - רק אם required
+                    if (fieldConfig.nonBillableType === FIELD_MODES.REQUIRED &&
+                        !r.isBillable && !r.nonBillableType && !xorExempt.has('nonBillableType')) {
+                        rowErrors[r.id] = rowErrors[r.id] || [];
+                        rowErrors[r.id].push(xorMsg || 'יש לבחור סוג דיווח לא לחיוב');
+                    }
+
+                    // בדיקת סיווג - רק אם required
+                    if (fieldConfig.stage === FIELD_MODES.REQUIRED &&
+                        customSettings.stageColumnId &&
+                        r.isBillable && !r.stageId && !xorExempt.has('stage')) {
+                        rowErrors[r.id] = rowErrors[r.id] || [];
+                        rowErrors[r.id].push(xorMsg || 'יש לבחור סיווג');
+                    }
+                });
             }
 
             if (Object.keys(rowErrors).length > 0) {
@@ -1046,8 +1060,7 @@ export default function AllDayEventModal({
                     {isEditMode && !isLocked && onDelete && <button className={`${styles.button} ${styles.deleteBtn}`} onClick={onDelete}>מחק</button>}
                     {isEditMode && isManager && isApprovalEnabled && eventToEdit?.isPending && (
                         <>
-                            <button className={`${styles.button} ${styles.approveBtn}`} onClick={() => { if (onApprove) onApprove(eventToEdit, 'billable'); onClose(); }}>אשר - לחיוב</button>
-                            <button className={`${styles.button} ${styles.approveUnbillableBtn}`} onClick={() => { if (onApprove) onApprove(eventToEdit, 'unbillable'); onClose(); }}>אשר - לא לחיוב</button>
+                            <button className={`${styles.button} ${styles.approveBtn}`} onClick={() => { if (onApprove) onApprove(eventToEdit); onClose(); }}>אשר</button>
                             <button className={`${styles.button} ${styles.rejectBtn}`} onClick={() => { if (onReject) onReject(eventToEdit); onClose(); }}>דחה</button>
                         </>
                     )}
