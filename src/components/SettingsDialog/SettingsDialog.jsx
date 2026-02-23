@@ -42,6 +42,9 @@ const ERROR_KEY_TO_TAB = {
   stageColumnId: 'mapping',
   eventTypeMapping: 'mapping',
   assignmentColumnId: 'mapping',
+  // Additional tab - אישור מנהל
+  approvalStatusColumnId: 'additional',
+  approvalStatusMapping: 'additional',
 };
 
 // סדר הטאבים לניווט

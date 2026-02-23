@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { FIELD_MODES, TOGGLE_MODES, DEFAULT_FIELD_CONFIG } from '../../contexts/SettingsContext';
 import { getEffectiveBoardId, hasValidReportingBoard } from '../../utils/boardIdResolver';
 import { validateMapping } from '../../utils/eventTypeMapping';
+import { validateApprovalMapping } from '../../utils/approvalMapping';
 
 /**
  * Hook ל-validation של הגדרות
@@ -146,6 +147,21 @@ export const useSettingsValidation = (settings, context) => {
         // עמודת קישור להקצאה בלוח הדיווחים
         if (hasReportingBoard && !settings.assignmentColumnId) {
           errors.assignmentColumnId = 'יש לבחור עמודת קישור להקצאה בלוח הדיווחים';
+        }
+      }
+    }
+
+    // --- בדיקת אישור מנהל ---
+    if (settings.enableApproval) {
+      if (!settings.approvalStatusColumnId) {
+        errors.approvalStatusColumnId = 'יש לבחור עמודת סטטוס אישור';
+      }
+      if (settings.approvalStatusColumnId && !settings.approvalStatusMapping) {
+        errors.approvalStatusMapping = 'יש להגדיר מיפוי סטטוס אישור';
+      } else if (settings.approvalStatusMapping) {
+        const approvalMappingValidation = validateApprovalMapping(settings.approvalStatusMapping);
+        if (!approvalMappingValidation.isValid) {
+          errors.approvalStatusMapping = approvalMappingValidation.errors[0];
         }
       }
     }
