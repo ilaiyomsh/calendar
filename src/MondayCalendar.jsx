@@ -1496,6 +1496,7 @@ export default function MondayCalendar({ monday, onOpenSettings, onSwitchToDashb
                 onClose={() => setShowValidationDialog(false)}
                 onOpenSettings={onOpenSettings}
                 validationResult={settingsValidation}
+                isOwner={isOwner}
             />
 
             {/* Selection Action Bar - תפריט פעולות לאירועים נבחרים */}

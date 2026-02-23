@@ -6,7 +6,8 @@ export default function SettingsValidationDialog({
     isOpen,
     onClose,
     onOpenSettings,
-    validationResult
+    validationResult,
+    isOwner = false
 }) {
     if (!isOpen || !validationResult) return null;
 
@@ -22,30 +23,34 @@ export default function SettingsValidationDialog({
                         <X size={20} />
                     </button>
                 </div>
-                
+
                 <div className={styles.content}>
                     <p className={styles.message}>
-                        יש להשלים את הגדרות האפליקציה כדי להתחיל להשתמש ביומן דיווח השעות.
+                        {isOwner
+                            ? 'יש להשלים את הגדרות האפליקציה כדי להתחיל להשתמש ביומן דיווח השעות.'
+                            : 'הגדרות האפליקציה טרם הושלמו. יש לפנות למנהל הלוח כדי להשלים את ההגדרות.'}
                     </p>
                 </div>
-                
+
                 <div className={styles.footer}>
-                    <button 
+                    <button
                         className={`${styles.button} ${styles.cancelBtn}`}
                         onClick={onClose}
                     >
-                        אחר כך
+                        {isOwner ? 'אחר כך' : 'סגור'}
                     </button>
-                    <button 
-                        className={`${styles.button} ${styles.settingsBtn}`}
-                        onClick={() => {
-                            onClose();
-                            onOpenSettings();
-                        }}
-                    >
-                        <Settings size={18} />
-                        פתח הגדרות
-                    </button>
+                    {isOwner && (
+                        <button
+                            className={`${styles.button} ${styles.settingsBtn}`}
+                            onClick={() => {
+                                onClose();
+                                onOpenSettings();
+                            }}
+                        >
+                            <Settings size={18} />
+                            פתח הגדרות
+                        </button>
+                    )}
                 </div>
             </div>
         </div>
