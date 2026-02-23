@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, Layout, Database, Filter, ChevronLeft, Save, AlertTriangle } from 'lucide-react';
-import { useSettings, STRUCTURE_MODES } from '../../contexts/SettingsContext';
+import { X, Layout, Database, Settings, Calendar, ChevronLeft, Save, AlertTriangle } from 'lucide-react';
+import { useSettings } from '../../contexts/SettingsContext';
 import StructureTab from './StructureTab';
 import MappingTab from './MappingTab';
-import FiltersTab from './FiltersTab';
+import AdditionalTab from './AdditionalTab';
+import CalendarTab from './CalendarTab';
 import { useSettingsValidation } from './useSettingsValidation';
 import { useToast } from '../../hooks/useToast';
 import { ToastContainer } from '../Toast';
@@ -14,23 +15,22 @@ import styles from './SettingsDialog.module.css';
 
 // מיפוי מפתחות שגיאה לטאבים
 const ERROR_KEY_TO_TAB = {
-  // Structure tab
-  connectedBoardId: 'structure',
-  peopleColumnIds: 'structure',
-  currentBoard: 'structure',
-  timeReportingBoardId: 'structure',
-  tasksBoardId: 'structure',
-  tasksProjectColumnId: 'structure',
-  projectStatusColumnId: 'structure',
-  projectActiveStatusValues: 'structure',
-  taskStatusColumnId: 'structure',
-  taskActiveStatusValues: 'structure',
-  assignmentsBoardId: 'structure',
-  assignmentPersonColumnId: 'structure',
-  assignmentStartDateColumnId: 'structure',
-  assignmentEndDateColumnId: 'structure',
-  assignmentProjectLinkColumnId: 'structure',
-  // Mapping tab
+  // Mapping tab - לוחות ועמודות
+  connectedBoardId: 'mapping',
+  peopleColumnIds: 'mapping',
+  currentBoard: 'mapping',
+  timeReportingBoardId: 'mapping',
+  tasksBoardId: 'mapping',
+  tasksProjectColumnId: 'mapping',
+  projectStatusColumnId: 'mapping',
+  projectActiveStatusValues: 'mapping',
+  taskStatusColumnId: 'mapping',
+  taskActiveStatusValues: 'mapping',
+  assignmentsBoardId: 'mapping',
+  assignmentPersonColumnId: 'mapping',
+  assignmentStartDateColumnId: 'mapping',
+  assignmentEndDateColumnId: 'mapping',
+  assignmentProjectLinkColumnId: 'mapping',
   dateColumnId: 'mapping',
   endTimeColumnId: 'mapping',
   durationColumnId: 'mapping',
@@ -42,32 +42,38 @@ const ERROR_KEY_TO_TAB = {
   stageColumnId: 'mapping',
   eventTypeMapping: 'mapping',
   assignmentColumnId: 'mapping',
+  // Additional tab - אישור מנהל
+  approvalStatusColumnId: 'additional',
+  approvalStatusMapping: 'additional',
 };
+
+// סדר הטאבים לניווט
+const TAB_ORDER = ['structure', 'mapping', 'additional', 'calendar'];
 
 /**
  * דיאלוג הגדרות ראשי
- * מחולק לשני טאבים: מבנה הדיווח ומיפוי נתונים
+ * מחולק ל-4 טאבים: מבנה דיווח, מיפוי נתונים, הגדרות נוספות, הגדרות יומן
  */
 export default function SettingsDialog({ monday, onClose, context }) {
   const { customSettings, updateSettings } = useSettings();
   const { showErrorWithDetails, showSuccess, toasts, removeToast, errorDetailsModal, openErrorDetailsModal, closeErrorDetailsModal } = useToast();
-  
+
   // State - טאב נוכחי
   const [activeTab, setActiveTab] = useState('structure');
-  
+
   // State - הגדרות זמניות (עד לשמירה)
   const [tempSettings, setTempSettings] = useState({ ...customSettings });
-  
+
   // State - רשימת לוחות
   const [boards, setBoards] = useState([]);
   const [loadingBoards, setLoadingBoards] = useState(false);
-  
+
   // State - דיאלוג אישור שמירה חלקית
   const [partialSaveDialog, setPartialSaveDialog] = useState({
     isOpen: false,
     message: ''
   });
-  
+
   // Validation
   const {
     errors,
@@ -77,7 +83,7 @@ export default function SettingsDialog({ monday, onClose, context }) {
 
   // חישוב מספר שגיאות לכל טאב
   const tabErrorCounts = useMemo(() => {
-    const counts = { structure: 0, mapping: 0, filters: 0 };
+    const counts = { structure: 0, mapping: 0, additional: 0, calendar: 0 };
     for (const key of Object.keys(errors)) {
       const tab = ERROR_KEY_TO_TAB[key];
       if (tab) counts[tab]++;
@@ -123,21 +129,34 @@ export default function SettingsDialog({ monday, onClose, context }) {
 
   // מעבר לטאב הבא
   const handleNextTab = () => {
-    if (activeTab === 'structure') {
-      setActiveTab('mapping');
-    } else if (activeTab === 'mapping') {
-      setActiveTab('filters');
+    const currentIndex = TAB_ORDER.indexOf(activeTab);
+    if (currentIndex < TAB_ORDER.length - 1) {
+      setActiveTab(TAB_ORDER[currentIndex + 1]);
     }
   };
 
   // חזרה לטאב הקודם
   const handlePrevTab = () => {
-    if (activeTab === 'mapping') {
-      setActiveTab('structure');
-    } else if (activeTab === 'filters') {
-      setActiveTab('mapping');
+    const currentIndex = TAB_ORDER.indexOf(activeTab);
+    if (currentIndex > 0) {
+      setActiveTab(TAB_ORDER[currentIndex - 1]);
     }
   };
+
+  const currentTabIndex = TAB_ORDER.indexOf(activeTab);
+  const isFirstTab = currentTabIndex === 0;
+  const isLastTab = currentTabIndex === TAB_ORDER.length - 1;
+
+  // שמות הטאבים לניווט
+  const TAB_LABELS = {
+    structure: 'מבנה דיווח',
+    mapping: 'מיפוי נתונים',
+    additional: 'הגדרות נוספות',
+    calendar: 'הגדרות יומן'
+  };
+
+  const nextTabLabel = !isLastTab ? TAB_LABELS[TAB_ORDER[currentTabIndex + 1]] : null;
+  const prevTabLabel = !isFirstTab ? TAB_LABELS[TAB_ORDER[currentTabIndex - 1]] : null;
 
   // שמירה סופית
   const handleSave = async () => {
@@ -150,14 +169,14 @@ export default function SettingsDialog({ monday, onClose, context }) {
       });
       return;
     }
-    
+
     await performSave();
   };
 
   // ביצוע השמירה בפועל
   const performSave = async () => {
     logger.functionStart('SettingsDialog.performSave', { tempSettings });
-    
+
     const success = await updateSettings(tempSettings);
 
     if (success) {
@@ -166,7 +185,7 @@ export default function SettingsDialog({ monday, onClose, context }) {
     } else {
       showErrorWithDetails(new Error('שגיאה בשמירת ההגדרות'), { functionName: 'handleSave' });
     }
-    
+
     setPartialSaveDialog({ isOpen: false, message: '' });
   };
 
@@ -186,7 +205,7 @@ export default function SettingsDialog({ monday, onClose, context }) {
       className={`${styles.tab} ${isActive ? styles.tabActive : ''}`}
       onClick={onClick}
     >
-      <Icon size={18} />
+      <Icon size={16} />
       {label}
       {errorCount > 0 && (
         <span className={styles.tabBadge}>{errorCount}</span>
@@ -199,7 +218,7 @@ export default function SettingsDialog({ monday, onClose, context }) {
       <div className={styles.modal}>
         {/* Header */}
         <div className={styles.header}>
-          <button 
+          <button
             className={styles.closeButton}
             onClick={onClose}
           >
@@ -214,7 +233,7 @@ export default function SettingsDialog({ monday, onClose, context }) {
         <div className={styles.tabs}>
           <TabHeader
             id="structure"
-            label="1. מבנה הדיווח"
+            label="1. מבנה דיווח"
             icon={Layout}
             isActive={activeTab === 'structure'}
             onClick={() => setActiveTab('structure')}
@@ -229,12 +248,20 @@ export default function SettingsDialog({ monday, onClose, context }) {
             errorCount={tabErrorCounts.mapping}
           />
           <TabHeader
-            id="filters"
-            label="3. מקורות פילטר"
-            icon={Filter}
-            isActive={activeTab === 'filters'}
-            onClick={() => setActiveTab('filters')}
-            errorCount={tabErrorCounts.filters}
+            id="additional"
+            label="3. הגדרות נוספות"
+            icon={Settings}
+            isActive={activeTab === 'additional'}
+            onClick={() => setActiveTab('additional')}
+            errorCount={tabErrorCounts.additional}
+          />
+          <TabHeader
+            id="calendar"
+            label="4. הגדרות יומן"
+            icon={Calendar}
+            isActive={activeTab === 'calendar'}
+            onClick={() => setActiveTab('calendar')}
+            errorCount={tabErrorCounts.calendar}
           />
         </div>
 
@@ -244,7 +271,6 @@ export default function SettingsDialog({ monday, onClose, context }) {
             <StructureTab
               settings={tempSettings}
               onChange={handleSettingsChange}
-              monday={monday}
             />
           )}
 
@@ -260,82 +286,77 @@ export default function SettingsDialog({ monday, onClose, context }) {
             />
           )}
 
-          {activeTab === 'filters' && (
-            <FiltersTab
+          {activeTab === 'additional' && (
+            <AdditionalTab
               settings={tempSettings}
               onChange={handleSettingsChange}
               monday={monday}
+              context={context}
               boards={boards}
               loadingBoards={loadingBoards}
               showErrorWithDetails={showErrorWithDetails}
+            />
+          )}
+
+          {activeTab === 'calendar' && (
+            <CalendarTab
+              settings={tempSettings}
+              onChange={handleSettingsChange}
             />
           )}
         </div>
 
         {/* Footer */}
         <div className={styles.footer}>
-          {activeTab === 'structure' && (
-            <>
-              <button
-                className={styles.buttonSecondary}
-                onClick={onClose}
-              >
-                ביטול
-              </button>
-              <button
-                className={styles.buttonPrimary}
-                onClick={handleNextTab}
-              >
-                הבא: מיפוי נתונים
-                <ChevronLeft size={18} />
-              </button>
-            </>
+          {customSettings.lastModifiedAt && (
+            <span className={styles.modifiedInfo}>
+              שונה לאחרונה{customSettings.lastModifiedBy?.name ? ` ע"י ${customSettings.lastModifiedBy.name}` : ''}
+              {' '}בתאריך {new Date(customSettings.lastModifiedAt).toLocaleDateString('he-IL')}
+              {' '}בשעה {new Date(customSettings.lastModifiedAt).toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          )}
+          {isFirstTab ? (
+            <button
+              className={styles.buttonSecondary}
+              onClick={onClose}
+            >
+              ביטול
+            </button>
+          ) : (
+            <button
+              className={styles.buttonSecondary}
+              onClick={handlePrevTab}
+            >
+              חזרה: {prevTabLabel}
+            </button>
           )}
 
-          {activeTab === 'mapping' && (
-            <>
-              <button
-                className={styles.buttonSecondary}
-                onClick={handlePrevTab}
-              >
-                חזרה למבנה
-              </button>
-              <button
-                className={styles.buttonPrimary}
-                onClick={handleNextTab}
-              >
-                הבא: מקורות פילטר
-                <ChevronLeft size={18} />
-              </button>
-            </>
-          )}
-
-          {activeTab === 'filters' && (
-            <>
-              <button
-                className={styles.buttonSecondary}
-                onClick={handlePrevTab}
-              >
-                חזרה למיפוי
-              </button>
-              <button
-                className={`${styles.buttonPrimary} ${styles.buttonSave}`}
-                onClick={handleSave}
-              >
-                <Save size={18} />
-                שמור הגדרות
-              </button>
-            </>
+          {isLastTab ? (
+            <button
+              className={`${styles.buttonPrimary} ${styles.buttonSave}`}
+              onClick={handleSave}
+            >
+              <Save size={18} />
+              שמור הגדרות
+            </button>
+          ) : (
+            <button
+              className={styles.buttonPrimary}
+              onClick={handleNextTab}
+            >
+              הבא: {nextTabLabel}
+              <ChevronLeft size={18} />
+            </button>
           )}
         </div>
       </div>
 
       {/* Toast Container */}
       <ToastContainer toasts={toasts} onRemove={removeToast} onShowErrorDetails={openErrorDetailsModal} />
-      
+
       {/* Error Details Modal */}
       <ErrorDetailsModal isOpen={!!errorDetailsModal} onClose={closeErrorDetailsModal} errorDetails={errorDetailsModal} />
-      
+
       {/* Partial Save Confirmation Dialog */}
       <ConfirmDialog
         isOpen={partialSaveDialog.isOpen}

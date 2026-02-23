@@ -284,3 +284,181 @@
   border-color: #2563eb;
   box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
 }
+
+/* === הגדרת שדות דיווח === */
+
+.fieldConfigTable {
+  margin-top: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.fieldConfigHeader {
+  display: grid;
+  grid-template-columns: 1fr 60px 60px 60px;
+  padding: 10px 14px;
+  background-color: #f3f4f6;
+  font-size: 13px;
+  font-weight: 600;
+  color: #6b7280;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.fieldConfigHeaderLabel {
+  text-align: right;
+}
+
+.fieldConfigHeaderOption {
+  text-align: center;
+}
+
+.fieldConfigRow {
+  display: grid;
+  grid-template-columns: 1fr 60px 60px 60px;
+  align-items: center;
+  padding: 12px 14px;
+  border-bottom: 1px solid #f3f4f6;
+  transition: background-color 0.15s;
+}
+
+.fieldConfigRow:last-child {
+  border-bottom: none;
+}
+
+.fieldConfigRow:hover {
+  background-color: #f9fafb;
+}
+
+.fieldConfigLabel {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.fieldConfigLabel > span:first-child {
+  font-size: 14px;
+  font-weight: 500;
+  color: #111827;
+}
+
+.fieldConfigDesc {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.fieldConfigRadio {
+  display: flex;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.fieldConfigRadio input[type="radio"] {
+  width: 18px;
+  height: 18px;
+  accent-color: #2563eb;
+  cursor: pointer;
+}
+
+.fieldConfigRowDisabled {
+  opacity: 0.6;
+  pointer-events: none;
+  background-color: #f9fafb;
+}
+
+.fieldConfigToggleRow {
+  padding: 10px 14px;
+  border-bottom: 1px solid #f3f4f6;
+  background-color: #f0f4ff;
+}
+
+.fieldConfigToggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.fieldConfigToggle input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: #2563eb;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.fieldConfigToggleContent {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.fieldConfigToggleTitle {
+  font-size: 14px;
+  font-weight: 500;
+  color: #111827;
+}
+
+/* === ולידציה מתקדמת (XOR) === */
+
+.advancedToggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.advancedToggle input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: #2563eb;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.advancedToggleContent {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.advancedToggleTitle {
+  font-size: 14px;
+  font-weight: 500;
+  color: #111827;
+}
+
+.xorSelectors {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 12px 14px;
+  background-color: #f9fafb;
+  border-radius: 8px;
+}
+
+.xorSelect {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+  direction: rtl;
+  outline: none;
+  background: #fff;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.xorSelect:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+
+.xorOrLabel {
+  font-size: 14px;
+  font-weight: 600;
+  color: #6b7280;
+  flex-shrink: 0;
+}

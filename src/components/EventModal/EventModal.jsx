@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { useSettings, STRUCTURE_MODES } from '../../contexts/SettingsContext';
+import { useSettings, FIELD_MODES, TOGGLE_MODES, DEFAULT_FIELD_CONFIG } from '../../contexts/SettingsContext';
 import { useMobile } from '../../contexts/MondayContext';
 import { useProjects } from '../../hooks/useProjects';
 import { useTasks } from '../../hooks/useTasks';
@@ -8,6 +8,7 @@ import { useNonBillableOptions } from '../../hooks/useNonBillableOptions';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { getEffectiveBoardId } from '../../utils/boardIdResolver';
 import { getNonBillableIndexes, getLabelText } from '../../utils/eventTypeMapping';
+import { getXorExemptFields, getXorErrorMessage } from '../../utils/xorValidation';
 import TaskSelect from '../TaskSelect';
 import ConfirmDialog from '../ConfirmDialog';
 import styles from './EventModal.module.css';
@@ -258,30 +259,53 @@ export default function EventModal({
     const modalRef = useFocusTrap(isOpen && !showCloseConfirm, handleCloseAttempt);
 
     const handleCreate = async () => {
-        const { structureMode } = customSettings;
+        const fieldConfig = customSettings.fieldConfig || DEFAULT_FIELD_CONFIG;
         const errors = {};
 
-        // לא לחיוב - נדרש רק סוג דיווח
+        // חישוב פטורי XOR
+        const fieldValues = {
+            task: selectedTask,
+            stage: selectedStage,
+            nonBillableType: selectedNonBillableType,
+            notes: notes?.trim()
+        };
+        const xorExempt = getXorExemptFields(customSettings.advancedValidation, fieldValues);
+
+        // לא לחיוב - נדרש רק סוג דיווח (אם הטוגל פעיל)
         if (!isBillable) {
-            if (!selectedNonBillableType) {
+            if (fieldConfig.nonBillableType === FIELD_MODES.REQUIRED &&
+                !selectedNonBillableType && !xorExempt.has('nonBillableType')) {
                 errors.nonBillableType = 'יש לבחור סוג דיווח לא לחיוב';
             }
         }
 
-        // לחיוב
+        // לחיוב — פרויקט תמיד חובה
         if (isBillable) {
             if (!selectedItem) {
                 errors.project = 'יש לבחור פרויקט';
             }
 
-            if (structureMode === STRUCTURE_MODES.PROJECT_WITH_TASKS &&
-                customSettings.taskColumnId && !selectedTask) {
+            if (fieldConfig.task === FIELD_MODES.REQUIRED &&
+                customSettings.taskColumnId && !selectedTask && !xorExempt.has('task')) {
                 errors.task = 'יש לבחור משימה';
             }
 
-            if (structureMode === STRUCTURE_MODES.PROJECT_WITH_STAGE &&
-                customSettings.stageColumnId && !selectedStage) {
+            if (fieldConfig.stage === FIELD_MODES.REQUIRED &&
+                customSettings.stageColumnId && !selectedStage && !xorExempt.has('stage')) {
                 errors.stage = 'יש לבחור סיווג';
+            }
+        }
+
+        // הודעת שגיאה ייחודית כש-2 שדות XOR ריקים
+        if (xorExempt.size === 0 && Object.keys(errors).length > 0) {
+            const xorMsg = getXorErrorMessage(customSettings.advancedValidation);
+            if (xorMsg) {
+                const [fieldA, fieldB] = customSettings.advancedValidation.xorFields;
+                if (errors[fieldA] || errors[fieldB]) {
+                    // החלפת הודעות השגיאה הרגילות בהודעת XOR
+                    if (errors[fieldA]) errors[fieldA] = xorMsg;
+                    if (errors[fieldB]) errors[fieldB] = xorMsg;
+                }
             }
         }
 
@@ -298,21 +322,18 @@ export default function EventModal({
         const taskName = task?.name || 'ללא משימה';
         const projectName = selectedItem?.name;
         
-        // קביעת כותרת האירוע לפי מבנה הדיווח (structureMode כבר מוגדר למעלה)
+        // קביעת כותרת האירוע לפי fieldConfig
         let eventTitle;
         if (isBillable) {
-            // לחיוב - לפי מבנה נבחר:
-            // PROJECT_ONLY: "שם הפרויקט"
-            // PROJECT_WITH_STAGE: "שם הפרויקט - סיווג"
-            // PROJECT_WITH_TASKS: "שם הפרויקט - שם המשימה"
-            if (structureMode === STRUCTURE_MODES.PROJECT_ONLY) {
-                eventTitle = projectName || 'ללא פרויקט';
-            } else if (structureMode === STRUCTURE_MODES.PROJECT_WITH_STAGE) {
-                eventTitle = selectedStage ? `${projectName} - ${selectedStage}` : projectName;
-            } else if (structureMode === STRUCTURE_MODES.PROJECT_WITH_TASKS) {
+            // לחיוב - לפי שדות פעילים:
+            // task פעיל: "שם הפרויקט - שם המשימה"
+            // stage פעיל: "שם הפרויקט - סיווג"
+            // שניהם מוסתרים: "שם הפרויקט"
+            if (fieldConfig.task !== FIELD_MODES.HIDDEN && selectedTask) {
                 eventTitle = projectName ? `${projectName} - ${taskName}` : taskName;
+            } else if (fieldConfig.stage !== FIELD_MODES.HIDDEN && selectedStage) {
+                eventTitle = selectedStage ? `${projectName} - ${selectedStage}` : projectName;
             } else {
-                // ברירת מחדל
                 eventTitle = projectName || 'ללא פרויקט';
             }
         } else {
@@ -355,29 +376,41 @@ export default function EventModal({
     const isFutureEvent = isConvertMode && pendingSlot?.end && pendingSlot.end > new Date();
 
     const isFormValid = () => {
+        const fieldConfig = customSettings.fieldConfig || DEFAULT_FIELD_CONFIG;
+
         // במצב המרה - אירוע עתידי חוסם שמירה
         if (isFutureEvent) {
             return false;
         }
 
-        // לא לחיוב - נדרש רק סוג אירוע
+        // חישוב פטורי XOR
+        const fieldValues = {
+            task: selectedTask,
+            stage: selectedStage,
+            nonBillableType: selectedNonBillableType,
+            notes: notes?.trim()
+        };
+        const xorExempt = getXorExemptFields(customSettings.advancedValidation, fieldValues);
+
+        // לא לחיוב - נדרש סוג אירוע רק אם חובה
         if (!isBillable) {
-            return !!selectedNonBillableType;
+            if (fieldConfig.nonBillableType === FIELD_MODES.REQUIRED) {
+                return !!selectedNonBillableType || xorExempt.has('nonBillableType');
+            }
+            return true;
         }
         // לחיוב - פרויקט חובה תמיד
         if (!selectedItem) return false;
 
-        const { structureMode } = customSettings;
-
-        // במצב TASKS - משימה חובה
-        if (structureMode === STRUCTURE_MODES.PROJECT_WITH_TASKS &&
-            customSettings.taskColumnId && !selectedTask) {
+        // משימה חובה — רק אם required
+        if (fieldConfig.task === FIELD_MODES.REQUIRED &&
+            customSettings.taskColumnId && !selectedTask && !xorExempt.has('task')) {
             return false;
         }
 
-        // במצב STAGE - סיווג חובה
-        if (structureMode === STRUCTURE_MODES.PROJECT_WITH_STAGE &&
-            customSettings.stageColumnId && !selectedStage) {
+        // סיווג חובה — רק אם required
+        if (fieldConfig.stage === FIELD_MODES.REQUIRED &&
+            customSettings.stageColumnId && !selectedStage && !xorExempt.has('stage')) {
             return false;
         }
 
@@ -387,12 +420,16 @@ export default function EventModal({
     const formIsValid = isFormValid();
 
     // האם להציג את שדה המלל החופשי (Notes)
-    const showNotesField = customSettings.enableNotes && (
+    const fcNotes = (customSettings.fieldConfig || DEFAULT_FIELD_CONFIG);
+    const notesInXor = customSettings.advancedValidation?.enabled &&
+        (customSettings.advancedValidation.xorFields || []).includes('notes');
+    const showNotesField = fcNotes.notes !== FIELD_MODES.HIDDEN && (
         !isBillable ? !!selectedNonBillableType : (
             selectedItem && (
-                customSettings.structureMode === STRUCTURE_MODES.PROJECT_ONLY ||
-                (customSettings.structureMode === STRUCTURE_MODES.PROJECT_WITH_TASKS && selectedTask) ||
-                (customSettings.structureMode === STRUCTURE_MODES.PROJECT_WITH_STAGE && selectedStage)
+                notesInXor ||
+                (fcNotes.task === FIELD_MODES.HIDDEN && fcNotes.stage === FIELD_MODES.HIDDEN) ||
+                (fcNotes.task !== FIELD_MODES.HIDDEN && selectedTask) ||
+                (fcNotes.stage !== FIELD_MODES.HIDDEN && selectedStage)
             )
         )
     );
@@ -530,11 +567,11 @@ export default function EventModal({
                         </div>
                     )}
 
-                    {/* משימה - מוצג רק במצב TASKS */}
+                    {/* משימה - מוצג רק אם לא מוסתר */}
                     {isBillable && customSettings.taskColumnId && selectedItem &&
-                     customSettings.structureMode === STRUCTURE_MODES.PROJECT_WITH_TASKS && (
+                     (customSettings.fieldConfig || DEFAULT_FIELD_CONFIG).task !== FIELD_MODES.HIDDEN && (
                         <div className={`${styles.formGroup} ${styles.fixedSection} ${fieldErrors.task ? styles.formGroupError : ''}`} data-field="task">
-                            <label className={styles.label}>משימה <span className={styles.required}>*</span></label>
+                            <label className={styles.label}>משימה {(customSettings.fieldConfig || DEFAULT_FIELD_CONFIG).task === FIELD_MODES.REQUIRED && <span className={styles.required}>*</span>}</label>
                             <div className={styles.productSection}>
                                 <TaskSelect
                                     products={selectedItemTasks}
@@ -551,11 +588,11 @@ export default function EventModal({
                         </div>
                     )}
 
-                    {/* סיווג - מוצג רק במצב STAGE */}
+                    {/* סיווג - מוצג רק אם לא מוסתר */}
                     {isBillable && customSettings.stageColumnId && selectedItem &&
-                     customSettings.structureMode === STRUCTURE_MODES.PROJECT_WITH_STAGE && (
+                     (customSettings.fieldConfig || DEFAULT_FIELD_CONFIG).stage !== FIELD_MODES.HIDDEN && (
                         <div className={`${styles.formGroup} ${styles.fixedSection} ${fieldErrors.stage ? styles.formGroupError : ''}`} data-field="stage">
-                            <label className={styles.label}>סיווג <span className={styles.required}>*</span></label>
+                            <label className={styles.label}>סיווג {(customSettings.fieldConfig || DEFAULT_FIELD_CONFIG).stage === FIELD_MODES.REQUIRED && <span className={styles.required}>*</span>}</label>
                             {loadingStages ? (
                                 <div className={styles.loading}>טוען...</div>
                             ) : (
@@ -578,7 +615,7 @@ export default function EventModal({
                     {/* הערות/מלל חופשי - מוצג רק אם מופעל בהגדרות ורק אחרי בחירות רלוונטיות */}
                     {showNotesField && (
                         <div className={`${styles.formGroup} ${styles.fixedSection}`}>
-                            <label className={styles.label}>מלל חופשי</label>
+                            <label className={styles.label}>מלל חופשי {(customSettings.fieldConfig || DEFAULT_FIELD_CONFIG).notes === FIELD_MODES.REQUIRED && <span className={styles.required}>*</span>}</label>
                             <input
                                 type="text"
                                 className={styles.input}
@@ -601,15 +638,9 @@ export default function EventModal({
                         <>
                             <button
                                 className={`${styles.btn} ${styles.btnApprove}`}
-                                onClick={() => { if (onApprove) onApprove(eventToEdit, 'billable'); onClose(); }}
+                                onClick={() => { if (onApprove) onApprove(eventToEdit); onClose(); }}
                             >
-                                אשר - לחיוב
-                            </button>
-                            <button
-                                className={`${styles.btn} ${styles.btnApproveUnbillable}`}
-                                onClick={() => { if (onApprove) onApprove(eventToEdit, 'unbillable'); onClose(); }}
-                            >
-                                אשר - לא לחיוב
+                                אשר
                             </button>
                             <button
                                 className={`${styles.btn} ${styles.btnReject}`}
