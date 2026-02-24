@@ -71,6 +71,10 @@ export default function EventModal({
     const [selectedStage, setSelectedStage] = useState(null);
     const [isBillable, setIsBillable] = useState(true);
     const [selectedNonBillableType, setSelectedNonBillableType] = useState(null);
+
+    // האם להציג טוגל לחיוב/לא לחיוב
+    const fieldConfig = customSettings.fieldConfig || DEFAULT_FIELD_CONFIG;
+    const showBillableToggle = fieldConfig.billableToggle !== TOGGLE_MODES.HIDDEN;
     const [isCreatingTask, setIsCreatingTask] = useState(false);
     // State נפרד למשימות של הפרויקט הנבחר
     const [selectedItemTasks, setSelectedItemTasks] = useState([]);
@@ -108,6 +112,14 @@ export default function EventModal({
         customSettings.nonBillableStatusColumnId
     );
     
+    // כשהטוגל מוסתר - כל הדיווחים לחיוב אוטומטית
+    useEffect(() => {
+        if (!showBillableToggle) {
+            setIsBillable(true);
+            setSelectedNonBillableType(null);
+        }
+    }, [showBillableToggle]);
+
     // Reset state when dialog opens
     useEffect(() => {
         if (isOpen) {
@@ -494,6 +506,7 @@ export default function EventModal({
                     {/* כל שדות הטופס מוסתרים באירוע עתידי */}
                     {!isFutureEvent && (<>
                     {/* בחירת מצב דיווח - לחיוב / לא לחיוב */}
+                    {showBillableToggle && (
                     <div className={`${styles.modeSelector} ${styles.fixedSection}`}>
                         <button
                             className={`${styles.modeButton} ${isBillable ? styles.modeButtonActive : ''}`}
@@ -508,8 +521,9 @@ export default function EventModal({
                             לא לחיוב
                         </button>
                     </div>
+                    )}
 
-                    {!isBillable && customSettings.nonBillableStatusColumnId && (
+                    {showBillableToggle && !isBillable && customSettings.nonBillableStatusColumnId && (
                         <div className={`${styles.formGroup} ${styles.fixedSection} ${fieldErrors.nonBillableType ? styles.formGroupError : ''}`} data-field="nonBillableType">
                             <label className={styles.label}>סוג דיווח לא לחיוב <span className={styles.required}>*</span></label>
                             {loadingNonBillable ? (

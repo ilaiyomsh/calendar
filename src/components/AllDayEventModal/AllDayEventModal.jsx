@@ -931,7 +931,8 @@ export default function AllDayEventModal({
                     ))}
                 </div>
                 <div className={styles.sidebar}>
-                    {/* כפתור לא לחיוב */}
+                    {/* כפתור לא לחיוב - מוצג רק כשהטוגל פעיל */}
+                    {(customSettings.fieldConfig || DEFAULT_FIELD_CONFIG).billableToggle !== TOGGLE_MODES.HIDDEN && (
                     <div
                         className={styles.projectItem}
                         onClick={addNonBillableReportRow}
@@ -940,6 +941,7 @@ export default function AllDayEventModal({
                         <span>{nonBillableDisplayLabel}</span>
                         <Plus size={14} color="#0073ea" />
                     </div>
+                    )}
                     <input type="text" placeholder="חיפוש פרויקט..." className={styles.searchBox} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} autoFocus />
                     <div className={styles.projectList}>
                         {loadingProjects ? <div style={{ padding: '10px', color: '#999', fontSize: '0.8rem', textAlign: 'center' }}>טוען פרויקטים...</div> : filteredProjects.length > 0 ? (
