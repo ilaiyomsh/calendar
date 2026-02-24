@@ -118,7 +118,7 @@ function getRequiredSettings(fieldConfig, useAssignmentsMode = false) {
         required.optional.push('notesColumnId');
     }
 
-    // סוג לא לחיוב — לפי fieldConfig
+    // סיווג (לא לחיוב) — לפי fieldConfig
     if (fieldConfig.billableToggle === TOGGLE_MODES.VISIBLE &&
         fieldConfig.nonBillableType !== FIELD_MODES.HIDDEN) {
         required.optional.push('nonBillableStatusColumnId');
@@ -308,7 +308,7 @@ function getColumnSettingLabel(key) {
         taskColumnId: 'עמודת משימה',
         reporterColumnId: 'עמודת מדווח',
         eventTypeStatusColumnId: 'עמודת סוג דיווח',
-        nonBillableStatusColumnId: 'עמודת לא לחיוב',
+        nonBillableStatusColumnId: 'עמודת סיווג (לא לחיוב)',
         stageColumnId: 'עמודת סיווג',
         notesColumnId: 'עמודת הערות',
         tasksProjectColumnId: 'עמודת קישור פרויקט-משימות'
