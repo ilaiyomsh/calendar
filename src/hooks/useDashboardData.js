@@ -8,6 +8,7 @@ import { useSettings } from '../contexts/SettingsContext';
 import { getEffectiveBoardId } from '../utils/boardIdResolver';
 import { isAllDayIndex, isTemporaryIndex, isBillableIndex, getLabelText, getLabelColor } from '../utils/eventTypeMapping';
 import { toLocalDateFormat } from '../utils/dateFormatters';
+import { safeApi } from '../utils/mondayApi';
 import logger from '../utils/logger';
 
 /**
@@ -253,7 +254,7 @@ export const useDashboardData = (monday, context) => {
             let allDashboardEvents = [];
 
             // עמוד ראשון
-            const firstRes = await monday.api(firstPageQuery);
+            const firstRes = await safeApi(monday, 'useDashboardData:firstPage', firstPageQuery);
             if (controller.signal.aborted) return;
 
             const firstPage = firstRes.data?.boards?.[0]?.items_page;
@@ -282,7 +283,7 @@ export const useDashboardData = (monday, context) => {
                         ${itemsFragment}
                     }
                 }`;
-                const nextRes = await monday.api(nextQuery);
+                const nextRes = await safeApi(monday, 'useDashboardData:nextPage', nextQuery);
                 if (controller.signal.aborted) return;
 
                 const nextPage = nextRes.data?.next_items_page;

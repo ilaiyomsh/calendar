@@ -10,6 +10,7 @@ import { useToast } from '../../hooks/useToast';
 import { ToastContainer } from '../Toast';
 import ErrorDetailsModal from '../ErrorDetailsModal/ErrorDetailsModal';
 import ConfirmDialog from '../ConfirmDialog/ConfirmDialog';
+import { safeApi } from '../../utils/mondayApi';
 import logger from '../../utils/logger';
 import styles from './SettingsDialog.module.css';
 
@@ -107,7 +108,7 @@ export default function SettingsDialog({ monday, onClose, context }) {
     setLoadingBoards(true);
     try {
       const query = `query { boards(limit: 500) { id name type } }`;
-      const res = await monday.api(query);
+      const res = await safeApi(monday, 'SettingsDialog.fetchBoards', query);
       if (res.data?.boards) {
         const filteredBoards = res.data.boards
           .filter(board => board.type === 'board')

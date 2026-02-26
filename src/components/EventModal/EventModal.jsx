@@ -7,6 +7,8 @@ import { useStageOptions } from '../../hooks/useStageOptions';
 import { useNonBillableOptions } from '../../hooks/useNonBillableOptions';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { getEffectiveBoardId } from '../../utils/boardIdResolver';
+import { safeApi } from '../../utils/mondayApi';
+import logger from '../../utils/logger';
 import { getNonBillableIndexes, getLabelText } from '../../utils/eventTypeMapping';
 import { getXorExemptFields, getXorErrorMessage } from '../../utils/xorValidation';
 import TaskSelect from '../TaskSelect';
@@ -91,8 +93,10 @@ export default function EventModal({
     useEffect(() => {
         if (monday) {
             // שליפת שם המשתמש הנוכחי
-            monday.api(`query { me { name } }`).then(res => {
+            safeApi(monday, 'EventModal:fetchUserName', `query { me { name } }`).then(res => {
                 setReporterName(res.data?.me?.name || '');
+            }).catch(err => {
+                logger.error('EventModal', 'Error fetching user name', err);
             });
         }
     }, [monday]);

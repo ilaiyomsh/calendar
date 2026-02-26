@@ -4,6 +4,7 @@ import { getEffectiveBoardId } from '../utils/boardIdResolver';
 import { getCategory, isTemporaryIndex, isAllDayIndex, getLabelText } from '../utils/eventTypeMapping';
 import { parseStatusColumnLabels } from '../utils/eventTypeValidation';
 import { toLocalDateFormat } from '../utils/dateFormatters';
+import { safeApi } from '../utils/mondayApi';
 import logger from '../utils/logger';
 
 /**
@@ -104,8 +105,8 @@ export const useMonthlyHours = (monday, context, viewRange, calendarView) => {
             }`;
 
             const [colorsRes, firstPageRes] = await Promise.all([
-                monday.api(colorsQuery),
-                monday.api(firstPageQuery)
+                safeApi(monday, 'useMonthlyHours:colors', colorsQuery),
+                safeApi(monday, 'useMonthlyHours:firstPage', firstPageQuery)
             ]);
 
             if (fetchId !== fetchIdRef.current) return;
@@ -143,7 +144,7 @@ export const useMonthlyHours = (monday, context, viewRange, calendarView) => {
                         }
                     }`;
 
-                    const nextRes = await monday.api(nextQuery);
+                    const nextRes = await safeApi(monday, 'useMonthlyHours:nextPage', nextQuery);
                     if (fetchId !== fetchIdRef.current) return;
 
                     const nextPage = nextRes?.data?.next_items_page;

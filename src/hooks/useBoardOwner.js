@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { safeApi } from '../utils/mondayApi';
 import logger from '../utils/logger';
 
 /**
@@ -40,9 +41,7 @@ export const useBoardOwner = (monday) => {
                 }
             `;
             
-            logger.api('useBoardOwner.checkOwnerStatus', query);
-            const response = await monday.api(query);
-            logger.apiResponse('useBoardOwner.checkOwnerStatus', response);
+            const response = await safeApi(monday, 'useBoardOwner.checkOwnerStatus', query);
             
             if (response.data?.boards?.[0]?.owners) {
                 const owners = response.data.boards[0].owners;

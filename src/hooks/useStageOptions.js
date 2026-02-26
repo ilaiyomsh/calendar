@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { safeApi } from '../utils/mondayApi';
 import logger from '../utils/logger';
 
 /**
@@ -37,7 +38,7 @@ export const useStageOptions = (monday, boardId, columnId) => {
                     }
                 }`;
 
-                const res = await monday.api(query);
+                const res = await safeApi(monday, 'useStageOptions', query);
 
                 if (res.data?.boards?.[0]?.columns?.[0]) {
                     const column = res.data.boards[0].columns[0];

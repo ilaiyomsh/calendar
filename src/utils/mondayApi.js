@@ -8,6 +8,57 @@
 import logger from './logger';
 import { extractOperationName } from './errorHandler';
 
+// ============================================
+// ולידציית שאילתות GraphQL לפני שליחה
+// ============================================
+
+// רגקסים מוכנים מראש לזיהוי ערכים חשודים בשאילתות
+const SUSPICIOUS_PATTERNS = [
+    { regex: /ids:\s*\[\s*undefined\s*\]/gi, desc: 'ids: [undefined]' },
+    { regex: /ids:\s*\[\s*null\s*\]/gi, desc: 'ids: [null]' },
+    { regex: /ids:\s*\[\s*NaN\s*\]/gi, desc: 'ids: [NaN]' },
+    { regex: /ids:\s*\[\s*\]/g, desc: 'ids: [] (empty)' },
+    { regex: /"undefined"/g, desc: '"undefined" string value' },
+    { regex: /"null"/g, desc: '"null" string value' },
+    { regex: /"NaN"/g, desc: '"NaN" string value' },
+    { regex: /column_id:\s*""/g, desc: 'empty column_id' },
+    { regex: /board_id:\s*undefined/gi, desc: 'board_id: undefined' },
+    { regex: /board_id:\s*null/gi, desc: 'board_id: null' },
+    { regex: /board_id:\s*NaN/gi, desc: 'board_id: NaN' },
+    { regex: /item_id:\s*undefined/gi, desc: 'item_id: undefined' },
+    { regex: /item_id:\s*null/gi, desc: 'item_id: null' },
+    { regex: /item_id:\s*NaN/gi, desc: 'item_id: NaN' },
+];
+
+/**
+ * בדיקת שאילתת GraphQL לזיהוי ערכים חשודים
+ * @param {string} query - שאילתת GraphQL
+ * @returns {{ valid: boolean, warnings: string[] }}
+ */
+const validateQuery = (query) => {
+    if (!query || typeof query !== 'string') {
+        return { valid: false, warnings: ['Query is empty or not a string'] };
+    }
+
+    const warnings = [];
+    for (const { regex, desc } of SUSPICIOUS_PATTERNS) {
+        // Reset lastIndex for global regexes
+        regex.lastIndex = 0;
+        if (regex.test(query)) {
+            warnings.push(`Suspicious value detected: ${desc}`);
+        }
+    }
+
+    if (warnings.length > 0) {
+        logger.error('QueryValidation', `Query has ${warnings.length} warning(s)`, {
+            warnings,
+            queryPreview: query.substring(0, 300)
+        });
+    }
+
+    return { valid: warnings.length === 0, warnings };
+};
+
 /**
  * @typedef {Object} MondayItem
  * @property {string} id - מזהה האייטם
@@ -80,25 +131,44 @@ export class MondayApiError extends Error {
  * @returns {Promise<{response: object, duration: number}>}
  */
 const wrapMondayApiCall = async (functionName, apiRequest, apiCall) => {
-    const startTime = Date.now();
-    try {
-        const response = await apiCall();
-        const duration = Date.now() - startTime;
-        logger.apiResponse(functionName, response, duration);
+    // ולידציית שאילתה לפני שליחה
+    const queryWarnings = [];
+    if (apiRequest?.query) {
+        const { warnings } = validateQuery(apiRequest.query);
+        queryWarnings.push(...warnings);
+    }
 
-        if (response.errors?.length > 0) {
-            const firstError = response.errors[0];
+    const startTime = Date.now();
+    let rawResponse = null;
+    try {
+        rawResponse = await apiCall();
+        const duration = Date.now() - startTime;
+        logger.apiResponse(functionName, rawResponse, duration);
+
+        if (rawResponse.errors?.length > 0) {
+            const firstError = rawResponse.errors[0];
+            // לוג ברמת ERROR תמיד — כולל שאילתה ותשובה גולמית
+            logger.error('API', `${functionName} - GraphQL errors in response`, {
+                query: apiRequest?.query,
+                rawResponse,
+                errors: rawResponse.errors,
+                queryWarnings
+            });
             throw new MondayApiError(firstError.message || 'Unknown error', {
-                response,
+                response: rawResponse,
                 apiRequest,
                 errorCode: firstError.extensions?.code,
                 functionName,
                 duration
             });
         }
-        return { response, duration };
+        return { response: rawResponse, duration };
     } catch (error) {
-        logger.apiError(functionName, error);
+        logger.apiError(functionName, error, {
+            query: apiRequest?.query,
+            rawResponse,
+            queryWarnings
+        });
         if (error instanceof MondayApiError) throw error;
         throw new MondayApiError(error.message || 'Unknown error', {
             response: error.response,
@@ -107,6 +177,54 @@ const wrapMondayApiCall = async (functionName, apiRequest, apiCall) => {
             functionName,
             duration: Date.now() - startTime
         });
+    }
+};
+
+/**
+ * Drop-in replacement ל-monday.api() עם ולידציה ולוגים מובנים
+ * מחזירה את התשובה הגולמית (כמו monday.api), לא { response, duration }
+ * לא זורקת על GraphQL soft errors — רק מלוגגת אותם
+ *
+ * @param {Object} monday - Monday SDK instance
+ * @param {string} callerName - שם הפונקציה הקוראת (ללוגים)
+ * @param {string} query - שאילתת GraphQL
+ * @param {Object} [options] - אפשרויות נוספות
+ * @param {Object} [options.variables] - משתנים לשאילתה
+ * @returns {Promise<Object>} - התשובה הגולמית מה-API
+ */
+export const safeApi = async (monday, callerName, query, options = {}) => {
+    // ולידציית שאילתה
+    const { warnings: queryWarnings } = validateQuery(query);
+
+    logger.api(callerName, query, options.variables || null);
+    const startTime = Date.now();
+    let rawResponse = null;
+
+    try {
+        rawResponse = options.variables
+            ? await monday.api(query, { variables: options.variables })
+            : await monday.api(query);
+        const duration = Date.now() - startTime;
+        logger.apiResponse(callerName, rawResponse, duration);
+
+        // לוג GraphQL errors ברמת ERROR — אבל לא זורק
+        if (rawResponse?.errors?.length > 0) {
+            logger.error('API', `${callerName} - GraphQL errors in response`, {
+                query,
+                rawResponse,
+                errors: rawResponse.errors,
+                queryWarnings
+            });
+        }
+
+        return rawResponse;
+    } catch (error) {
+        logger.apiError(callerName, error, {
+            query,
+            rawResponse,
+            queryWarnings
+        });
+        throw error;
     }
 };
 
@@ -807,7 +925,7 @@ export const fetchConnectedBoardsFromColumn = async (monday, boardId, columnId) 
             }
         }`;
 
-        const boardsResponse = await monday.api(boardsQuery);
+        const boardsResponse = await safeApi(monday, 'fetchConnectedBoardsFromColumn:boards', boardsQuery);
         const boards = boardsResponse.data?.boards || [];
 
         logger.functionEnd('fetchConnectedBoardsFromColumn', { boardsCount: boards.length });
@@ -878,7 +996,7 @@ export const fetchUniquePeopleFromBoard = async (monday, boardId, columnId) => {
         }
     }`;
 
-    const usersResponse = await monday.api(usersQuery);
+    const usersResponse = await safeApi(monday, 'fetchUniquePeopleFromBoard:users', usersQuery);
     const users = usersResponse.data?.users || [];
 
     logger.functionEnd('fetchUniquePeopleFromBoard', { uniquePeopleCount: users.length });

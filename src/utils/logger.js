@@ -198,13 +198,28 @@ const logger = {
 
   /**
    * לוג מיוחד לקריאות API - שגיאה
+   * @param {string} functionName - שם הפונקציה
+   * @param {Error} error - אובייקט השגיאה
+   * @param {Object} [context] - מידע דיאגנוסטי נוסף
+   * @param {string} [context.query] - השאילתה שנשלחה
+   * @param {Object} [context.rawResponse] - התשובה הגולמית מה-API
+   * @param {string[]} [context.queryWarnings] - אזהרות ולידציה על השאילתה
    */
-  apiError: (functionName, error) => {
+  apiError: (functionName, error, context = null) => {
     const formatted = formatMessage('API', 'ERROR', `❌ ${functionName} - Request failed`);
     console.group(`%c${formatted}`, `color: ${COLORS.ERROR}; font-weight: bold`);
     console.error('Error:', error);
     if (error?.message) {
       console.error('Error message:', error.message);
+    }
+    if (context?.query) {
+      console.error('Query sent:', context.query);
+    }
+    if (context?.rawResponse) {
+      console.error('Raw response:', context.rawResponse);
+    }
+    if (context?.queryWarnings?.length > 0) {
+      console.error('Query warnings:', context.queryWarnings);
     }
     if (error?.stack) {
       console.error('Stack trace:', error.stack);

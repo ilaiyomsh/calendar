@@ -3,7 +3,7 @@ import { Briefcase, ListTodo, Table, ChevronDown, ChevronUp, AlertTriangle, Cale
 import SearchableSelect from './SearchableSelect';
 import MultiSelect from './MultiSelect';
 import { FIELD_MODES, TOGGLE_MODES, DEFAULT_FIELD_CONFIG } from '../../contexts/SettingsContext';
-import { fetchStatusColumnsFromBoard, parseStatusLabels, createEventTypeStatusColumn } from '../../utils/mondayApi';
+import { fetchStatusColumnsFromBoard, parseStatusLabels, createEventTypeStatusColumn, safeApi } from '../../utils/mondayApi';
 import { parseStatusColumnLabels } from '../../utils/eventTypeValidation';
 import { EVENT_CATEGORIES, CATEGORY_LABELS, UNMAPPED, UNMAPPED_LABEL, validateMapping, createLegacyMapping } from '../../utils/eventTypeMapping';
 import { getEffectiveBoardId } from '../../utils/boardIdResolver';
@@ -154,7 +154,7 @@ const MappingTab = ({
     setLoadingPeopleColumns(true);
     try {
       const query = `query { boards(ids: [${boardId}]) { columns { id title type } } }`;
-      const res = await monday.api(query);
+      const res = await safeApi(monday, 'MappingTab.fetchPeopleColumns', query);
       if (res.data?.boards?.[0]) {
         const cols = res.data.boards[0].columns
           .filter(col => col.type === 'people')
@@ -177,7 +177,7 @@ const MappingTab = ({
     setLoadingTasksColumns(true);
     try {
       const query = `query { boards(ids: [${boardId}]) { columns { id title type settings_str } } }`;
-      const res = await monday.api(query);
+      const res = await safeApi(monday, 'MappingTab.fetchProjectTasksColumns', query);
       if (res.data?.boards?.[0]) {
         const cols = res.data.boards[0].columns
           .filter(col => col.type === 'board_relation')
@@ -196,13 +196,13 @@ const MappingTab = ({
     if (!columnId || !boardId) return;
     try {
       const query = `query { boards(ids: [${boardId}]) { columns(ids: ["${columnId}"]) { settings_str } } }`;
-      const res = await monday.api(query);
+      const res = await safeApi(monday, 'MappingTab.extractTaskBoardsFromColumn', query);
       if (res.data?.boards?.[0]?.columns?.[0]) {
         const settings = JSON.parse(res.data.boards[0].columns[0].settings_str || '{}');
         const boardIds = settings.boardIds || [];
         if (boardIds.length > 0) {
           const boardsQuery = `query { boards(ids: [${boardIds.join(',')}]) { id name } }`;
-          const boardsRes = await monday.api(boardsQuery);
+          const boardsRes = await safeApi(monday, 'MappingTab.extractTaskBoardsFromColumn:boards', boardsQuery);
           if (boardsRes.data?.boards) {
             setTaskBoards(boardsRes.data.boards.map(b => ({ id: b.id, name: b.name })));
           }
@@ -221,10 +221,10 @@ const MappingTab = ({
     setLoadingCurrentBoardColumns(true);
     try {
       const query = `query { boards(ids: [${boardId}]) { columns { id title type settings_str } } }`;
-      const res = await monday.api(query);
+      const res = await safeApi(monday, 'MappingTab.fetchCurrentBoardColumns', query);
       if (res.data?.boards?.[0]) {
         const columns = res.data.boards[0].columns;
-        
+
         setDateColumns(columns.filter(col => col.type === 'date').map(col => ({ id: col.id, name: col.title })));
         setDurationColumns(columns.filter(col => col.type === 'numbers').map(col => ({ id: col.id, name: col.title })));
         setReporterColumns(columns.filter(col => col.type === 'people').map(col => ({ id: col.id, name: col.title })));
@@ -379,7 +379,7 @@ const MappingTab = ({
     setLoadingAssignmentColumns(true);
     try {
       const query = `query { boards(ids: [${boardId}]) { columns { id title type settings_str } } }`;
-      const res = await monday.api(query);
+      const res = await safeApi(monday, 'MappingTab.fetchAssignmentBoardColumns', query);
       if (res.data?.boards?.[0]) {
         const columns = res.data.boards[0].columns;
         setAssignmentPersonColumns(columns.filter(col => col.type === 'people').map(col => ({ id: col.id, name: col.title })));

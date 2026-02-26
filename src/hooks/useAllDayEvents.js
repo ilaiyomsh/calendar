@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from 'react';
 import { useSettings, FIELD_MODES, DEFAULT_FIELD_CONFIG } from '../contexts/SettingsContext';
-import { createBoardItem, fetchCurrentUser } from '../utils/mondayApi';
+import { createBoardItem, fetchCurrentUser, safeApi } from '../utils/mondayApi';
 import { calculateEndDateFromDays, formatDurationForSave } from '../utils/durationUtils';
 import { toLocalDateFormat, toLocalTimeFormat } from '../utils/dateFormatters';
 import { getEffectiveBoardId } from '../utils/boardIdResolver';
@@ -151,7 +151,7 @@ export const useAllDayEvents = ({
                 }
             }`;
 
-            await monday.api(updateMutation);
+            await safeApi(monday, 'handleUpdateAllDayEvent:updateName', updateMutation);
 
             // עדכון עמודות נוספות (סטטוס) אם יש
             if (Object.keys(columnValues).length > 0) {
@@ -164,7 +164,7 @@ export const useAllDayEvents = ({
                         id
                     }
                 }`;
-                await monday.api(updateColumnsMutation);
+                await safeApi(monday, 'handleUpdateAllDayEvent:updateColumns', updateColumnsMutation);
             }
 
             // רענון האירועים מהשרת כדי לעדכן את ה-state

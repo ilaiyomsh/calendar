@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { useSettings } from '../contexts/SettingsContext';
-import { createBoardItem, deleteItem, updateItemColumnValues } from '../utils/mondayApi';
+import { createBoardItem, deleteItem, updateItemColumnValues, safeApi } from '../utils/mondayApi';
 import { getColumnIds, mapItemToEvent } from '../utils/mondayColumns';
 import { isAllDayEventType, parseDuration, calculateEndDateFromDays, calculateDaysDiff, formatDurationForSave } from '../utils/durationUtils';
 import { isTemporaryIndex, getTimedEventIndex, getLabelText, isBillableIndex } from '../utils/eventTypeMapping';
@@ -252,7 +252,7 @@ export const useMondayEvents = (monday, context) => {
                     }
                 }`;
 
-                return await monday.api(query);
+                return await safeApi(monday, 'useMondayEvents.loadEventsPage', query);
             };
 
             // לולאת pagination
@@ -905,13 +905,13 @@ export const useMondayEvents = (monday, context) => {
                 }
             }`;
 
-            const res = await monday.api(query);
+            const res = await safeApi(monday, 'fetchEmployeeHourlyRate', query);
             const items = res.data?.boards?.[0]?.items_page?.items;
 
             if (items && items.length > 0) {
                 const rateVal = items[0].column_values[0];
                 const rate = parseFloat(rateVal?.number) || 0;
-                
+
                 logger.functionEnd('fetchEmployeeHourlyRate', { rate });
                 return rate;
             }

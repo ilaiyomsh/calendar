@@ -16,6 +16,7 @@ import { getColumnIds } from './utils/mondayColumns';
 import { validateSettings } from './utils/settingsValidator';
 import { getEffectiveBoardId } from './utils/boardIdResolver';
 import { isEventLocked } from './utils/editLockUtils';
+import { safeApi } from './utils/mondayApi';
 import logger from './utils/logger';
 
 // רכיבים - Lazy loaded (מודלים ורכיבים כבדים שנטענים רק בעת שימוש)
@@ -461,7 +462,7 @@ export default function MondayCalendar({ monday, onOpenSettings, onSwitchToDashb
                         }
                     }
                 }`;
-                const res = await monday.api(query);
+                const res = await safeApi(monday, 'MondayCalendar:migrateEventTypeMapping', query);
                 const settingsStr = res?.data?.boards?.[0]?.columns?.[0]?.settings_str;
 
                 if (!settingsStr) {
@@ -508,7 +509,7 @@ export default function MondayCalendar({ monday, onOpenSettings, onSwitchToDashb
                         }
                     }
                 }`;
-                const res = await monday.api(query);
+                const res = await safeApi(monday, 'MondayCalendar:migrateLabelMetaColors', query);
                 const settingsStr = res?.data?.boards?.[0]?.columns?.[0]?.settings_str;
                 if (!settingsStr) return;
 

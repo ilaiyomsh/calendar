@@ -4,6 +4,7 @@
  */
 
 import logger from './logger';
+import { safeApi } from './mondayApi';
 import { STRUCTURE_MODES, FIELD_MODES, TOGGLE_MODES, DEFAULT_FIELD_CONFIG } from '../contexts/SettingsContext';
 
 /**
@@ -28,9 +29,9 @@ async function checkColumnsExist(monday, boardId, columnIds) {
             }
         }`;
 
-        const response = await monday.api(query);
+        const response = await safeApi(monday, 'settingsValidator.checkColumnsExist', query);
         const board = response?.data?.boards?.[0];
-        
+
         if (!board) {
             logger.warn('settingsValidator', `Board not found: ${boardId}`);
             return { valid: false, missingColumns: columnIds, boardNotFound: true };
@@ -69,7 +70,7 @@ async function checkBoardExists(monday, boardId) {
             }
         }`;
 
-        const response = await monday.api(query);
+        const response = await safeApi(monday, 'settingsValidator.checkBoardExists', query);
         const board = response?.data?.boards?.[0];
 
         return {

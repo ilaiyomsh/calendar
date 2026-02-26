@@ -5,7 +5,7 @@ import { parseStatusColumnLabels } from '../../utils/eventTypeValidation';
 import { APPROVAL_CATEGORY_LABELS, APPROVAL_UNMAPPED, APPROVAL_UNMAPPED_LABEL, validateApprovalMapping, createAutoApprovalMapping } from '../../utils/approvalMapping';
 import { EDIT_LOCK_MODES, EDIT_LOCK_LABELS } from '../../utils/editLockUtils';
 import { getEffectiveBoardId } from '../../utils/boardIdResolver';
-import { fetchConnectedBoardsFromColumn } from '../../utils/mondayApi';
+import { fetchConnectedBoardsFromColumn, safeApi } from '../../utils/mondayApi';
 import logger from '../../utils/logger';
 import sStyles from './StructureTab.module.css';
 import mStyles from './MappingTab.module.css';
@@ -110,7 +110,7 @@ const AdditionalTab = ({
     if (!monday) return;
     setLoadingUsers(true);
     try {
-      const res = await monday.api(`query { users(kind: non_guests) { id name photo_thumb_small } }`);
+      const res = await safeApi(monday, 'AdditionalTab.fetchAccountUsers', `query { users(kind: non_guests) { id name photo_thumb_small } }`);
       if (res.data?.users) {
         setAccountUsers(res.data.users.map(u => ({
           id: String(u.id),
@@ -130,7 +130,7 @@ const AdditionalTab = ({
     setLoadingStatusColumns(true);
     try {
       const query = `query { boards(ids: [${boardId}]) { columns { id title type settings_str } } }`;
-      const res = await monday.api(query);
+      const res = await safeApi(monday, 'AdditionalTab.fetchStatusColumns', query);
       if (res.data?.boards?.[0]) {
         const columns = res.data.boards[0].columns;
         const statusCols = columns
@@ -173,7 +173,7 @@ const AdditionalTab = ({
     setLoadingEmployeesColumns(true);
     try {
       const query = `query { boards(ids: [${boardId}]) { columns { id title type } } }`;
-      const res = await monday.api(query);
+      const res = await safeApi(monday, 'AdditionalTab.loadEmployeesPeopleColumns', query);
       if (res.data?.boards?.[0]) {
         const cols = res.data.boards[0].columns
           .filter(col => col.type === 'people')

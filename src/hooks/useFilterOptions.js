@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { safeApi } from '../utils/mondayApi';
 import logger from '../utils/logger';
 
 /**
@@ -83,7 +84,7 @@ export const useFilterOptions = (monday, effectiveBoardId, customSettings) => {
                 }
             }`;
 
-            const response = await monday.api(query);
+            const response = await safeApi(monday, 'useFilterOptions:loadReporters', query);
             const items = response.data?.boards?.[0]?.items_page?.items || [];
 
             // מיפוי עובדים - שם הפריט כשם התצוגה, ID מעמודת People
@@ -179,7 +180,7 @@ export const useFilterOptions = (monday, effectiveBoardId, customSettings) => {
                     }
                 }`;
 
-                const response = await monday.api(query);
+                const response = await safeApi(monday, 'useFilterOptions:loadProjects', query);
                 const page = response.data?.boards?.[0]?.items_page;
 
                 if (page?.items) {

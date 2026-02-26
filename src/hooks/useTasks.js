@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
 import mondaySdk from 'monday-sdk-js';
 import { useSettings } from '../contexts/SettingsContext';
-import { fetchItemsStatus } from '../utils/mondayApi';
+import { fetchItemsStatus, safeApi } from '../utils/mondayApi';
 import logger from '../utils/logger';
 
 const monday = mondaySdk();
@@ -66,13 +66,7 @@ export const useTasks = () => {
                 }
             }`;
 
-            logger.api('fetchTasksForProject (direct)', query);
-
-            const startTime = Date.now();
-            const res = await monday.api(query);
-            const duration = Date.now() - startTime;
-
-            logger.apiResponse('fetchTasksForProject (direct)', res, duration);
+            const res = await safeApi(monday, 'useTasks.fetchForProject', query);
 
             if (res.data?.items?.[0]?.column_values?.[0]?.linked_items) {
                 let items = res.data.items[0].column_values[0].linked_items;
@@ -161,13 +155,7 @@ export const useTasks = () => {
                 }
             }`;
 
-            logger.api('createTask - create item', createMutation);
-
-            const createStartTime = Date.now();
-            const createRes = await monday.api(createMutation);
-            const createDuration = Date.now() - createStartTime;
-
-            logger.apiResponse('createTask - create item', createRes, createDuration);
+            const createRes = await safeApi(monday, 'useTasks.createTask:createItem', createMutation);
 
             if (!createRes.data?.create_item) {
                 logger.warn('useTasks', 'No task created in response');
@@ -191,13 +179,7 @@ export const useTasks = () => {
                 }
             }`;
 
-            logger.api('createTask - fetch existing tasks', fetchExistingQuery);
-
-            const fetchStartTime = Date.now();
-            const fetchRes = await monday.api(fetchExistingQuery);
-            const fetchDuration = Date.now() - fetchStartTime;
-
-            logger.apiResponse('createTask - fetch existing tasks', fetchRes, fetchDuration);
+            const fetchRes = await safeApi(monday, 'useTasks.createTask:fetchExisting', fetchExistingQuery);
 
             // חילוץ ה-IDs של המשימות הקיימות
             const existingLinkedItems = fetchRes.data?.items?.[0]?.column_values?.[0]?.linked_items || [];
@@ -227,13 +209,7 @@ export const useTasks = () => {
                 }
             }`;
 
-            logger.api('createTask - update project', updateMutation);
-
-            const updateStartTime = Date.now();
-            const updateRes = await monday.api(updateMutation);
-            const updateDuration = Date.now() - updateStartTime;
-
-            logger.apiResponse('createTask - update project', updateRes, updateDuration);
+            const updateRes = await safeApi(monday, 'useTasks.createTask:updateProject', updateMutation);
 
             // עדכון state עם המשימה החדשה
             setTasks(prev => [...prev, newTask]);

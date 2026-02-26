@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import mondaySdk from 'monday-sdk-js';
 import { useSettings } from '../contexts/SettingsContext';
-import { fetchItemsStatus, fetchActiveAssignments } from '../utils/mondayApi';
+import { fetchItemsStatus, fetchActiveAssignments, safeApi } from '../utils/mondayApi';
 import logger from '../utils/logger';
 
 const monday = mondaySdk();
@@ -114,13 +114,7 @@ export const useProjects = () => {
                 }
             }`;
 
-            logger.api('fetchProjects', query);
-
-            const startTime = Date.now();
-            const res = await monday.api(query);
-            const duration = Date.now() - startTime;
-
-            logger.apiResponse('fetchProjects', res, duration);
+            const res = await safeApi(monday, 'useProjects.fetchProjects', query);
 
             if (res.data && res.data.boards && res.data.boards[0]) {
                 let items = res.data.boards[0].items_page.items || [];
